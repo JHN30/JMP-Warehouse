@@ -1,8 +1,9 @@
 """Column-first analytical schema for the cached v2, v3, and live responses.
 
-The only JSONB table in this schema is the source-response archive. Repeated
-objects (quarters, overtime, streaks, minute evolution) get child rows rather
-than many mostly-NULL columns on their parent.
+Repeated objects (quarters, overtime, streaks, minute evolution) get child rows
+rather than many mostly-NULL columns on their parent. JSONB appears only in the
+source-response archive and in page-shaped `app_*` tables, whose list columns
+match what the web app's API returns.
 """
 
 import re
@@ -465,6 +466,52 @@ TABLES["standings_basic_form"] = table(
     ),
 )
 
+# Page-shaped web-app table: one row per club with every standings feed, named
+# like the app's StandingEntry fields (feed prefix + snake_case of the field).
+APP_STANDINGS_FEEDS = {
+    "basicstandings": "basic", "calendarstandings": "calendar", "streaks": "streaks",
+    "aheadbehind": "ahead_behind", "margins": "margins",
+}
+STANDING_SHARED = ("position", "position_change", "games_played", "games_won",
+                   "games_lost", "qualified")
+APP_CLEAN_NAMES = {
+    "longest_wins_streak_current_season": "longest_win_streak_current_season",
+    "longest_loses_streak_current_season": "longest_lose_streak_current_season",
+    "longest_wins_streak_any_season": "longest_win_streak_any_season",
+    "longest_loses_streak_any_season": "longest_lose_streak_any_season",
+    **{f"quater{quarter}_{state}": f"quarter{quarter}_{state}"
+       for quarter in (1, 3) for state in ("ahead", "behind", "tied")},
+    "point_difference1to5": "point_difference_1_to_5",
+    "point_difference6to10": "point_difference_6_to_10",
+    "point_difference11to15": "point_difference_11_to_15",
+    "point_difference_more_than15": "point_difference_more_than_15",
+}
+
+
+def app_standings_feed_fields():
+    shared = tuple(field for field in STANDINGS_IDENTITY if field.name in STANDING_SHARED)
+    for feed, prefix in APP_STANDINGS_FEEDS.items():
+        metrics = tuple(field for group in STANDINGS_METRICS[feed] for field in group)
+        for field in shared + metrics:
+            name = APP_CLEAN_NAMES.get(field.name, field.name)
+            yield f(f"{prefix}_{name}", field.kind, f"{feed}.{field.path}")
+
+
+TABLES["app_standings"] = table(
+    "standings_page", ("phase_code", "round_number", "club_code"), (
+        f("phase_code", "TEXT NOT NULL", "@phase_code"),
+        f("round_number", "INTEGER NOT NULL", "@round_number"),
+        f("club_code", "TEXT NOT NULL", "@club_code"),
+        f("club_name", "TEXT", "basicstandings.club.name"),
+        f("club_tv_code", "TEXT", "basicstandings.club.tvCode"),
+        f("crest_url", "TEXT", "@crest_url"),
+        f("group_name", "TEXT", "basicstandings.groupName"),
+    ), tuple(app_standings_feed_fields()), (
+        f("form", "JSONB NOT NULL", "@form"),
+        f("streak_history", "JSONB NOT NULL", "@streak_history"),
+    ), indexes=(("club_code",),),
+)
+
 COMPARISON_NUMERIC = (
     "DefensiveReboundsA OffensiveReboundsB OffensiveReboundsA DefensiveReboundsB "
     "TurnoversStartersA TurnoversBenchA TurnoversStartersB TurnoversBenchB "
@@ -490,7 +537,11 @@ TABLES["source_payloads"] = table("source_payloads", ("relative_path",), (
 
 
 def physical_name(name):
-    return "etl_source_payloads" if name == "source_payloads" else f"etl_flat_{name}"
+    if name == "source_payloads":
+        return "etl_source_payloads"
+    if name.startswith("app_"):
+        return name
+    return f"etl_flat_{name}"
 
 
 def create_table_sql(name):

@@ -1,6 +1,6 @@
 # Publish to Neon
 
-Copies the 21 web-app tables (the v2/v3 `etl_flat_*` tables) for selected
+Copies the 22 web-app tables (21 v2/v3 `etl_flat_*` tables plus `app_standings`) for selected
 seasons from **local PostgreSQL** straight into **Neon**. It replaces the CSV
 export + `psql \copy` route (now in `old/code/`: `neon_csv_import/` and
 `import-e2025-e2026.psql`), which could only append and failed when a season was loaded twice.

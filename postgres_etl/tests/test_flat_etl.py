@@ -63,9 +63,13 @@ class FlatEtlTests(unittest.TestCase):
     def test_curated_tables_are_column_first(self):
         self.assertEqual(physical_name("games"), "etl_flat_games")
         for name, spec in TABLES.items():
-            if name != "source_payloads":
-                self.assertNotIn("payload", {field.name for field in spec.fields})
-                self.assertNotIn("JSONB", create_table_sql(name))
+            if name == "source_payloads":
+                continue
+            self.assertNotIn("payload", {field.name for field in spec.fields})
+            json_columns = {field.name for field in spec.fields if field.kind.startswith("JSONB")}
+            # Page-shaped app tables may carry the lists their API returns.
+            allowed = {"form", "streak_history"} if name.startswith("app_") else set()
+            self.assertLessEqual(json_columns, allowed, name)
         self.assertNotIn("extra_1", create_table_sql("games"))
 
     def test_future_placeholders_are_not_results(self):

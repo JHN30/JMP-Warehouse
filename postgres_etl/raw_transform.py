@@ -121,6 +121,19 @@ def code(value):
 
 
 PBP_PERIODS = ("FirstQuarter", "SecondQuarter", "ThirdQuarter", "ForthQuarter", "ExtraTime")
+STANDINGS_FILE = re.compile(r"(.+?)_(\d+)_(.+)\.json$")
+
+
+def js_iso(value):
+    """Format a source timestamp the way the web app returns it today: the
+    zone-less value read as UTC, then JavaScript toISOString()."""
+    value = code(value)
+    if not value:
+        return None
+    moment = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if moment.tzinfo is not None:
+        moment = moment.astimezone(timezone.utc).replace(tzinfo=None)
+    return f"{moment:%Y-%m-%dT%H:%M:%S}.{moment.microsecond // 1000:03d}Z"
 LIVE_TEAM_MARKER = re.compile(r"(AC|CO)_[AB]")
 
 
@@ -278,6 +291,46 @@ class RawSeason:
             return candidate, "season_roster"
         return None, "unmatched"
 
+    def _standings_page_rows(self, files):
+        """One row per basicstandings club and round, with every feed merged.
+
+        Mirrors the web app's standings query: basicstandings drives the rows,
+        the other feeds join by club, and form and streak history become the
+        same lists the API returns.
+        """
+        rounds = {}
+        for path in files:
+            match = STANDINGS_FILE.fullmatch(path.name)
+            if not match:
+                raise ValueError(f"Unexpected standings filename: {path}")
+            phase, round_number, feed = match.groups()
+            teams = {}
+            for item in self.read(path).get("teams") or []:
+                club = nested(item, "club", "code")
+                if club:
+                    teams[club] = item
+            rounds.setdefault((phase, int(round_number)), {})[feed] = teams
+        clubs = self._paths("v2/clubs")
+        crests = ({code(item.get("code")): code(nested(item, "images", "crest"))
+                   for item in self.read(clubs[0]).get("data", [])} if clubs else {})
+        for (phase, round_number), feeds in sorted(rounds.items()):
+            for club, basic in (feeds.get("basicstandings") or {}).items():
+                payload = {feed: teams.get(club) for feed, teams in feeds.items()}
+                calendar = payload.get("calendarstandings") or {}
+                yield dict(
+                    self.scope, phase_code=phase, round_number=round_number, club_code=club,
+                    crest_url=crests.get(code(club)),
+                    form=[{"resultOrdinal": ordinal, "result": code(result)}
+                          for ordinal, result in enumerate(basic.get("last5Form") or [])],
+                    streak_history=[
+                        {"streakOrdinal": ordinal, "startAt": js_iso(streak.get("startDate")),
+                         "endAt": js_iso(streak.get("endDate")),
+                         "winLossRecord": code(streak.get("winLossRecord"))}
+                        for ordinal, streak in enumerate(calendar.get("streaks") or [])
+                    ],
+                    payload=payload,
+                )
+
     def _people_pages(self):
         """Latest page versions, ignoring stale pages beyond the current total."""
         pages = self._paths("v2/season_people_pages/*")
@@ -308,6 +361,7 @@ class RawSeason:
             "game_stat_gaps": "v2/game_stats/*",
             "season_player_stats": "v3/season_stats/*",
             "standings": "v3/standings/*",
+            "standings_page": "v3/standings/*",
         }
         if table in patterns:
             return self._paths(patterns[table])
@@ -503,10 +557,13 @@ class RawSeason:
                                club_code=nested(item, "player", "team", "code"), payload=item)
             return
 
+        if table == "standings_page":
+            yield from self._standings_page_rows(files)
+            return
+
         if table == "standings":
-            pattern = re.compile(r"(.+?)_(\d+)_(.+)\.json$")
             for path in files:
-                match = pattern.fullmatch(path.name)
+                match = STANDINGS_FILE.fullmatch(path.name)
                 if not match:
                     raise ValueError(f"Unexpected standings filename: {path}")
                 phase, round_number, feed = match.groups()

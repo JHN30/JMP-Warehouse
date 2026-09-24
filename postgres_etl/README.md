@@ -4,8 +4,9 @@
 (`data/bronze/<competition>/<season>/`, written by `api_requests`). It does
 not call the EuroLeague APIs. The default output is a **column-first** set of
 `etl_flat_*` tables. Ordinary facts and metrics have named SQL columns;
-repeated data gets child tables. The only JSONB table loaded by default is
-`etl_source_payloads`, an archive of complete source responses.
+repeated data gets child tables. JSONB is used only by `etl_source_payloads`
+(an archive of complete source responses) and by the list columns of
+page-shaped `app_*` tables such as `app_standings`.
 
 
 ## First load

@@ -11,8 +11,10 @@ from postgres_etl.flat_schema import TABLES
 
 
 class PublishTests(unittest.TestCase):
-    def test_app_tables_are_the_former_neon_import_set(self):
-        self.assertEqual(len(APP_TABLES), 21)
+    def test_app_tables_are_the_web_app_tables(self):
+        self.assertEqual(len(APP_TABLES), 22)
+        self.assertIn("app_standings", APP_TABLES)
+        self.assertIn("standings_basicstandings", APP_TABLES)  # kept until the app switches
         self.assertTrue(set(APP_TABLES) <= set(TABLES))
         self.assertNotIn("play_by_play", APP_TABLES)
         self.assertNotIn("source_payloads", APP_TABLES)

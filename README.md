@@ -22,7 +22,7 @@ python pipeline.py            # needs the NEON_DATABASE_URL environment variable
 | [pipeline.py](pipeline.py) | Scheduled refresh: fetch → load (with quality checks) → publish. Stops after the fetch when nothing changed. |
 | [api_requests/](api_requests/README.md) | **Fetch.** Rate-limited downloader for the v2/v3 APIs plus live play-by-play and shots. Writes to `data/bronze/`. |
 | [postgres_etl/](postgres_etl/README.md) | **Load.** Turns bronze into typed `etl_flat_*` tables in local PostgreSQL and runs quality checks. |
-| [neon_publish/](neon_publish/README.md) | **Publish.** Replaces seasons of the 21 web-app tables in Neon, one transaction per season. |
+| [neon_publish/](neon_publish/README.md) | **Publish.** Replaces seasons of the 22 web-app tables in Neon, one transaction per season. |
 | [tables_to_csv/](tables_to_csv/README.md) | **Export.** Local PostgreSQL tables → one CSV per season and table (e.g. for MSSQL analysis). |
 | `common/` | Code shared by all stages: the bronze store, database connection, season-code helpers. |
 | [docs/](docs/) | [Data dictionary](docs/DATA_DICTIONARY.md), [pipeline plan and status](docs/PIPELINE-ANALYSIS.md), and the original [handoff](docs/PIPELINE-HANDOFF.md) from the web-app repo. |

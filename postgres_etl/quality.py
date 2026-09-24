@@ -105,6 +105,20 @@ def checks_for_tables(names):
     if {"game_player_stats", "clubs"} <= names:
         checks.append(Check("orphan_club", "game_player_stats",
                             orphan_query("game_player_stats", "clubs", "club_code")))
+    if {"app_standings", "standings_basicstandings"} <= names:
+        # The page table must have exactly one row per basicstandings row.
+        checks.append(Check("app_standings_key_mismatch", "app_standings", (
+            'SELECT count(*) FROM "app_standings" AS page '
+            'FULL JOIN "etl_flat_standings_basicstandings" AS basic '
+            'ON basic.competition_code = page.competition_code '
+            'AND basic.season_code = page.season_code '
+            'AND basic.phase_code = page.phase_code '
+            'AND basic.round_number = page.round_number '
+            'AND basic.club_code = page.club_code '
+            'WHERE COALESCE(page.competition_code, basic.competition_code) = %s '
+            'AND COALESCE(page.season_code, basic.season_code) = %s '
+            'AND (page.club_code IS NULL OR basic.club_code IS NULL)'
+        )))
     checks.extend(anomaly_checks(names))
     return checks
 

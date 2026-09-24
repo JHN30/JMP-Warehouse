@@ -147,6 +147,44 @@ feed; E2025 currently has 38 regular-season rounds in the basic feed.
 | `standings_calendar_streaks`  | One calendar streak per club/round; extra key also has `streak_ordinal`.           |
 | `standings_basic_form`        | One recent-form result per club/round; extra key also has `result_ordinal`.        |
 
+## Web-app tables
+
+Page-shaped tables built for the web app, with clean names (no `etl_flat_`
+prefix, no source misspellings). Published to Neon with the flat tables.
+
+### `app_standings`
+
+| Extra key | One row represents | Essential use |
+| --- | --- | --- |
+| `phase_code`, `round_number`, `club_code` | One club in the standings of one phase and round, with every standings feed. | Filter season, phase and round; order by `group_name`, `basic_position`, `club_code`. The latest round is `max(round_number)`. |
+
+Built from the v3 standings feeds and the season's clubs. Rows exist exactly
+for the clubs in basicstandings (a quality check enforces it), so group-phase
+rounds only. Verified field by field against the web app's current 7-table
+standings query for all seasons (0 differences).
+
+**Contract for the web app** (replaces the `getStandings` join and its two list
+queries):
+
+- Columns map to `StandingEntry` mechanically: feed prefix (`basic_`,
+  `calendar_`, `streaks_`, `ahead_behind_`, `margins_`) plus the snake_case of
+  the field name. Examples: `basic.winPercentage` -> `basic_win_percentage`,
+  `aheadBehind.quarter1Ahead` -> `ahead_behind_quarter1_ahead`,
+  `streaks.longestWinStreakCurrentSeason` ->
+  `streaks_longest_win_streak_current_season`, `margins.pointDifference1To5`
+  -> `margins_point_difference_1_to_5`.
+- `clubCode`, `clubName`, `clubTvCode`, `crestUrl`, `groupName` ->
+  `club_code`, `club_name`, `club_tv_code`, `crest_url`, `group_name`.
+- A feed object is `null` when all of its columns are `NULL` (that feed had no
+  row for the club), as with today's left joins.
+- `form` (JSONB) is the `form` list and `streak_history` (JSONB) the
+  `streakHistory` list, already in API shape and order; `[]` when empty. Dates
+  are strings like `2025-09-01T00:00:00.000Z`.
+- NUMERIC columns (`basic_win_percentage`, `ahead_behind_wins_percentage`)
+  arrive as strings from node-postgres, as today.
+- Until the app switches, the 7 `etl_flat_standings_*` tables keep being
+  published. Stop publishing and drop them only after the app no longer reads them.
+
 ## Source archive
 
 `etl_source_payloads` has extra key `relative_path`: one cached source response

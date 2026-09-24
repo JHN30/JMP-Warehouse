@@ -75,6 +75,13 @@ class QualityRulesTests(unittest.TestCase):
         self.assertIn(("unmatched_live_player", "shots"), warnings)
         self.assertIn(("fallback_person_key", "game_player_stats"), warnings)
 
+    def test_app_standings_key_parity_is_an_error_when_both_tables_load(self):
+        both = {(c.code, c.severity) for c in
+                checks_for_tables(["app_standings", "standings_basicstandings"])}
+        self.assertIn(("app_standings_key_mismatch", "ERROR"), both)
+        alone = {c.code for c in checks_for_tables(["app_standings"])}
+        self.assertNotIn("app_standings_key_mismatch", alone)
+
     def test_bad_played_score_is_an_error(self):
         report = check_season(FakeConnection(bad_scores=1), "euroleague", "E2025",
                               ["games", "clubs"])

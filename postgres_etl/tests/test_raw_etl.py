@@ -3,6 +3,7 @@ import sys
 import tempfile
 import types
 import unittest
+from decimal import Decimal
 from pathlib import Path
 from unittest.mock import patch
 
@@ -236,6 +237,120 @@ class RawEtlTests(unittest.TestCase):
             self.assertIn('"competition_code"', sql)
             self.assertIn('"season_code"', sql)
             self.assertNotIn("DROP", sql)
+
+    def write_standings_round(self):
+        def team(club, **values):
+            return dict({"club": {"code": club, "name": f"{club} name", "tvCode": club[:2]},
+                         "groupName": "Regular Season", "position": 1, "gamesPlayed": 3,
+                         "gamesWon": 2, "gamesLost": 1}, **values)
+        self.write("v2/clubs.json", {"data": [
+            {"code": "MAD", "images": {"crest": "https://img/mad.png"}}]})
+        self.write("v3/standings/RS_3_basicstandings.json", {"teams": [
+            team("MAD", winPercentage="66.7%", last5Form=["W", "L", "W"]),
+            team("BAR", winPercentage="NaN%", last5Form=[])]})
+        self.write("v3/standings/RS_3_calendarstandings.json", {"teams": [
+            team("MAD", streaks=[
+                {"startDate": "2025-09-01T00:00:00", "endDate": "2025-09-30T00:00:00",
+                 "winLossRecord": "1-0"},
+                {"startDate": "2025-10-01T00:00:00", "endDate": None, "winLossRecord": "1-1"}])]})
+        self.write("v3/standings/RS_3_streaks.json", {"teams": [
+            team("MAD", longestWinsStreakCurrentSeason=2)]})
+        self.write("v3/standings/RS_3_aheadbehind.json", {"teams": [
+            team("MAD", quater1Ahead="2-0")]})
+        self.write("v3/standings/RS_3_margins.json", {"teams": [
+            team("OLY", pointDifference1to5="1-0")]})
+
+    def test_app_standings_merges_every_feed_into_one_row_per_club(self):
+        self.write_standings_round()
+        rows = {row["club_code"]: row for row in
+                FlatSeason(self.root, "euroleague", "E2025").rows("app_standings")}
+        self.assertEqual(sorted(rows), ["BAR", "MAD"])  # OLY is only in margins
+        mad, bar = rows["MAD"], rows["BAR"]
+        self.assertEqual((mad["phase_code"], mad["round_number"]), ("RS", 3))
+        self.assertEqual(mad["club_name"], "MAD name")
+        self.assertEqual(mad["crest_url"], "https://img/mad.png")
+        self.assertIsNone(bar["crest_url"])
+        self.assertEqual(mad["basic_win_percentage"], Decimal("66.7"))
+        self.assertIsNone(bar["basic_win_percentage"])  # "NaN%"
+        self.assertEqual(mad["calendar_games_won"], 2)
+        self.assertEqual(mad["streaks_longest_win_streak_current_season"], 2)
+        self.assertEqual(mad["ahead_behind_quarter1_ahead"], "2-0")
+        self.assertIsNone(mad["margins_position"])  # no margins row for MAD
+        self.assertTrue(all(value is None for name, value in bar.items()
+                            if name.startswith(("calendar_", "streaks_", "ahead_behind_"))))
+        self.assertEqual(mad["form"], [{"resultOrdinal": 0, "result": "W"},
+                                       {"resultOrdinal": 1, "result": "L"},
+                                       {"resultOrdinal": 2, "result": "W"}])
+        self.assertEqual(mad["streak_history"], [
+            {"streakOrdinal": 0, "startAt": "2025-09-01T00:00:00.000Z",
+             "endAt": "2025-09-30T00:00:00.000Z", "winLossRecord": "1-0"},
+            {"streakOrdinal": 1, "startAt": "2025-10-01T00:00:00.000Z",
+             "endAt": None, "winLossRecord": "1-1"}])
+        self.assertEqual((bar["form"], bar["streak_history"]), ([], []))
+
+    def test_app_standings_uses_clean_names_and_is_not_prefixed(self):
+        from flat_schema import physical_name
+        columns = {field.name for field in TABLES["app_standings"].fields}
+        self.assertEqual(physical_name("app_standings"), "app_standings")
+        for clean in ("ahead_behind_quarter3_tied", "streaks_longest_lose_streak_any_season",
+                      "margins_point_difference_more_than_15", "margins_point_difference_1_to_5",
+                      "basic_last_ten_record", "streaks_last10", "calendar_qualified"):
+            self.assertIn(clean, columns)
+        self.assertFalse([name for name in columns if "quater" in name or "loses" in name
+                          or "wins_streak" in name or "1to5" in name])
+
+    def test_app_standings_lists_are_loaded_as_json(self):
+        self.write_standings_round()
+        rows = self.load_with_fake_database("app_standings")
+        columns = [field.name for field in TABLES["app_standings"].fields]
+        form, history = columns.index("form"), columns.index("streak_history")
+        self.assertEqual(len(rows), 2)
+        self.assertTrue(all(row[form][0] == "JSON" and row[history][0] == "JSON" for row in rows))
+
+    def load_with_fake_database(self, name):
+        """Run _load_table against a fake psycopg2 that marks Json-wrapped values."""
+        operations = []
+
+        class Cursor:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                return False
+
+            def execute(self, sql, params=None):
+                operations.append((sql, params))
+
+        class Connection:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                return False
+
+            def cursor(self):
+                return Cursor()
+
+        package = types.ModuleType("psycopg2")
+        package.__path__ = []
+        extras = types.ModuleType("psycopg2.extras")
+        extras.Json = lambda value: ("JSON", value)
+        extras.execute_values = lambda cursor, sql, rows, page_size: operations.append(
+            (sql, list(rows))
+        )
+        package.extras = extras
+        season = FlatSeason(self.root, "euroleague", "E2025")
+        with patch.dict(sys.modules, {"psycopg2": package, "psycopg2.extras": extras}):
+            FlatDatabaseLoader._load_table(Connection(), season, name, season.files(name), 0)
+        return [row for sql, rows in operations if sql.startswith("INSERT") for row in rows]
+
+    def test_every_jsonb_column_is_wrapped_as_json(self):
+        rows = self.load_with_fake_database("source_payloads")
+        columns = [field.name for field in TABLES["source_payloads"].fields]
+        payload, sha = columns.index("payload"), columns.index("sha256")
+        self.assertTrue(rows)
+        self.assertTrue(all(row[payload][0] == "JSON" for row in rows))
+        self.assertTrue(all(isinstance(row[sha], str) for row in rows))
 
     def test_database_writer_replaces_only_selected_season(self):
         operations = []

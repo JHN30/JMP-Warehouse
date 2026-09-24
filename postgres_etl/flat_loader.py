@@ -77,6 +77,7 @@ class FlatDatabaseLoader:
         spec = TABLES[name]
         physical = physical_name(name)
         columns = [field.name for field in spec.fields]
+        json_columns = {field.name for field in spec.fields if field.kind.startswith("JSONB")}
         column_sql = ", ".join(f'"{column}"' for column in columns)
         insert_sql = f'INSERT INTO "{physical}" ({column_sql}) VALUES %s'
         batch_size = 25 if name == "source_payloads" else 1000
@@ -95,7 +96,7 @@ class FlatDatabaseLoader:
                     (season.scope["competition_code"], season.season_code),
                 )
                 for row in season.rows(name, files):
-                    batch.append(tuple(Json(row[column]) if column == "payload" else row[column]
+                    batch.append(tuple(Json(row[column]) if column in json_columns else row[column]
                                        for column in columns))
                     count += 1
                     if len(batch) == batch_size:

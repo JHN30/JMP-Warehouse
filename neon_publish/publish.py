@@ -21,8 +21,9 @@ from postgres_etl.flat_schema import TABLES, create_index_sql, create_table_sql,
 from common.seasons import COMPETITION_CODES  # noqa: E402
 
 
-# The v2/v3 tables the web app reads today.
-# Live-API tables and etl_source_payloads stay local.
+# The tables the web app reads: the v2/v3 flat tables it uses today, plus the
+# page-shaped app_* tables it moves to. Live-API tables and etl_source_payloads
+# stay local.
 APP_TABLES = (
     "seasons", "clubs", "people", "registrations", "rounds", "games",
     "game_officials", "game_period_scores", "game_player_stats",
@@ -32,6 +33,7 @@ APP_TABLES = (
     "standings_basicstandings", "standings_calendarstandings",
     "standings_streaks", "standings_aheadbehind", "standings_margins",
     "standings_calendar_streaks", "standings_basic_form",
+    "app_standings",
 )
 NEON_URL_ENV = "NEON_DATABASE_URL"
 # Publishing is refused when a table would keep less than this share of its

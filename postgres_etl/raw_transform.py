@@ -137,15 +137,22 @@ def parse_source_timestamp(value):
     return datetime.fromisoformat(raw.replace("Z", "+00:00"))
 
 
+def utc_wall_time(moment):
+    """A zone-aware datetime as zone-less UTC; a zone-less one unchanged. Used for
+    TIMESTAMP (without time zone) columns and js_iso, so no session time zone
+    can shift a value."""
+    if moment.tzinfo is not None:
+        return moment.astimezone(timezone.utc).replace(tzinfo=None)
+    return moment
+
+
 def js_iso(value):
     """Format a source timestamp the way the web app returns it today: a
     zone-less value read as UTC (zone-aware values converted to UTC), then
     JavaScript toISOString()."""
     if code(value) is None:
         return None
-    moment = parse_source_timestamp(value)
-    if moment.tzinfo is not None:
-        moment = moment.astimezone(timezone.utc).replace(tzinfo=None)
+    moment = utc_wall_time(parse_source_timestamp(value))
     return f"{moment:%Y-%m-%dT%H:%M:%S}.{moment.microsecond // 1000:03d}Z"
 
 

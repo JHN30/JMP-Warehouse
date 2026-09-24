@@ -298,7 +298,19 @@ class RawEtlTests(unittest.TestCase):
         self.assertIsNone(js_iso(None))
         self.assertIsNone(js_iso("   "))
         for raw in ("20250901183000", "2025-09-01T18:30:00", "2025-09-01T20:30:00+02:00"):
-            self.assertEqual(cast(raw, "TIMESTAMP"), parse_source_timestamp(raw))
+            self.assertEqual(cast(raw, "TIMESTAMPTZ"), parse_source_timestamp(raw))
+
+    def test_timestamp_columns_store_zone_aware_dates_as_utc(self):
+        from datetime import datetime, timezone
+        from flat_transform import cast
+        utc = datetime(2025, 9, 1, 10, 0)
+        for raw in ("2025-09-01T12:00:00+02:00", "2025-09-01T10:00:00Z", "20250901100000"):
+            moment = cast(raw, "TIMESTAMP")
+            self.assertEqual((moment, moment.tzinfo), (utc, None), raw)
+        self.assertEqual(cast("2025-09-01T12:00:00", "TIMESTAMP NOT NULL"), datetime(2025, 9, 1, 12, 0))
+        self.assertEqual(cast("2025-09-01T12:00:00+02:00", "TIMESTAMPTZ"),
+                         datetime(2025, 9, 1, 10, 0, tzinfo=timezone.utc))
+        self.assertIsNotNone(cast("20250901100000", "TIMESTAMPTZ").tzinfo)
 
     def test_bad_streak_date_names_the_table_field_and_season(self):
         self.write_standings_round()

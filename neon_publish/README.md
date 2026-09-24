@@ -27,8 +27,8 @@ shrink is intended.
 
 Until feature 22 the 21 v2/v3 tables were called `etl_flat_*` (the full list is
 in [Table names](../docs/DATA_DICTIONARY.md#table-names)). The first publish of
-each table renames it in Neon inside the season's transaction and leaves a
-read-only view under the old name, so the web app keeps working until it reads
+each table renames it in Neon inside the season's transaction and keeps a
+view under the old name, so the web app keeps working until it reads
 the `app_*` names. A dry run prints `etl_flat_games: would be renamed to
 app_games (old name kept as a view)` and changes nothing. If an old and a new
 table both exist, the publish stops before any change and names both.

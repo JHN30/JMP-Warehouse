@@ -43,7 +43,7 @@ not change. Every other table keeps its `etl_flat_` name.
 
 1. The owner runs the refresh (`python pipeline.py`, after a
    `--dry-run-publish`). The first publish of each table renames it in Neon
-   and leaves a read-only view under the old name in the same transaction, so
+   and keeps a view under the old name in the same transaction, so
    the app keeps reading `etl_flat_*` unchanged. Locally, the first load or
    publish renames the tables (no views).
 2. The web-app repo moves every query, and any Drizzle table filter, to the

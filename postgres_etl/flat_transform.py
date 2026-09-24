@@ -4,7 +4,7 @@ import re
 from decimal import Decimal, InvalidOperation
 
 from flat_schema import TABLES
-from raw_transform import RawSeason, parse_source_timestamp
+from raw_transform import RawSeason, parse_source_timestamp, utc_wall_time
 
 
 def get_path(value, path):
@@ -56,7 +56,9 @@ def cast(value, kind):
             return number
         except (InvalidOperation, TypeError) as error:
             raise ValueError(f"Invalid number: {value!r}") from error
-    if sql_type in ("TIMESTAMP", "TIMESTAMPTZ"):
+    if sql_type == "TIMESTAMP":
+        return utc_wall_time(parse_source_timestamp(value))
+    if sql_type == "TIMESTAMPTZ":
         return parse_source_timestamp(value)
     raise ValueError(f"Unknown SQL type: {kind}")
 

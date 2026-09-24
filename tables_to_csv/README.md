@@ -4,8 +4,8 @@ This tool exports the **current column-first PostgreSQL ETL tables**. It reads
 the database; it does not call the EuroLeague APIs or change database rows.
 Run it after loading data with `postgres_etl/main.py`.
 
-The default export covers every available `etl_flat_*` table plus the
-`etl_source_payloads` archive. Table names come from
+The default export covers every available `app_*` and `etl_flat_*` table plus
+the `etl_source_payloads` archive. Table names come from
 `postgres_etl/flat_schema.py`, so they stay aligned with the loader. The
 previous seven `euroleague_header`/`euroleague_box_score`-style tables are not
 used by this command.
@@ -39,7 +39,7 @@ python tables_to_csv/main.py -sc current -tb games game_player_stats
 inclusive range, `current`, `latest`, or `all`. The default is `latest` **in
 the database**, not the newest season in the raw JSON cache. `current` uses
 the same September season boundary as `postgres_etl`. `-tb/--table` accepts
-logical names from `--list-tables`, without the `etl_flat_` prefix. It defaults
+logical names from `--list-tables`, without the `app_`/`etl_flat_` prefix. It defaults
 to all flat tables that exist in the connected database. Missing explicitly
 selected tables are an error; missing tables in an `all` run are reported and
 skipped. Seasons not yet loaded into the selected tables are also reported and
@@ -55,10 +55,15 @@ PostgreSQL search path as the connection and sets the session to read-only.
 Files are separated by competition and season, for example:
 
 ```text
-data/euroleague_csv/E2025/etl_flat_games.csv
-data/euroleague_csv/E2025/etl_flat_game_player_stats.csv
+data/euroleague_csv/E2025/app_games.csv
+data/euroleague_csv/E2025/app_game_player_stats.csv
+data/euroleague_csv/E2025/etl_flat_play_by_play.csv
 data/euroleague_csv/E2025/etl_source_payloads.csv
 ```
+
+Files take the table's name, so the web-app tables export as `app_*.csv` since
+their rename. Earlier exports named `etl_flat_games.csv` and so on are not
+removed.
 
 Each file contains all database columns, a header row, and only rows matching
 its competition and season. Rows are ordered by the table's primary key. A

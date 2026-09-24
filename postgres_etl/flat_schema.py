@@ -536,12 +536,100 @@ TABLES["source_payloads"] = table("source_payloads", ("relative_path",), (
 ))
 
 
+# The tables the web app reads, in publish order. All of them have clean app_*
+# names; the first 21 were called etl_flat_* before feature 22.
+PUBLISHED_TABLES = (
+    "seasons", "clubs", "people", "registrations", "rounds", "games",
+    "game_officials", "game_period_scores", "game_player_stats",
+    "game_team_stats",
+    "season_stats_traditional", "season_stats_advanced",
+    "season_stats_scoring", "season_stats_misc",
+    "standings_basicstandings", "standings_calendarstandings",
+    "standings_streaks", "standings_aheadbehind", "standings_margins",
+    "standings_calendar_streaks", "standings_basic_form",
+    "app_standings",
+)
+RENAMED_TABLES = frozenset(name for name in PUBLISHED_TABLES if not name.startswith("app_"))
+
+
 def physical_name(name):
     if name == "source_payloads":
         return "etl_source_payloads"
     if name.startswith("app_"):
         return name
+    if name in RENAMED_TABLES:
+        return f"app_{name}"
     return f"etl_flat_{name}"
+
+
+def legacy_name(name):
+    """The pre-feature-22 name of a renamed table, or None."""
+    return f"etl_flat_{name}" if name in RENAMED_TABLES else None
+
+
+def rename_actions(kinds, names, keep_views=False):
+    """Plan the move of legacy tables to their app_* names.
+
+    ``kinds`` maps existing relation names to "table", "view" or "other". The
+    result is a list of ("rename", old, new) and, with ``keep_views``,
+    ("view", old, new) actions. A legacy table next to an existing new table is
+    refused: which one holds the right rows is not for this code to guess.
+    """
+    actions = []
+    for name in names:
+        old = legacy_name(name)
+        if old is None:
+            continue
+        new = physical_name(name)
+        old_kind, new_kind = kinds.get(old), kinds.get(new)
+        if new_kind is not None and new_kind != "table":
+            raise ValueError(f"{new} exists but is not a table ({new_kind}); rename it by hand.")
+        if new_kind == "table" and old_kind == "table":
+            raise ValueError(f"Both {old} and {new} exist as tables; keep the right one "
+                             "and drop or rename the other by hand.")
+        if new_kind is None and old_kind == "table":
+            actions.append(("rename", old, new))
+            if keep_views:
+                actions.append(("view", old, new))
+    return actions
+
+
+def relation_kinds(cursor, relation_names):
+    """{name: "table" | "view" | "other"} for the names in the current schema."""
+    cursor.execute(
+        "SELECT c.relname, c.relkind FROM pg_class AS c "
+        "JOIN pg_namespace AS n ON n.oid = c.relnamespace "
+        "WHERE n.nspname = current_schema() AND c.relname = ANY(%s)",
+        (list(relation_names),),
+    )
+    labels = {"r": "table", "p": "table", "v": "view"}
+    return {name: labels.get(kind, "other") for name, kind in cursor.fetchall()}
+
+
+def rename_legacy_tables(cursor, names, keep_views=False, dry_run=False):
+    """Rename legacy tables of ``names`` in the cursor's transaction; return the actions."""
+    from psycopg2 import sql
+
+    wanted = [label for name in names if legacy_name(name)
+              for label in (legacy_name(name), physical_name(name))]
+    actions = rename_actions(relation_kinds(cursor, wanted), names, keep_views)
+    if not dry_run:
+        for action, old, new in actions:
+            statement = ("ALTER TABLE {old} RENAME TO {new}" if action == "rename"
+                         else "CREATE VIEW {old} AS SELECT * FROM {new}")
+            cursor.execute(sql.SQL(statement).format(old=sql.Identifier(old),
+                                                     new=sql.Identifier(new)))
+    return actions
+
+
+def rename_local_tables(connection, log=print):
+    """Move local legacy tables to their app_* names (no views), all or none."""
+    with connection:
+        with connection.cursor() as cursor:
+            actions = rename_legacy_tables(cursor, PUBLISHED_TABLES)
+    for _, old, new in actions:
+        log(f"Renamed local {old} -> {new}")
+    return actions
 
 
 def create_table_sql(name):

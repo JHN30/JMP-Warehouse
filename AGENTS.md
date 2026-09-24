@@ -15,8 +15,9 @@ for optional tool settings.
 
 The data pipeline behind the JMP EuroLeague web app (`jmpeuroleague.com`, repo
 `jmp-euroleague2`). It downloads EuroLeague API data into a bronze store of exact
-responses, loads it into typed `etl_flat_*` tables in a local PostgreSQL database
-with quality checks, and publishes the web-app tables to Neon. Python 3.13 +
+responses, loads it into typed tables in a local PostgreSQL database (`app_*` for
+the tables the app reads, `etl_flat_*` for the rest) with quality checks, and
+publishes the web-app tables to Neon. Python 3.13 +
 PostgreSQL, no web framework. See `README.md` for the layout and
 `docs/DATA_DICTIONARY.md` for the tables.
 
@@ -311,6 +312,8 @@ not set, `pipeline.py` asks for it with hidden input right before publishing.
 - Load dry run (no database): `python postgres_etl/main.py -sc <seasons> --dry-run`
 - Quality report only: `python postgres_etl/main.py -sc <seasons> --quality-only`
 - Publish to Neon: `python neon_publish/main.py -sc <seasons>` (always `--dry-run` first)
+- Drop the old `etl_flat_*` view names in Neon once the web app reads the `app_*`
+  names: `python neon_publish/main.py --drop-old-names` (`--dry-run` first)
 - CSV export: `python tables_to_csv/main.py -sc <seasons>`
 - Test:
   - `cd api_requests && python -m unittest tests.test_scrapper`

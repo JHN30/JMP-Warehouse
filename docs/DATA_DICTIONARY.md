@@ -4,8 +4,59 @@ This describes the **column-first PostgreSQL tables** produced by
 `postgres_etl/main.py` and exported by `tables_to_csv/main.py`. The exact SQL
 columns, types, source-field paths, and primary keys are defined in
 [postgres_etl/flat_schema.py](postgres_etl/flat_schema.py). The table names
-below omit the `etl_flat_` prefix; `source_payloads` is the exception and is
-stored as `etl_source_payloads`.
+below omit the prefix: the web-app tables are stored as `app_<name>` (see
+[Table names](#table-names)), the others as `etl_flat_<name>`;
+`source_payloads` is stored as `etl_source_payloads`.
+
+## Table names
+
+The 22 tables the web app reads are published to Neon and carry clean `app_*`
+names, locally and in Neon: `app_standings` plus the 21 v2/v3 tables below,
+which were called `etl_flat_*` until feature 22 (2026-09). Column names did
+not change. Every other table keeps its `etl_flat_` name.
+
+| Old name (until feature 22) | New name |
+| --- | --- |
+| `etl_flat_seasons` | `app_seasons` |
+| `etl_flat_clubs` | `app_clubs` |
+| `etl_flat_people` | `app_people` |
+| `etl_flat_registrations` | `app_registrations` |
+| `etl_flat_rounds` | `app_rounds` |
+| `etl_flat_games` | `app_games` |
+| `etl_flat_game_officials` | `app_game_officials` |
+| `etl_flat_game_period_scores` | `app_game_period_scores` |
+| `etl_flat_game_player_stats` | `app_game_player_stats` |
+| `etl_flat_game_team_stats` | `app_game_team_stats` |
+| `etl_flat_season_stats_traditional` | `app_season_stats_traditional` |
+| `etl_flat_season_stats_advanced` | `app_season_stats_advanced` |
+| `etl_flat_season_stats_scoring` | `app_season_stats_scoring` |
+| `etl_flat_season_stats_misc` | `app_season_stats_misc` |
+| `etl_flat_standings_basicstandings` | `app_standings_basicstandings` |
+| `etl_flat_standings_calendarstandings` | `app_standings_calendarstandings` |
+| `etl_flat_standings_streaks` | `app_standings_streaks` |
+| `etl_flat_standings_aheadbehind` | `app_standings_aheadbehind` |
+| `etl_flat_standings_margins` | `app_standings_margins` |
+| `etl_flat_standings_calendar_streaks` | `app_standings_calendar_streaks` |
+| `etl_flat_standings_basic_form` | `app_standings_basic_form` |
+
+**Switchover for the web app** (the app keeps working at every step):
+
+1. The owner runs the refresh (`python pipeline.py`, after a
+   `--dry-run-publish`). The first publish of each table renames it in Neon
+   and leaves a read-only view under the old name in the same transaction, so
+   the app keeps reading `etl_flat_*` unchanged. Locally, the first load or
+   publish renames the tables (no views).
+2. The web-app repo moves every query, and any Drizzle table filter, to the
+   `app_*` names and deploys.
+3. The owner runs `python neon_publish/main.py --drop-old-names --dry-run`,
+   then `python neon_publish/main.py --drop-old-names`. It drops only the
+   old-name views, never a table.
+
+The old-name views keep the columns their table had when they were created;
+columns added later appear only under the `app_*` names. If the web app
+connects with a different database role than the publisher, grant it
+`SELECT` on the views. The renamed tables keep their `etl_flat_*_pkey` and
+`idx_flat_*` constraint and index names; they are internal.
 
 ## Conventions to apply to every query
 
@@ -149,8 +200,8 @@ feed; E2025 currently has 38 regular-season rounds in the basic feed.
 
 ## Web-app tables
 
-Page-shaped tables built for the web app, with clean names (no `etl_flat_`
-prefix, no source misspellings). Published to Neon with the flat tables.
+Page-shaped tables built for the web app, with clean table and column names
+(no source misspellings). Published to Neon with the other `app_*` tables.
 
 ### `app_standings`
 
@@ -182,8 +233,9 @@ queries):
   are strings like `2025-09-01T00:00:00.000Z`.
 - NUMERIC columns (`basic_win_percentage`, `ahead_behind_wins_percentage`)
   arrive as strings from node-postgres, as today.
-- Until the app switches, the 7 `etl_flat_standings_*` tables keep being
-  published. Stop publishing and drop them only after the app no longer reads them.
+- Until the app switches, the 7 standings feed tables (`app_standings_*`,
+  formerly `etl_flat_standings_*`) keep being published. Stop publishing and
+  drop them only after the app no longer reads them.
 
 ## Source archive
 
@@ -199,19 +251,19 @@ table. Its CSV can be large because the JSON is included as text.
 -- Completed games; the season champion is a different field.
 SELECT game_code, scheduled_at, local_club_code, road_club_code,
        local_score, road_score, match_winner_club_code
-FROM public.etl_flat_games
+FROM public.app_games
 WHERE competition_code = 'E' AND season_code = 'E2025' AND played IS TRUE
 ORDER BY game_code;
 
 -- One comparable player-statistics population.
 SELECT person_key, player_name, club_code, games_played, points_scored
-FROM public.etl_flat_season_stats_traditional
+FROM public.app_season_stats_traditional
 WHERE competition_code = 'E' AND season_code = 'E2025'
   AND phase_code = 'RS' AND mode = 'accumulated';
 
 -- A standings snapshot, not a sum of all round rows.
 SELECT club_code, club_name, position, games_played
-FROM public.etl_flat_standings_basicstandings
+FROM public.app_standings_basicstandings
 WHERE competition_code = 'E' AND season_code = 'E2025'
   AND phase_code = 'RS' AND round_number = 38
 ORDER BY position;

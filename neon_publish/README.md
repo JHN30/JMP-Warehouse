@@ -1,6 +1,6 @@
 # Publish to Neon
 
-Copies the 22 web-app tables (21 v2/v3 `etl_flat_*` tables plus `app_standings`) for selected
+Copies the 22 web-app tables (`app_standings` and 21 v2/v3 tables, all named `app_*`) for selected
 seasons from **local PostgreSQL** straight into **Neon**. It replaces the CSV
 export + `psql \copy` route (now in `old/code/`: `neon_csv_import/` and
 `import-e2025-e2026.psql`), which could only append and failed when a season was loaded twice.
@@ -22,6 +22,25 @@ Other seasons are never touched. Running the same command again is safe.
 rows for the season (for example after a failed or partial local load), the
 publish is refused and Neon is unchanged. Pass `--allow-shrink` only when the
 shrink is intended.
+
+## Old table names
+
+Until feature 22 the 21 v2/v3 tables were called `etl_flat_*` (the full list is
+in [Table names](../docs/DATA_DICTIONARY.md#table-names)). The first publish of
+each table renames it in Neon inside the season's transaction and leaves a
+read-only view under the old name, so the web app keeps working until it reads
+the `app_*` names. A dry run prints `etl_flat_games: would be renamed to
+app_games (old name kept as a view)` and changes nothing. If an old and a new
+table both exist, the publish stops before any change and names both.
+
+When the web app no longer reads the old names:
+
+```powershell
+python neon_publish/main.py --drop-old-names --dry-run   # list the views
+python neon_publish/main.py --drop-old-names             # drop them
+```
+
+It drops only views, never a table, and a later publish does not recreate them.
 
 ## Running it
 

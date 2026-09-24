@@ -34,9 +34,9 @@ class FakeCursor:
             return (None if self.params[0] in self.missing else self.params[0],)
         if "row.played IS TRUE AND (row.local_score IS NULL" in self.query:
             return (self.bad_scores,)
-        if 'FROM "etl_flat_games" AS row' in self.query and "AND (" not in self.query:
+        if 'FROM "app_games" AS row' in self.query and "AND (" not in self.query:
             return (2,)
-        if 'FROM "etl_flat_clubs" AS row' in self.query and "AND (" not in self.query:
+        if 'FROM "app_clubs" AS row' in self.query and "AND (" not in self.query:
             return (1,)
         return (0,)
 
@@ -91,7 +91,7 @@ class QualityRulesTests(unittest.TestCase):
                       {(i.severity, i.code, i.count) for i in report.issues})
 
     def test_missing_table_is_reported_without_querying_it(self):
-        report = check_season(FakeConnection(missing={"etl_flat_clubs"}),
+        report = check_season(FakeConnection(missing={"app_clubs"}),
                               "euroleague", "E2025", ["clubs"])
         self.assertFalse(report.passed)
         self.assertEqual(report.counts, {})

@@ -3,6 +3,7 @@
 import io
 import json
 import os
+import re
 import sys
 import tempfile
 import unittest
@@ -11,8 +12,10 @@ from pathlib import Path
 from unittest import mock
 
 import pipeline
-from neon_publish.main import build_parser
-from neon_publish.publish import APP_TABLES, shrink_problems
+from neon_publish import publish
+from neon_publish.main import build_parser, main as publish_main
+from neon_publish.publish import (APP_TABLES, drop_old_name_actions, drop_old_names,
+                                  publish_season, remote_counts, shrink_problems)
 from pipeline import season_code_for
 from postgres_etl.flat_schema import TABLES
 
@@ -37,7 +40,7 @@ class PublishTests(unittest.TestCase):
         problems = shrink_problems({"games": 0, "people": 80},
                                    {"games": 380, "people": 100})
         self.assertEqual(len(problems), 2)
-        self.assertIn("etl_flat_games: 380 -> 0 rows", problems[0])
+        self.assertIn("app_games: 380 -> 0 rows", problems[0])
 
     def test_cli_defaults_to_current_season_and_all_app_tables(self):
         args = build_parser().parse_args([])
@@ -268,6 +271,182 @@ class RefreshCommandTests(unittest.TestCase):
             self.assertEqual(stages.ran("publish"), [])
             self.assertTrue(pipeline.read_state(self.state)["publish_pending"])
             self.assertIn(pipeline.NEON_URL_ENV, next_step)
+
+
+def sql_text(query):
+    """Readable text of a psycopg2.sql object, without a real connection."""
+    from psycopg2 import sql
+
+    if isinstance(query, str):
+        return query
+    if isinstance(query, sql.Composed):
+        return "".join(sql_text(part) for part in query.seq)
+    if isinstance(query, sql.SQL):
+        return query.string
+    if isinstance(query, sql.Identifier):
+        return ".".join(f'"{part}"' for part in query.strings)
+    return repr(query.wrapped)  # sql.Literal
+
+
+class FakeDatabase:
+    """Just enough of a psycopg2 connection: relations with row counts, a statement log."""
+
+    def __init__(self, tables=None, views=None):
+        self.tables = dict(tables or {})   # name -> rows of the tested season
+        self.views = dict(views or {})     # name -> base table
+        self.statements = []
+        self.result = None
+
+    # connection
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        return False
+
+    def cursor(self):
+        return self
+
+    def rollback(self):
+        pass
+
+    def set_session(self, **_):
+        pass
+
+    # cursor
+    def execute(self, query, params=None):
+        text = sql_text(query)
+        self.statements.append(text)
+        names = re.findall(r'"(\w+)"', text)
+        if "FROM pg_class" in text:
+            self.result = [(name, "r") for name in params[0] if name in self.tables]
+            self.result += [(name, "v") for name in params[0] if name in self.views]
+        elif text.startswith("SELECT count(*)"):
+            relation = self.views.get(names[0], names[0])
+            self.result = [(self.tables[relation],)]
+        elif "information_schema.columns" in text:
+            fields = TABLES[params[0].removeprefix("app_")].fields if params[0] in self.tables else ()
+            self.result = [(field.name,) for field in fields]
+        elif text.startswith("ALTER TABLE") and " RENAME TO " in text:
+            self.tables[names[1]] = self.tables.pop(names[0])
+        elif text.startswith("CREATE VIEW"):
+            self.views[names[0]] = names[1]
+        elif text.startswith("DROP VIEW"):
+            del self.views[names[0]]
+        elif text.startswith("DELETE FROM"):
+            self.tables[names[0]] = 0
+
+    def copy_expert(self, query, spool):
+        text = sql_text(query)
+        self.statements.append(text)
+        if "FROM STDIN" in text:
+            self.tables[re.findall(r'"(\w+)"', text)[0]] = len(spool.read().splitlines())
+
+    def fetchone(self):
+        return self.result[0]
+
+    def fetchall(self):
+        return self.result
+
+    def ddl(self):
+        return [text for text in self.statements
+                if text.split(" ", 1)[0] in ("ALTER", "CREATE", "DROP", "DELETE", "COPY")]
+
+
+def publish_games(neon, dry_run=False):
+    """Publish only `games` (380 local rows) with a faked local export."""
+    local = FakeDatabase({"app_games": 380})
+    lines = []
+    spools = {"games": io.BytesIO(b"row\n" * 380)}
+    with mock.patch.object(publish, "export_season", return_value=({"games": 380}, spools)):
+        result = publish_season(local, neon, "euroleague", "E2025", ["games"],
+                                dry_run=dry_run, log=lines.append)
+    return result, lines
+
+
+def changes_schema(neon):
+    return [text for text in neon.ddl() if text.startswith(("ALTER", "CREATE"))]
+
+
+class NeonRenameTests(unittest.TestCase):
+    def test_counts_use_the_new_name_or_else_the_old_table(self):
+        neon = FakeDatabase({"etl_flat_games": 380, "app_clubs": 20}, {"etl_flat_clubs": "app_clubs"})
+        counts, planned = remote_counts(neon, "E", "E2025", ["games", "clubs", "people"])
+        self.assertEqual(counts, {"games": 380, "clubs": 20, "people": None})
+        self.assertEqual(planned, [("rename", "etl_flat_games", "app_games"),
+                                   ("view", "etl_flat_games", "app_games")])
+
+    def test_dry_run_reports_the_rename_and_changes_nothing(self):
+        neon = FakeDatabase({"etl_flat_games": 380})
+        result, lines = publish_games(neon, dry_run=True)
+        self.assertEqual(result, {"games": (380, 380)})
+        self.assertEqual(lines, ["  etl_flat_games: would be renamed to app_games "
+                                 "(old name kept as a view)"])
+        self.assertEqual(neon.ddl(), [])
+        self.assertEqual(neon.tables, {"etl_flat_games": 380})
+
+    def test_publish_renames_and_keeps_a_view_before_replacing_rows(self):
+        neon = FakeDatabase({"etl_flat_games": 375})
+        result, lines = publish_games(neon)
+        self.assertEqual(result, {"games": (375, 380)})
+        columns = ", ".join(f'"{field.name}"' for field in TABLES["games"].fields)
+        self.assertEqual(neon.ddl()[:4], [
+            'ALTER TABLE "etl_flat_games" RENAME TO "app_games"',
+            'CREATE VIEW "etl_flat_games" AS SELECT * FROM "app_games"',
+            "DELETE FROM \"app_games\" WHERE competition_code = 'E' AND season_code = 'E2025'",
+            f'COPY "app_games" ({columns}) FROM STDIN WITH (FORMAT CSV)',
+        ])
+        self.assertIn("  etl_flat_games: renamed to app_games (old name kept as a view)", lines)
+        self.assertEqual((neon.tables, neon.views),
+                         ({"app_games": 380}, {"etl_flat_games": "app_games"}))
+
+        neon.statements.clear()  # a second publish renames nothing
+        publish_games(neon)
+        self.assertEqual(changes_schema(neon), [])
+
+    def test_no_view_comes_back_after_the_old_names_were_dropped(self):
+        neon = FakeDatabase({"app_games": 380})
+        publish_games(neon)
+        self.assertEqual(neon.views, {})
+        self.assertEqual(changes_schema(neon), [])
+
+    def test_old_and_new_tables_side_by_side_stop_before_any_change(self):
+        neon = FakeDatabase({"etl_flat_games": 380, "app_games": 380})
+        with self.assertRaisesRegex(ValueError, "Both etl_flat_games and app_games"):
+            publish_games(neon)
+        self.assertEqual(neon.ddl(), [])
+
+
+class DropOldNamesTests(unittest.TestCase):
+    def test_only_views_are_dropped_never_a_table(self):
+        kinds = {"etl_flat_games": "view", "etl_flat_clubs": "table", "app_games": "table"}
+        self.assertEqual(drop_old_name_actions(kinds),
+                         [("keep", "etl_flat_clubs"), ("drop", "etl_flat_games")])
+        self.assertEqual(drop_old_name_actions({}), [])
+
+    def test_dry_run_lists_the_views_and_drops_nothing(self):
+        neon = FakeDatabase({"app_games": 380, "etl_flat_clubs": 20}, {"etl_flat_games": "app_games"})
+        lines = []
+        drop_old_names(neon, dry_run=True, log=lines.append)
+        self.assertEqual(neon.ddl(), [])
+        self.assertIn("  etl_flat_games: view would be dropped", lines)
+        self.assertIn("  etl_flat_clubs: still a table (not published since the rename); "
+                      "left alone", lines)
+
+    def test_drop_removes_the_views_and_reports_when_none_are_left(self):
+        neon = FakeDatabase({"app_games": 380, "etl_flat_clubs": 20}, {"etl_flat_games": "app_games"})
+        drop_old_names(neon, log=lambda _: None)
+        self.assertEqual(neon.ddl(), ['DROP VIEW "etl_flat_games"'])
+        self.assertEqual((set(neon.tables), neon.views), ({"app_games", "etl_flat_clubs"}, {}))
+        lines = []
+        drop_old_names(neon, log=lines.append)
+        self.assertEqual(lines[-1], "No old-name views left in Neon.")
+
+    def test_drop_old_names_cannot_be_combined_with_tables_or_seasons(self):
+        for extra in (["-tb", "games"], ["-sc", "2025"]):
+            with self.assertRaises(SystemExit), mock.patch("sys.stderr", io.StringIO()):
+                publish_main(["--drop-old-names", *extra])
+        self.assertIn("--drop-old-names", build_parser().format_help())
 
 
 if __name__ == "__main__":

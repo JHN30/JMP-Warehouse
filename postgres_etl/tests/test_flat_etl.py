@@ -8,7 +8,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from flat_schema import TABLES, create_table_sql, physical_name
+from flat_schema import (PUBLISHED_TABLES, TABLES, create_table_sql, legacy_name, physical_name,
+                         rename_actions)
 from flat_transform import FlatSeason
 from main import main
 from shared import BronzeStore
@@ -61,7 +62,7 @@ class FlatEtlTests(unittest.TestCase):
         return FlatSeason(self.data_root, "euroleague", "E2025")
 
     def test_curated_tables_are_column_first(self):
-        self.assertEqual(physical_name("games"), "etl_flat_games")
+        self.assertEqual(physical_name("games"), "app_games")
         for name, spec in TABLES.items():
             if name == "source_payloads":
                 continue
@@ -113,6 +114,43 @@ class FlatEtlTests(unittest.TestCase):
     def test_cli_flat_dry_run(self):
         self.assertEqual(main(["-sc", "2025", "-tb", "games", "game_period_scores",
                                "--data-root", str(self.data_root), "--dry-run"]), 0)
+
+
+
+class CleanTableNameTests(unittest.TestCase):
+    def test_published_tables_have_app_names_and_the_rest_keep_theirs(self):
+        self.assertEqual(len(PUBLISHED_TABLES), 22)
+        self.assertEqual(physical_name("standings_basicstandings"), "app_standings_basicstandings")
+        self.assertEqual(legacy_name("games"), "etl_flat_games")
+        self.assertEqual(physical_name("play_by_play"), "etl_flat_play_by_play")
+        self.assertIsNone(legacy_name("play_by_play"))
+        self.assertEqual(physical_name("app_standings"), "app_standings")
+        self.assertIsNone(legacy_name("app_standings"))
+        self.assertEqual(physical_name("source_payloads"), "etl_source_payloads")
+        self.assertTrue(all(physical_name(name).startswith("app_") for name in PUBLISHED_TABLES))
+
+    def test_legacy_table_is_renamed_and_optionally_kept_as_a_view(self):
+        kinds = {"etl_flat_games": "table"}
+        self.assertEqual(rename_actions(kinds, ["games"]),
+                         [("rename", "etl_flat_games", "app_games")])
+        self.assertEqual(rename_actions(kinds, ["games"], keep_views=True),
+                         [("rename", "etl_flat_games", "app_games"),
+                          ("view", "etl_flat_games", "app_games")])
+
+    def test_already_renamed_missing_or_unrenamed_tables_need_nothing(self):
+        for kinds in ({"app_games": "table", "etl_flat_games": "view"},  # renamed, view kept
+                      {"app_games": "table"},                            # renamed, view dropped
+                      {}):                                               # created fresh later
+            for keep_views in (False, True):
+                self.assertEqual(rename_actions(kinds, ["games"], keep_views), [])
+        self.assertEqual(rename_actions({"etl_flat_play_by_play": "table"},
+                                        ["play_by_play", "app_standings"], True), [])
+
+    def test_old_and_new_tables_side_by_side_are_refused(self):
+        with self.assertRaisesRegex(ValueError, "Both etl_flat_games and app_games"):
+            rename_actions({"etl_flat_games": "table", "app_games": "table"}, ["games"])
+        with self.assertRaisesRegex(ValueError, "app_games exists but is not a table"):
+            rename_actions({"etl_flat_games": "table", "app_games": "view"}, ["games"])
 
 
 if __name__ == "__main__":

@@ -3,7 +3,9 @@
 `main.py` reads the latest version of each resource in the local bronze layer
 (`data/bronze/<competition>/<season>/`, written by `api_requests`). It does
 not call the EuroLeague APIs. The default output is a **column-first** set of
-`etl_flat_*` tables. Ordinary facts and metrics have named SQL columns;
+tables: the 22 the web app reads are named `app_*` (for example `app_games`),
+the rest `etl_flat_*` (see [Table names](../docs/DATA_DICTIONARY.md#table-names)).
+Ordinary facts and metrics have named SQL columns;
 repeated data gets child tables. JSONB is used only by `etl_source_payloads`
 (an archive of complete source responses) and by the list columns of
 page-shaped `app_*` tables such as `app_standings`.
@@ -23,11 +25,13 @@ types, nullability, and primary-key uniqueness. The actual load requires
 `psycopg2` (`python -m pip install psycopg2-binary`) and the settings in
 `postgres_etl/config_connection.json`.
 
-The default command creates 32 `etl_flat_*` tables and loads the shared
+The default command creates the flat tables and loads the shared
 `etl_source_payloads` archive. Replacement is transactional and restricted to one
 selected table, competition, and season. Rerunning E2025 refreshes only E2025
 rows in the selected flat tables; E2026 and EuroCup rows remain separate.
-Missing source files cause that table to be skipped, not emptied.
+Missing source files cause that table to be skipped, not emptied. The first
+load after the rename to `app_*` names renames the old `etl_flat_*` tables in
+place (all seasons, one transaction) and prints `Renamed local ...` lines.
 
 ## Selecting data
 
@@ -46,7 +50,7 @@ python postgres_etl/main.py -sc current
 `latest`, or `all`. The default is `latest` locally cached season. `all` loads
 all locally cached seasons for that competition; it does not download them.
 Missing requested seasons are reported and skipped. `-tb/--table` selects
-names returned by `--list-tables`, without the `etl_flat_` prefix. `all` is
+names returned by `--list-tables`, without the `app_`/`etl_flat_` prefix. `all` is
 the default. `--data-root` and `--config` override the default paths.
 
 ## Flat-table design
@@ -62,12 +66,12 @@ the default. `--data-root` and `--config` override the default paths.
 | Live Evolution, Comparison, ShootingGraphic | `live_evolution`, `live_evolution_minutes`, `live_evolution_largest_differences`, `live_comparison`, `live_scoring` |
 
 All flat tables have `competition_code` and `season_code` in their primary
-keys. For example, `etl_flat_game_player_stats` has separate `points`,
+keys. For example, `app_game_player_stats` has separate `points`,
 `field_goals_made2`, `assistances`, and other statistic columns, rather than a
 nested player-statistics object. V3 statistics and standings are split by
 category/feed so unrelated metric columns do not become mostly NULL.
 
-Quarter and overtime scores are rows in `etl_flat_game_period_scores` (v2)
+Quarter and overtime scores are rows in `app_game_period_scores` (v2)
 and `etl_flat_live_boxscore_period_scores` (live). `period_number` 1–4 denotes
 regulation; 5 and above denotes overtime. A game without overtime simply has
 no overtime rows. Similarly, recent-form results, calendar streaks, and
@@ -76,7 +80,7 @@ own child rows.
 
 The v2 feed represents unplayed fixtures with placeholder `0–0` scores and
 zero quarter scores. In the flat tables these fixtures still exist in
-`etl_flat_games`, but their scores are SQL `NULL`, and they have no period-score
+`app_games`, but their scores are SQL `NULL`, and they have no period-score
 rows until played. The complete original response remains in
 `etl_source_payloads`. Its SHA-256 column hashes the original file bytes;
 JSONB itself is not byte-for-byte identical to the file.
@@ -95,17 +99,17 @@ introduced fields remain in the archive rather than being silently discarded.
 ```sql
 SELECT game_code, played, local_club_code, road_club_code,
        local_score, road_score, match_winner_club_code
-FROM public.etl_flat_games
+FROM public.app_games
 WHERE season_code = 'E2025'
 ORDER BY game_code;
 
 SELECT game_code, side, period_number, score
-FROM public.etl_flat_game_period_scores
+FROM public.app_game_period_scores
 WHERE season_code = 'E2025' AND period_number > 4
 ORDER BY game_code, side, period_number;
 
 SELECT game_code, person_key, points, field_goals_made2, assistances
-FROM public.etl_flat_game_player_stats
+FROM public.app_game_player_stats
 WHERE season_code = 'E2025'
 LIMIT 20;
 ```

@@ -8,13 +8,13 @@ from datetime import datetime
 from pathlib import Path
 
 if __package__:
-    from .publish import APP_TABLES, NEON_URL_ENV, neon_connect, publish_season
+    from .publish import APP_TABLES, NEON_URL_ENV, drop_old_names, neon_connect, publish_season
 else:
-    from publish import APP_TABLES, NEON_URL_ENV, neon_connect, publish_season
+    from publish import APP_TABLES, NEON_URL_ENV, drop_old_names, neon_connect, publish_season
 
 from common.db import DEFAULT_CONFIG, Tee, connect, elapsed, log_directory  # noqa: E402
 from common.seasons import COMPETITION_CODES, select_seasons  # noqa: E402
-from postgres_etl.flat_schema import physical_name  # noqa: E402  (path set by publish)
+from postgres_etl.flat_schema import physical_name, rename_local_tables  # noqa: E402  (path set by publish)
 from tables_to_csv.utils import available_seasons  # noqa: E402
 
 
@@ -35,6 +35,10 @@ def build_parser():
                         help="List the published tables and exit.")
     parser.add_argument("--dry-run", action="store_true",
                         help="Compare local and Neon row counts without changing Neon.")
+    parser.add_argument("--drop-old-names", action="store_true",
+                        help="Drop the old etl_flat_* views left in Neon by the rename to app_* "
+                             "names. Only after the web app reads the app_* names; try "
+                             "--dry-run first.")
     parser.add_argument("--allow-shrink", action="store_true",
                         help="Publish even if a table would lose more than 10%% of its "
                              "current Neon rows for the season.")
@@ -45,12 +49,26 @@ def build_parser():
     return parser
 
 
+def run_drop_old_names(args):
+    neon = neon_connect(args.neon_url_env)
+    try:
+        print("Mode: " + ("dry run (Neon unchanged)" if args.dry_run
+                          else "drop the old etl_flat_* views in Neon"), flush=True)
+        print("The web app must already read the app_* names; after this, the old names "
+              "no longer exist in Neon.", flush=True)
+        drop_old_names(neon, dry_run=args.dry_run)
+        return 0
+    finally:
+        neon.close()
+
+
 def run(args, names):
     started = time.monotonic()
     local = connect(args.config)
     neon = None
     try:
         local.set_client_encoding("UTF8")
+        rename_local_tables(local)
         available = available_seasons(local, args.competition, ["games"])
         local.rollback()
         seasons, missing = select_seasons(args.season_code, args.competition, available)
@@ -91,6 +109,8 @@ def main(argv=None):
         for name in APP_TABLES:
             print(f"{name:40} {physical_name(name)}")
         return 0
+    if args.drop_old_names and (args.table != ["all"] or args.season_code != ["current"]):
+        parser.error("--drop-old-names cannot be combined with --table or --season-code")
     unknown = set(args.table) - {"all", *APP_TABLES}
     if unknown:
         parser.error("Unknown or non-app table(s): " + ", ".join(sorted(unknown)))
@@ -102,6 +122,8 @@ def main(argv=None):
     with log_path.open("w", encoding="utf-8") as log:
         with redirect_stdout(Tee(sys.stdout, log)):
             try:
+                if args.drop_old_names:
+                    return run_drop_old_names(args)
                 return run(args, names)
             except KeyboardInterrupt:
                 print("\nInterrupted. The open Neon transaction was rolled back.", flush=True)

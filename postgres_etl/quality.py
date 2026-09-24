@@ -89,8 +89,8 @@ def checks_for_tables(names):
         for side in ("local", "road"):
             key = f"{side}_club_code"
             checks.append(Check(f"orphan_{side}_club", "games", (
-                'SELECT count(*) FROM "etl_flat_games" AS child '
-                'LEFT JOIN "etl_flat_clubs" AS parent '
+                f'SELECT count(*) FROM "{physical_name("games")}" AS child '
+                f'LEFT JOIN "{physical_name("clubs")}" AS parent '
                 'ON parent.competition_code = child.competition_code '
                 'AND parent.season_code = child.season_code '
                 f'AND parent.club_code = child."{key}" '
@@ -109,7 +109,7 @@ def checks_for_tables(names):
         # The page table must have exactly one row per basicstandings row.
         checks.append(Check("app_standings_key_mismatch", "app_standings", (
             'SELECT count(*) FROM "app_standings" AS page '
-            'FULL JOIN "etl_flat_standings_basicstandings" AS basic '
+            f'FULL JOIN "{physical_name("standings_basicstandings")}" AS basic '
             'ON basic.competition_code = page.competition_code '
             'AND basic.season_code = page.season_code '
             'AND basic.phase_code = page.phase_code '
@@ -135,7 +135,7 @@ def anomaly_checks(names):
         if {"games", name} <= names:
             # The live API has data from E2007; earlier seasons have none by design.
             checks.append(Check(f"played_game_without_{name}", "games", (
-                'SELECT count(*) FROM "etl_flat_games" AS row '
+                f'SELECT count(*) FROM "{physical_name("games")}" AS row '
                 'WHERE row.competition_code = %s AND row.season_code = %s '
                 'AND row.played IS TRUE AND substring(row.season_code from 2)::int >= 2007 '
                 f'AND NOT EXISTS (SELECT 1 FROM "{physical_name(name)}" AS child '
@@ -165,7 +165,7 @@ def anomaly_checks(names):
             if name in names:
                 checks.append(Check("unmatched_live_player", name, (
                     f'SELECT count(*) FROM "{physical_name(name)}" AS child '
-                    'LEFT JOIN "etl_flat_people" AS parent '
+                    f'LEFT JOIN "{physical_name("people")}" AS parent '
                     'ON parent.competition_code = child.competition_code '
                     'AND parent.season_code = child.season_code '
                     'AND parent.person_key = child.person_code '

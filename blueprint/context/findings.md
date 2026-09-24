@@ -22,3 +22,29 @@ before binding them to `TIMESTAMP` columns (or move those columns to
 `TIMESTAMPTZ` together with the app). None needed now; no current requirement is
 lost by leaving it.
 **Resolution:**
+
+### F-07 [P3] open - A Neon password with an unencoded `@` passes the URL check and part of it can reach the log
+
+**File:** pipeline.py:204
+**Found:** 2026-09-24 by /audit independent (scope: current; lens: security)
+**Why it matters:** `looks_like_postgres_url` and `redactor` read the URL with
+`urllib.parse.urlsplit`, which splits the user info at the *last* `@`, while
+libpq splits at the *first* `@`. For a hand-built URL whose password contains a
+raw `@` (for example `user:abc@def@host/db`, which should be written `abc%40def`),
+the check accepts it, libpq takes `abc` as the password and `def@host` as the
+host name, and the connection error `could not translate host name
+"def@host" to address` carries the password's tail. The redactor hides the
+whole password and the text before the first `@`, but not that tail, so it can
+reach the console, the refresh log and the summary. Confirmed locally with a
+fake value: `psycopg2.extensions.parse_dsn` returns the host with the password
+tail, and `redactor` leaves it in a libpq-format host error (the live connect
+error itself was not produced; no network was used). Neon's generated passwords
+and copied connection strings are alphanumeric and encoded, so this needs a
+hand-edited URL; low likelihood, local-only impact (`logs/` is git-ignored).
+**Suggested fix:** In `looks_like_postgres_url`, also require exactly one `@`
+in the authority (`parts.netloc.count("@") == 1`) so such a URL is refused with
+the existing "malformed" message (which could mention percent-encoding `@` as
+`%40`); add that case to
+`test_malformed_neon_url_is_refused_before_publish_and_never_shown`. No current
+requirement is lost.
+**Resolution:**

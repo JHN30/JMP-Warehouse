@@ -27,7 +27,7 @@ Items 1-8 were already shipped when the Blueprint was adopted (2026-09-24).
 - [x] 7. **CSV export** - local tables to one CSV per season and table
 - [x] 8. **Full EuroLeague history** - E2000-E2025 downloaded and loaded locally with 0 quality errors
 - [x] 9. **Standings app table** - one page-shaped standings table published to Neon, replacing the 7 standings tables the app reads (coordinated with the web-app repo)
-- [ ] 10. **Manual refresh command** - one command the owner runs when wanted that refreshes the current season end to end (fetch, load, quality checks, publish), handles the Neon URL safely, and ends with a clear summary and a log file
+- [x] 10. **Manual refresh command** - one command the owner runs when wanted that refreshes the current season end to end (fetch, load, quality checks, publish), handles the Neon URL safely, and ends with a clear summary and a log file
 - [ ] 11. **Records tables** - precomputed player-season, single-game and team-season records, excluding forfeits, instead of computing them in the Express API
 - [ ] 12. **Coverage and team season stats** - precomputed coverage counts and team season aggregates for the app
 - [ ] 13. **Postseason series** - play-in, playoff and Final Four matchups derived from games

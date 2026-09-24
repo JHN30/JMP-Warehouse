@@ -9,11 +9,37 @@ API ──fetch──▶ data/bronze (exact responses) ──load──▶ local
                                                        └──export──▶ CSV (tables_to_csv/)
 ```
 
-One command runs the whole refresh for the current season:
+## Run a refresh
+
+Open the project in VS Code, then in its terminal (Terminal > New Terminal):
 
 ```powershell
-python pipeline.py            # needs the NEON_DATABASE_URL environment variable
+python pipeline.py                     # refresh the current season: fetch, load, checks, publish
+python pipeline.py --dry-run-publish   # the same, but Neon is only compared, never written
 ```
+
+Or without typing: **Terminal > Run Task... > "Refresh current season"** (or
+"Refresh current season (dry run)"). Both run the same command in the terminal.
+
+- **Neon URL:** if the `NEON_DATABASE_URL` environment variable is set, it is
+  used. Otherwise the command asks for it with hidden input, only when it is
+  about to publish, and forgets it after the run. To set it once for your
+  Windows user: Start menu > "Edit environment variables for your account" >
+  New, name `NEON_DATABASE_URL`, value = the direct (non-pooled) Neon URL, then
+  restart VS Code. (Avoid typing it into a terminal command: PowerShell keeps a
+  plain-text command history.)
+- **What you see:** the live output of every step, then a summary: the result
+  (`OK`, `NOTHING TO DO`, `OK (dry run)`, or `FAILED at <step>` with what to do
+  next), what the download changed, rows loaded with quality errors and
+  warnings, and each Neon table's rows before -> after.
+- **Log:** every run is saved to `logs/refresh/refresh_<date>_<time>.log`.
+- **Options:** `-sc 2025` (another season), `--allow-shrink` (only after
+  checking why a table would lose rows), `--force` (load and publish even if
+  nothing changed), `--skip-fetch` (use the files already downloaded),
+  `--help` for all.
+- When nothing new was downloaded and nothing is waiting to be published, the
+  run stops after the download and leaves Neon alone. A failed load or publish
+  stays pending and is retried by the next run.
 
 ## Layout
 

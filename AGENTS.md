@@ -296,12 +296,16 @@ checks do not make the Blueprint unusable.
 
 ## Commands
 
-Run from the repository root. Local PostgreSQL settings come from
-`postgres_etl/config_connection.json` (not committed; copy the `.example`).
-Publishing needs `NEON_DATABASE_URL`.
+Run from the repository root (the owner uses the VS Code terminal). Local
+PostgreSQL settings come from `postgres_etl/config_connection.json` (not
+committed; copy the `.example`). Publishing uses `NEON_DATABASE_URL`; when it is
+not set, `pipeline.py` asks for it with hidden input right before publishing.
 
 - Refresh the current season (fetch, load, quality checks, publish): `python pipeline.py`
-- Same without changing Neon: `python pipeline.py --dry-run-publish`
+  (VS Code task "Refresh current season"). Ends with a summary; each run is logged
+  to `logs/refresh/refresh_<YYYYMMDD_HHMMSS>.log`.
+- Same without changing Neon: `python pipeline.py --dry-run-publish` (task
+  "Refresh current season (dry run)")
 - Fetch into bronze: `python api_requests/main.py -sc <seasons>` (for example `-sc 2000-2025`)
 - Load into local PostgreSQL: `python postgres_etl/main.py -sc <seasons>`
 - Load dry run (no database): `python postgres_etl/main.py -sc <seasons> --dry-run`

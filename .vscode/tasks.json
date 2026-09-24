@@ -1,0 +1,23 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Refresh current season",
+      "detail": "python pipeline.py: fetch, load, quality checks, publish to Neon",
+      "type": "shell",
+      "command": "python pipeline.py",
+      "options": { "cwd": "${workspaceFolder}" },
+      "presentation": { "reveal": "always", "focus": true, "panel": "dedicated", "clear": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "Refresh current season (dry run)",
+      "detail": "python pipeline.py --dry-run-publish: same, but Neon is only compared",
+      "type": "shell",
+      "command": "python pipeline.py --dry-run-publish",
+      "options": { "cwd": "${workspaceFolder}" },
+      "presentation": { "reveal": "always", "focus": true, "panel": "dedicated", "clear": true },
+      "problemMatcher": []
+    }
+  ]
+}

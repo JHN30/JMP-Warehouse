@@ -55,6 +55,11 @@ the items in `build-plan.md`.
   E2007), plus `etl_source_payloads`.
 - **Neon** (`public` schema): the 22 v2/v3 `etl_flat_*` tables the app reads,
   currently for E2025 and E2026 only. All seasons would be about 237 MB.
+  Feature 22 renames them to clean `app_*` names in `public` (the `app` schema
+  and read-only role stay in feature 16). Feature 21 then adds play-by-play
+  and shots as `app_play_by_play` and `app_shots`, for E2025 and E2026 only
+  (all seasons would be about 1.5 GB, too large for the current plan). Derived
+  analytics (feature 19) stay local.
 - Keys are source natural keys scoped by `competition_code` + `season_code`.
   `person_code` is stable across seasons.
 

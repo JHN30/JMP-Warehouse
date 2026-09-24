@@ -1,6 +1,6 @@
 # EuroLeague Data ETL - Project Overview
 
-<!-- blueprint:source-hash 8bcbe155128ac4cbba32114c49bb3cec5efadceafbcb65093d763e965b3d3395 -->
+<!-- blueprint:source-hash 11a4d392061d8c4e660ff4c290c942c43ed925d89efcff2a2b2f31a3592064d9 -->
 
 > The data pipeline behind the JMP EuroLeague web app: EuroLeague API data into
 > exact bronze files, typed tables in local PostgreSQL, and app tables in Neon.
@@ -32,7 +32,7 @@ tables, makes source problems visible, and publishes what the app reads.
 
 ## Features
 
-Shipped (1-9):
+Shipped (1-10):
 
 1. **Bronze fetch** - v2/v3 plus live play-by-play and shots into exact, gzipped, versioned files with a manifest.
 2. **Current-season refresh** - recent rounds' standings, stats and rosters re-fetched; season-level data re-checked daily.
@@ -44,15 +44,18 @@ Shipped (1-9):
 8. **Full EuroLeague history** - E2000-E2025 loaded locally, 0 quality errors.
 9. **Standings app table** - `app_standings`, one page-shaped row per club and round, published next to the 7 old standings tables until the app switches.
 
-Next:
+10. **Manual refresh command** - `python pipeline.py` refreshes the current season end to end, with safe Neon URL handling, a summary and a log file.
 
-10. **Manual refresh command** (headline next feature) - one command the owner runs to refresh the current season end to end, with safe Neon URL handling, a clear summary and a log file.
+Next, in build-plan order (IDs are stable, so 22 comes before 21):
+
+22. **Clean table names** (headline next feature) - rename the 21 published `etl_flat_*` tables to clean `app_*` names in Neon `public` (for example `app_games`), switched over together with the web-app repo.
+21. **Play-by-play and shots in Neon** - publish `app_play_by_play` and `app_shots` for E2025 and E2026 only, for game play-by-play and shot charts in the app.
 11. **Records tables** - player-season, single-game and team-season records, excluding forfeits.
 12. **Coverage and team season stats** - precomputed for the app.
 13. **Postseason series** - play-in, playoff and Final Four matchups from games.
 14. **Player careers** - cross-season player dimension on `person_code`.
 15. **Historical seasons in Neon** - when Neon storage allows (about 237 MB for all seasons).
-16. **Clean app schema** - clean names in a Neon `app` schema with a read-only role.
+16. **Clean app schema** - move the clean-named app tables (feature 22) into a Neon `app` schema with a read-only role.
 17. **Dependencies and CI** - `requirements.txt` and automatic tests.
 18. **EuroCup** - download, load and publish.
 19. **Analytics layer** - play-by-play and shot features, possessions, reports; local only.
@@ -105,7 +108,7 @@ Schemas are defined in `postgres_etl/flat_schema.py`.
 - standings_basicstandings / calendarstandings / streaks / aheadbehind / margins: key `phase_code`, `round_number`, `club_code`; `position`, `games_played`, `games_won`, `games_lost`, feed metrics (group-phase rounds only)
 - standings_calendar_streaks (`streak_ordinal`), standings_basic_form (`result_ordinal`, `result`)
 
-### Live detail (from E2007, local only)
+### Live detail (from E2007; E2025-E2026 go to Neon with feature 21)
 
 - play_by_play: key `game_code`, `period`, `event_ordinal`; shots: key `game_code`, `shot_ordinal` with `coord_x`, `coord_y`, `points`, `zone`
 - Both: `player_code` (source id), `person_code` -> people, `person_code_method` (`live_id`, `jersey_number`, `name`, `play_by_play`, `season_roster`, `unmatched`)
@@ -119,8 +122,15 @@ Schemas are defined in `postgres_etl/flat_schema.py`.
 - Contract for the app repo in `docs/DATA_DICTIONARY.md`
 
 > Locked: the 21 `etl_flat_*` Neon tables keep their names and columns until
-> feature 16; `app_*` tables use clean names from the start. Changes are additive
-> and coordinated with the app repo.
+> feature 22 renames them to `app_*` in `public`, switched over together with
+> the app repo (old names stay until the app no longer reads them). New tables
+> use clean `app_*` names from the start. Changes are coordinated with the app repo.
+
+### app_play_by_play / app_shots (feature 21)
+
+- Same rows as local play_by_play and shots, E2025 and E2026 only (about 130 MB
+  estimated; all seasons about 1.5 GB, too large for the current Neon plan)
+- Derived analytics (possessions, features; feature 19) stay local
 
 ## Tech stack
 
@@ -154,4 +164,9 @@ a short run summary, and a quality report that explains every known source gap.
 > - Feature 15 depends on the Neon plan's storage limit.
 > - Monetization of the web app, if any, is unconfirmed (project-plan TODO).
 > - Project plan section 4 says "22 v2/v3 `etl_flat_*` tables"; it is 21 `etl_flat_*` plus `app_standings`.
-> - Project plan section 3 still lists standings as next; feature 9 is shipped.
+> - Project plan section 3 still lists standings as next; features 9 and 10 are shipped.
+> - Feature 21 needs the free space left in Neon (about 130 MB estimated for
+>   two seasons of play-by-play and shots); not checked, since Neon is only
+>   accessed with the owner's go-ahead.
+> - Feature 22: whether the local tables are renamed too, and when the old Neon
+>   `etl_flat_*` tables are dropped after the app switches, is for its spec.

@@ -28,12 +28,14 @@ Items 1-8 were already shipped when the Blueprint was adopted (2026-09-24).
 - [x] 8. **Full EuroLeague history** - E2000-E2025 downloaded and loaded locally with 0 quality errors
 - [x] 9. **Standings app table** - one page-shaped standings table published to Neon, replacing the 7 standings tables the app reads (coordinated with the web-app repo)
 - [x] 10. **Manual refresh command** - one command the owner runs when wanted that refreshes the current season end to end (fetch, load, quality checks, publish), handles the Neon URL safely, and ends with a clear summary and a log file
+- [ ] 22. **Clean table names** - rename the 21 published `etl_flat_*` tables to clean `app_*` names in Neon's `public` schema (for example `app_games`), switched over together with the web-app repo
+- [ ] 21. **Play-by-play and shots in Neon** - publish play-by-play and shots as `app_play_by_play` and `app_shots` for E2025 and E2026 so the app can show game play-by-play and shot charts (coordinated with the web-app repo)
 - [ ] 11. **Records tables** - precomputed player-season, single-game and team-season records, excluding forfeits, instead of computing them in the Express API
 - [ ] 12. **Coverage and team season stats** - precomputed coverage counts and team season aggregates for the app
 - [ ] 13. **Postseason series** - play-in, playoff and Final Four matchups derived from games
 - [ ] 14. **Player careers** - cross-season player dimension on `person_code` for careers, archives and head-to-head
 - [ ] 15. **Historical seasons in Neon** - publish older seasons once Neon storage allows (app tables for all seasons are about 237 MB)
-- [ ] 16. **Clean app schema** - rename `etl_flat_*` to clean names in a Neon `app` schema with a read-only role, coordinated with the web app
+- [ ] 16. **Clean app schema** - move the clean-named app tables (feature 22) into a Neon `app` schema with a read-only role, coordinated with the web app
 - [ ] 17. **Dependencies and CI** - `requirements.txt` and an automatic test run so the project installs and verifies anywhere
 - [ ] 18. **EuroCup** - download, load and publish EuroCup seasons
 - [ ] 19. **Analytics layer** - play-by-play and shot features, possessions and reports, local only (never Neon)

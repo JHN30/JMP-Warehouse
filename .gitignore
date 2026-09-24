@@ -1,0 +1,15 @@
+# Local data and run output
+data/
+logs/
+
+# Retired code, logs and data kept locally until the owner decides (see old/README.md)
+old/
+
+# Credentials: local PostgreSQL password
+postgres_etl/config_connection.json
+.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/

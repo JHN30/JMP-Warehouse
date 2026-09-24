@@ -288,6 +288,26 @@ class RawEtlTests(unittest.TestCase):
              "endAt": None, "winLossRecord": "1-1"}])
         self.assertEqual((bar["form"], bar["streak_history"]), ([], []))
 
+    def test_js_iso_and_timestamp_casts_share_one_parsing_rule(self):
+        from flat_transform import cast
+        from raw_transform import js_iso, parse_source_timestamp
+        self.assertEqual(js_iso("20250901183000"), "2025-09-01T18:30:00.000Z")
+        self.assertEqual(js_iso("2025-09-01T20:30:00+02:00"), "2025-09-01T18:30:00.000Z")
+        self.assertEqual(js_iso("2025-09-01T18:30:00Z"), "2025-09-01T18:30:00.000Z")
+        self.assertEqual(js_iso("2025-09-01T18:30:00.123456"), "2025-09-01T18:30:00.123Z")
+        self.assertIsNone(js_iso(None))
+        self.assertIsNone(js_iso("   "))
+        for raw in ("20250901183000", "2025-09-01T18:30:00", "2025-09-01T20:30:00+02:00"):
+            self.assertEqual(cast(raw, "TIMESTAMP"), parse_source_timestamp(raw))
+
+    def test_bad_streak_date_names_the_table_field_and_season(self):
+        self.write_standings_round()
+        self.write("v3/standings/RS_3_calendarstandings.json", {"teams": [
+            {"club": {"code": "MAD"}, "streaks": [{"startDate": "not-a-date"}]}]})
+        with self.assertRaisesRegex(ValueError,
+                                    r"app_standings\.streak_history\.startAt .*RS_3_calendarstandings.*E2025"):
+            list(RawSeason(self.root, "euroleague", "E2025").rows("standings_page"))
+
     def test_app_standings_uses_clean_names_and_is_not_prefixed(self):
         from flat_schema import physical_name
         columns = {field.name for field in TABLES["app_standings"].fields}

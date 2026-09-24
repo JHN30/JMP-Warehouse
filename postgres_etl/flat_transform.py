@@ -1,11 +1,10 @@
 """Flatten cached responses into typed rows without per-row JSONB payloads."""
 
 import re
-from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 
 from flat_schema import TABLES
-from raw_transform import RawSeason
+from raw_transform import RawSeason, parse_source_timestamp
 
 
 def get_path(value, path):
@@ -58,12 +57,7 @@ def cast(value, kind):
         except (InvalidOperation, TypeError) as error:
             raise ValueError(f"Invalid number: {value!r}") from error
     if sql_type in ("TIMESTAMP", "TIMESTAMPTZ"):
-        if isinstance(value, datetime):
-            return value
-        raw = str(value).strip()
-        if re.fullmatch(r"\d{14}", raw):
-            return datetime.strptime(raw, "%Y%m%d%H%M%S").replace(tzinfo=timezone.utc)
-        return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        return parse_source_timestamp(value)
     raise ValueError(f"Unknown SQL type: {kind}")
 
 

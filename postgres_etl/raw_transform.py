@@ -122,19 +122,31 @@ def code(value):
 
 PBP_PERIODS = ("FirstQuarter", "SecondQuarter", "ThirdQuarter", "ForthQuarter", "ExtraTime")
 STANDINGS_FILE = re.compile(r"(.+?)_(\d+)_(.+)\.json$")
+LIVE_TEAM_MARKER = re.compile(r"(AC|CO)_[AB]")
+
+
+def parse_source_timestamp(value):
+    """Parse a source timestamp: a datetime, the 14-digit YYYYMMDDHHMMSS form
+    (UTC), or ISO 8601 with an optional Z or offset. The loader's TIMESTAMP
+    casts and js_iso share it, so every date is read by one rule."""
+    if isinstance(value, datetime):
+        return value
+    raw = str(value).strip()
+    if re.fullmatch(r"\d{14}", raw):
+        return datetime.strptime(raw, "%Y%m%d%H%M%S").replace(tzinfo=timezone.utc)
+    return datetime.fromisoformat(raw.replace("Z", "+00:00"))
 
 
 def js_iso(value):
-    """Format a source timestamp the way the web app returns it today: the
-    zone-less value read as UTC, then JavaScript toISOString()."""
-    value = code(value)
-    if not value:
+    """Format a source timestamp the way the web app returns it today: a
+    zone-less value read as UTC (zone-aware values converted to UTC), then
+    JavaScript toISOString()."""
+    if code(value) is None:
         return None
-    moment = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    moment = parse_source_timestamp(value)
     if moment.tzinfo is not None:
         moment = moment.astimezone(timezone.utc).replace(tzinfo=None)
     return f"{moment:%Y-%m-%dT%H:%M:%S}.{moment.microsecond // 1000:03d}Z"
-LIVE_TEAM_MARKER = re.compile(r"(AC|CO)_[AB]")
 
 
 def normalized_name(value):
@@ -313,18 +325,31 @@ class RawSeason:
         clubs = self._paths("v2/clubs")
         crests = ({code(item.get("code")): code(nested(item, "images", "crest"))
                    for item in self.read(clubs[0]).get("data", [])} if clubs else {})
+
+        def streak_date(value, field, phase, round_number, club):
+            try:
+                return js_iso(value)
+            except (TypeError, ValueError) as error:
+                raise ValueError(
+                    f"app_standings.streak_history.{field} from "
+                    f"{phase}_{round_number}_calendarstandings, club {club} "
+                    f"({self.season_code}): {error}"
+                ) from error
+
         for (phase, round_number), feeds in sorted(rounds.items()):
             for club, basic in (feeds.get("basicstandings") or {}).items():
                 payload = {feed: teams.get(club) for feed, teams in feeds.items()}
                 calendar = payload.get("calendarstandings") or {}
+                where = (phase, round_number, club)
                 yield dict(
                     self.scope, phase_code=phase, round_number=round_number, club_code=club,
                     crest_url=crests.get(code(club)),
                     form=[{"resultOrdinal": ordinal, "result": code(result)}
                           for ordinal, result in enumerate(basic.get("last5Form") or [])],
                     streak_history=[
-                        {"streakOrdinal": ordinal, "startAt": js_iso(streak.get("startDate")),
-                         "endAt": js_iso(streak.get("endDate")),
+                        {"streakOrdinal": ordinal,
+                         "startAt": streak_date(streak.get("startDate"), "startAt", *where),
+                         "endAt": streak_date(streak.get("endDate"), "endAt", *where),
                          "winLossRecord": code(streak.get("winLossRecord"))}
                         for ordinal, streak in enumerate(calendar.get("streaks") or [])
                     ],

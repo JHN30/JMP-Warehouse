@@ -53,7 +53,7 @@ the items in `build-plan.md`.
   officials, period scores, player and team box scores, stat gaps, v3 season
   stats (4 categories), v3 standings (7 feeds), play-by-play and shots (from
   E2007), plus `etl_source_payloads`.
-- **Neon** (`public` schema): the 21 v2/v3 `etl_flat_*` tables the app reads,
+- **Neon** (`public` schema): the 22 v2/v3 `etl_flat_*` tables the app reads,
   currently for E2025 and E2026 only. All seasons would be about 237 MB.
 - Keys are source natural keys scoped by `competition_code` + `season_code`.
   `person_code` is stable across seasons.
@@ -79,9 +79,9 @@ warnings explain every known source gap.
 
 ## 8. Deployment - Where and how will this ship?
 
-- Runs on the owner's Windows PC. Scheduled refresh via Windows Task Scheduler:
-  `python pipeline.py` nightly and after each round (roughly every 2 h on game
-  days). Not set up yet.
+- Runs on the owner's Windows PC. For now the owner starts the refresh manually
+  with one command (feature 10), typically nightly and after each round.
+  Automatic scheduling (Task Scheduler or GitHub Actions) comes later (feature 20).
 - Needs `NEON_DATABASE_URL` (direct, non-pooled) in the environment and
   `postgres_etl/config_connection.json` for local PostgreSQL (not committed).
 - Neon plan storage is limited; only app-facing tables go there.

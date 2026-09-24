@@ -1,6 +1,6 @@
 # EuroLeague Data ETL - Project Overview
 
-<!-- blueprint:source-hash 46f2a47703901ef577863a730ea941458710382ab7923b37d08c7b79506f7fbe -->
+<!-- blueprint:source-hash 8bcbe155128ac4cbba32114c49bb3cec5efadceafbcb65093d763e965b3d3395 -->
 
 > The data pipeline behind the JMP EuroLeague web app: EuroLeague API data into
 > exact bronze files, typed tables in local PostgreSQL, and app tables in Neon.
@@ -32,7 +32,7 @@ tables, makes source problems visible, and publishes what the app reads.
 
 ## Features
 
-Shipped (1-8):
+Shipped (1-9):
 
 1. **Bronze fetch** - v2/v3 plus live play-by-play and shots into exact, gzipped, versioned files with a manifest.
 2. **Current-season refresh** - recent rounds' standings, stats and rosters re-fetched; season-level data re-checked daily.
@@ -42,11 +42,11 @@ Shipped (1-8):
 6. **One-command refresh** - `pipeline.py`, skipped when nothing changed.
 7. **CSV export** - one CSV per season and table.
 8. **Full EuroLeague history** - E2000-E2025 loaded locally, 0 quality errors.
+9. **Standings app table** - `app_standings`, one page-shaped row per club and round, published next to the 7 old standings tables until the app switches.
 
 Next:
 
-9. **Standings app table** (headline next feature) - one page-shaped standings table in Neon replacing the 7 standings tables the app reads; coordinated with the app repo.
-10. **Scheduled refresh** - Task Scheduler runs `pipeline.py` nightly and about every 2 h on game days.
+10. **Manual refresh command** (headline next feature) - one command the owner runs to refresh the current season end to end, with safe Neon URL handling, a clear summary and a log file.
 11. **Records tables** - player-season, single-game and team-season records, excluding forfeits.
 12. **Coverage and team season stats** - precomputed for the app.
 13. **Postseason series** - play-in, playoff and Final Four matchups from games.
@@ -56,11 +56,13 @@ Next:
 17. **Dependencies and CI** - `requirements.txt` and automatic tests.
 18. **EuroCup** - download, load and publish.
 19. **Analytics layer** - play-by-play and shot features, possessions, reports; local only.
+20. **Scheduled refresh** - run the refresh command automatically later (Task Scheduler or GitHub Actions).
 
 ## Data model
 
-Layers: bronze files -> local PostgreSQL (`public.etl_flat_*`, 33 tables plus
-`etl_source_payloads`) -> Neon (`public`, 21 app tables). Every table's primary
+Layers: bronze files -> local PostgreSQL (`public.etl_flat_*`, 33 tables, plus
+`app_standings` and `etl_source_payloads`) -> Neon (`public`, 22 app tables: 21
+`etl_flat_*` plus `app_standings`). Every table's primary
 key starts with `competition_code` (`E`, `U`) and `season_code` (`E2025` =
 2025-26). Codes are text; `person_code` and `club_code` are stable across seasons.
 Schemas are defined in `postgres_etl/flat_schema.py`.
@@ -108,8 +110,17 @@ Schemas are defined in `postgres_etl/flat_schema.py`.
 - play_by_play: key `game_code`, `period`, `event_ordinal`; shots: key `game_code`, `shot_ordinal` with `coord_x`, `coord_y`, `points`, `zone`
 - Both: `player_code` (source id), `person_code` -> people, `person_code_method` (`live_id`, `jersey_number`, `name`, `play_by_play`, `season_roster`, `unmatched`)
 
-> Locked: the 21 Neon app tables keep their names and columns until feature 16;
-> changes are additive and coordinated with the app repo.
+### app_standings (web-app table, clean names)
+
+- Key `phase_code`, `round_number`, `club_code`; one row per basicstandings club (ERROR check on key parity)
+- `club_name`, `club_tv_code`, `crest_url`, `group_name`
+- Per-feed columns `basic_*`, `calendar_*`, `streaks_*`, `ahead_behind_*`, `margins_*`: feed prefix + snake_case of the app's `StandingEntry` field (for example `ahead_behind_quarter1_ahead`); all NULL when the feed has no row
+- `form` JSONB (`[{resultOrdinal, result}]`), `streak_history` JSONB (`[{streakOrdinal, startAt, endAt, winLossRecord}]`, ISO `...000Z`)
+- Contract for the app repo in `docs/DATA_DICTIONARY.md`
+
+> Locked: the 21 `etl_flat_*` Neon tables keep their names and columns until
+> feature 16; `app_*` tables use clean names from the start. Changes are additive
+> and coordinated with the app repo.
 
 ## Tech stack
 
@@ -133,7 +144,7 @@ a short run summary, and a quality report that explains every known source gap.
 ## Deployment
 
 - Runs on the owner's Windows PC; data in `data/bronze`, local PostgreSQL on disk D:.
-- Scheduling (feature 10): Windows Task Scheduler, `python pipeline.py` nightly and about every 2 h on game days. Not set up yet.
+- Refresh: the owner runs one command manually (feature 10), typically nightly and after each round. Automatic scheduling is feature 20.
 - Env: `NEON_DATABASE_URL` (direct, non-pooled). Local DB via `postgres_etl/config_connection.json` (not committed).
 - Neon storage is limited; only app-facing tables go there.
 
@@ -142,3 +153,5 @@ a short run summary, and a quality report that explains every known source gap.
 > - Order of features 11-15 is a proposal (build-plan TODO).
 > - Feature 15 depends on the Neon plan's storage limit.
 > - Monetization of the web app, if any, is unconfirmed (project-plan TODO).
+> - Project plan section 4 says "22 v2/v3 `etl_flat_*` tables"; it is 21 `etl_flat_*` plus `app_standings`.
+> - Project plan section 3 still lists standings as next; feature 9 is shipped.

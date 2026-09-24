@@ -27,7 +27,7 @@ Items 1-8 were already shipped when the Blueprint was adopted (2026-09-24).
 - [x] 7. **CSV export** - local tables to one CSV per season and table
 - [x] 8. **Full EuroLeague history** - E2000-E2025 downloaded and loaded locally with 0 quality errors
 - [x] 9. **Standings app table** - one page-shaped standings table published to Neon, replacing the 7 standings tables the app reads (coordinated with the web-app repo)
-- [ ] 10. **Scheduled refresh** - Windows Task Scheduler runs `pipeline.py` nightly and about every 2 h on game days, with logs and failure visibility
+- [ ] 10. **Manual refresh command** - one command the owner runs when wanted that refreshes the current season end to end (fetch, load, quality checks, publish), handles the Neon URL safely, and ends with a clear summary and a log file
 - [ ] 11. **Records tables** - precomputed player-season, single-game and team-season records, excluding forfeits, instead of computing them in the Express API
 - [ ] 12. **Coverage and team season stats** - precomputed coverage counts and team season aggregates for the app
 - [ ] 13. **Postseason series** - play-in, playoff and Final Four matchups derived from games
@@ -37,6 +37,7 @@ Items 1-8 were already shipped when the Blueprint was adopted (2026-09-24).
 - [ ] 17. **Dependencies and CI** - `requirements.txt` and an automatic test run so the project installs and verifies anywhere
 - [ ] 18. **EuroCup** - download, load and publish EuroCup seasons
 - [ ] 19. **Analytics layer** - play-by-play and shot features, possessions and reports, local only (never Neon)
+- [ ] 20. **Scheduled refresh** - run the refresh command automatically (Windows Task Scheduler or GitHub Actions), nightly and after each round
 
 > TODO (confirm): the order of items 11-15 is a proposal; item 15 depends on your
 > Neon plan's storage limit.

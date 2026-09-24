@@ -220,7 +220,11 @@ class RefreshCommandTests(unittest.TestCase):
     def test_malformed_neon_url_is_refused_before_publish_and_never_shown(self):
         for malformed in (f'"{SECRET_URL}?sslmode=require',          # one stray quote
                           f"“{SECRET_URL}”",                 # curly quotes
-                          "not a url at all s3cret-pass"):
+                          "not a url at all s3cret-pass",
+                          "postgresql://owner:s3cret@pass@example.neon.tech/db",   # raw @ in password
+                          "postgresql://owner:s3cret@pass/x@example.neon.tech/db", # raw @, then /
+                          "postgresql://owner:s3cret@pass?x@example.neon.tech/db", # raw @, then ?
+                          "postgresql://owner:s3cret@pass#x@example.neon.tech/db"): # raw @, then #
             self.setUp()
             stages = FakeStages()
             code, result, next_step = self.run_refresh(stages, environ={pipeline.NEON_URL_ENV: malformed})
@@ -228,7 +232,20 @@ class RefreshCommandTests(unittest.TestCase):
             self.assertEqual(stages.ran("publish"), [])
             self.assertTrue(pipeline.read_state(self.state)["publish_pending"])
             for text in (self.log_text(), self.console.getvalue(), next_step):
-                self.assertNotIn("s3cret-pass", text)
+                for secret in ("s3cret-pass", "s3cret@pass", "pass@example"):
+                    self.assertNotIn(secret, text)
+        self.assertIn("%40", self.log_text())
+
+    def test_percent_encoded_at_in_password_is_still_accepted(self):
+        encoded = "postgresql://owner:s3cret%40pass@example.neon.tech/db"
+        self.assertTrue(pipeline.looks_like_postgres_url(encoded))
+        self.assertTrue(pipeline.looks_like_postgres_url(SECRET_URL))
+        self.assertTrue(pipeline.looks_like_postgres_url(SECRET_URL + "?sslmode=require&channel_binding=require"))
+        for raw_at in ("postgresql://owner:s3cret@pass@example.neon.tech/db",
+                       "postgresql://owner:s3cret@pass/x@example.neon.tech/db",
+                       "postgresql://owner:s3cret@pass?x@example.neon.tech/db",
+                       "postgresql://owner:s3cret@pass#x@example.neon.tech/db"):
+            self.assertFalse(pipeline.looks_like_postgres_url(raw_at), raw_at)
 
     def test_redactor_hides_credentials_even_when_the_url_does_not_parse(self):
         raw = f"“{SECRET_URL}”"

@@ -199,11 +199,17 @@ def resolve_neon_url(environ, prompt, interactive):
 
 def looks_like_postgres_url(url):
     """True for postgres[ql]://user:password@host/... ; a malformed URL is refused
-    before publishing, because the driver's error message would echo it."""
+    before publishing, because the driver's error message would echo it.
+
+    Exactly one @ in the whole URL is required: urlsplit and libpq split the
+    user info differently, so a raw @ in the password (even one followed by /, ?
+    or #, where urlsplit ends the authority) would pass here and then leak the
+    password's tail through libpq's error.
+    """
     try:
         parts = urlsplit(url)
         return (parts.scheme in ("postgres", "postgresql") and bool(parts.hostname)
-                and bool(parts.password))
+                and bool(parts.password) and url.count("@") == 1)
     except ValueError:
         return False
 
@@ -321,7 +327,8 @@ def refresh(args, season_code, log, state_file, facts, stage_runner=run_stage,
                 f"{NEON_URL_ENV} or enter the URL when asked, then run again.")
     if not looks_like_postgres_url(url):
         log.line(f"The Neon URL ({source}) is not a postgresql://user:password@host/... URL; "
-                 "not publishing. Check it for stray or curly quotes.")
+                 "not publishing. Check it for stray or curly quotes; an @ inside the "
+                 "password must be written as %40.")
         return (1, "STOPPED before Publish (Neon URL is malformed)",
                 "The local database is up to date; the publish stays pending. Fix the URL "
                 f"({NEON_URL_ENV} or the prompt), then run again.")

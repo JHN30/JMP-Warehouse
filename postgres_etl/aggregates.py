@@ -16,11 +16,10 @@ per-season load and Neon publish path.
 
 import json
 
-from flat_schema import TEAM_SEASON_MEASURES, create_index_sql, create_table_sql, physical_name, snake
+from flat_schema import (AGGREGATE_TABLES, TEAM_SEASON_MEASURES, create_index_sql, create_table_sql,
+                         physical_name, snake)
 from shared import COMPETITION_CODES, connect
 
-
-AGGREGATE_TABLES = ("app_team_season_stats", "app_coverage_seasons", "app_coverage_games")
 
 MEASURE_COLUMNS = tuple(snake(name) for name in TEAM_SEASON_MEASURES.split())
 
@@ -227,6 +226,51 @@ def _game_items(row, season_wide_items):
     return game_code, items
 
 
+POSTSEASON_PHASES = ("PI", "PO", "FF")
+POSTSEASON_SERIES_COLUMNS = (
+    "competition_code", "season_code", "phase_code", "club_a_code", "club_b_code",
+    "club_a_name", "club_b_name", "games_played", "club_a_wins", "club_b_wins",
+    "winner_club_code", "games",
+)
+
+
+def _postseason_series_select_sql():
+    games = physical_name("games")
+    phases = ", ".join(f"'{phase}'" for phase in POSTSEASON_PHASES)
+    return (
+        "SELECT competition_code, season_code, phase_code, club_a_code, club_b_code, "
+        "club_a_name, club_b_name, games_played, club_a_wins, club_b_wins, "
+        "CASE WHEN club_a_wins > club_b_wins THEN club_a_code "
+        "WHEN club_b_wins > club_a_wins THEN club_b_code ELSE NULL END AS winner_club_code, "
+        "games "
+        "FROM ("
+        "  SELECT competition_code, season_code, phase_code, "
+        "  LEAST(local_club_code, road_club_code) AS club_a_code, "
+        "  GREATEST(local_club_code, road_club_code) AS club_b_code, "
+        "  min(CASE WHEN local_club_code < road_club_code "
+        "           THEN local_club_name ELSE road_club_name END) AS club_a_name, "
+        "  min(CASE WHEN local_club_code < road_club_code "
+        "           THEN road_club_name ELSE local_club_name END) AS club_b_name, "
+        "  count(*) AS games_played, "
+        "  count(*) FILTER (WHERE played IS TRUE AND match_winner_club_code = "
+        "                   LEAST(local_club_code, road_club_code)) AS club_a_wins, "
+        "  count(*) FILTER (WHERE played IS TRUE AND match_winner_club_code = "
+        "                   GREATEST(local_club_code, road_club_code)) AS club_b_wins, "
+        "  jsonb_agg(jsonb_build_object("
+        "    'gameCode', game_code, 'roundNumber', round_number, 'scheduledAt', scheduled_at, "
+        "    'localClubCode', local_club_code, 'roadClubCode', road_club_code, "
+        "    'localScore', local_score, 'roadScore', road_score, "
+        "    'winnerClubCode', match_winner_club_code"
+        "  ) ORDER BY round_number) AS games "
+        f'  FROM "{games}" '
+        "  WHERE competition_code = %(competition_code)s AND season_code = %(season_code)s "
+        f"  AND phase_code IN ({phases}) "
+        "  GROUP BY competition_code, season_code, phase_code, "
+        "  LEAST(local_club_code, road_club_code), GREATEST(local_club_code, road_club_code)"
+        ") AS pairs"
+    )
+
+
 def build_aggregates(config_path, season_codes, names=AGGREGATE_TABLES, competition="euroleague",
                      dry_run=False, log=print):
     """Recompute the requested aggregate tables for each season in
@@ -269,6 +313,14 @@ def build_aggregates(config_path, season_codes, names=AGGREGATE_TABLES, competit
                         n = len(cursor.fetchall())
                         counts[("app_coverage_games", season_code)] = n
                         log(f"  {physical_name('app_coverage_games')} [{season_code}]: "
+                            f"{n:,} rows would be computed")
+                    if "app_postseason_series" in names:
+                        cursor.execute(
+                            f"SELECT count(*) FROM ({_postseason_series_select_sql()}) AS probe",
+                            params)
+                        n = cursor.fetchone()[0]
+                        counts[("app_postseason_series", season_code)] = n
+                        log(f"  {physical_name('app_postseason_series')} [{season_code}]: "
                             f"{n:,} rows would be computed")
                 connection.rollback()
                 connection.set_session(readonly=False)
@@ -323,6 +375,21 @@ def build_aggregates(config_path, season_codes, names=AGGREGATE_TABLES, competit
                             })
                         counts[("app_coverage_games", season_code)] = len(rows)
                         log(f"  {physical} [{season_code}]: {len(rows):,} rows")
+                    if "app_postseason_series" in names:
+                        physical = physical_name("app_postseason_series")
+                        cursor.execute(
+                            f'DELETE FROM "{physical}" WHERE competition_code = %(competition_code)s '
+                            "AND season_code = %(season_code)s", params)
+                        columns = ", ".join(f'"{c}"' for c in POSTSEASON_SERIES_COLUMNS)
+                        cursor.execute(
+                            f'INSERT INTO "{physical}" ({columns}) {_postseason_series_select_sql()}',
+                            params)
+                        cursor.execute(
+                            f'SELECT count(*) FROM "{physical}" WHERE competition_code = '
+                            "%(competition_code)s AND season_code = %(season_code)s", params)
+                        counts[("app_postseason_series", season_code)] = cursor.fetchone()[0]
+                        log(f"  {physical} [{season_code}]: "
+                            f"{counts[('app_postseason_series', season_code)]:,} rows")
     finally:
         connection.close()
     return counts

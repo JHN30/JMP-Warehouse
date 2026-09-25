@@ -10,14 +10,15 @@ below omit the prefix: the web-app tables are stored as `app_<name>` (see
 
 ## Table names
 
-The 30 tables the web app reads are published to Neon and carry clean `app_*`
+The 31 tables the web app reads are published to Neon and carry clean `app_*`
 names, locally and in Neon: `app_standings`, the 21 v2/v3 tables below, which
 were called `etl_flat_*` until feature 22 (2026-09), play-by-play and shots
 (feature 21, local-only `etl_flat_*` tables until then), the three all-time
-records tables (feature 11), and the three team-season/coverage tables
-(feature 12) — the last six `app_*`-named from the start; see
-[Web-app tables](#web-app-tables). Column names did not change on the
-renamed tables. Every other table keeps its `etl_flat_` name.
+records tables (feature 11), the three team-season/coverage tables
+(feature 12), and `app_postseason_series` (feature 13) — the last seven
+`app_*`-named from the start; see [Web-app tables](#web-app-tables). Column
+names did not change on the renamed tables. Every other table keeps its
+`etl_flat_` name.
 
 | Old name (until feature 22) | New name |
 | --- | --- |
@@ -240,6 +241,9 @@ feed; E2025 currently has 38 regular-season rounds in the basic feed.
 
 Page-shaped tables built for the web app, with clean table and column names
 (no source misspellings). Published to Neon with the other `app_*` tables.
+This section is the up-to-date contract for the `jmp-euroleague2` repo: for
+each table, what it replaces (if anything) in the current Express API, its
+exact columns, and what's still that repo's own work to switch over.
 
 ### `app_standings`
 
@@ -380,6 +384,42 @@ Express quirk, replicated as-is, not a design choice made here.
   Express currently hardcodes both as `unavailable` always (stale — it
   hasn't been updated since feature 21 added that data). Fixing that on the
   Express side is separate, coordinated, later work.
+
+### `app_postseason_series`
+
+One row per club pairing per phase per season, for `phase_code IN ('PI',
+'PO', 'FF')` only (play-in, playoffs, Final Four — not the `TS` "Top 16"
+round-robin group stage, which isn't postseason). No existing Express
+contract exists for this table; unlike the tables above, it's a new design,
+deliberately conservative: it reports only facts already in `app_games` and
+invents no bracket-position labels ("Quarterfinal 1", seed numbers, etc.)
+that the source data doesn't carry.
+
+| Key | One row represents |
+| --- | --- |
+| `phase_code`, `club_a_code`, `club_b_code` | Every game two clubs played against each other in one phase of one season. `club_a_code < club_b_code` alphabetically, so the same pairing never produces two rows regardless of which club was local/road in a given game. |
+
+- `club_a_name`, `club_b_name`, `games_played` (count of games between the
+  pair, played or not), `club_a_wins`, `club_b_wins` (counted only from
+  `played = TRUE` games), `winner_club_code` (the club with strictly more
+  wins; `NULL` while tied, including a series still in progress).
+- `games` (JSONB NOT NULL): array ordered by `round_number`, one entry per
+  game between the pair: `{gameCode, roundNumber, scheduledAt,
+  localClubCode, roadClubCode, localScore, roadScore, winnerClubCode}`.
+  `localScore`, `roadScore`, `winnerClubCode` are `null` for a not-yet-played
+  game.
+- One definition covers every era without hardcoding a format: today's `PO`
+  is a best-of-5 quarterfinal (confirmed against E2025: 2 home games, 2
+  away, a deciding 5th only when tied 2-2); older seasons show different
+  game counts per pairing (for example best-of-3), and the row just reports
+  however many games were actually played. `FF` semifinals/final and `PI`
+  pairings don't repeat within a season, so each naturally becomes its own
+  1-game row (confirmed against E2025: three distinct `PI` pairings, not one
+  pair playing twice; a 3-game `FF` with no third-place game that year).
+- No "series is decided" status field: whether a series is finished isn't
+  reliably derivable without hardcoding a best-of-N target per era, so it's
+  intentionally not stored. `winner_club_code` plus the game list already
+  show the state.
 
 ## Source archive
 

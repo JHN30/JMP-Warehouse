@@ -152,6 +152,27 @@ def checks_for_tables(names):
             'AND COALESCE(page.season_code, g.season_code) = %s '
             'AND (page.game_code IS NULL OR g.game_code IS NULL)'
         )))
+    if "app_postseason_series" in names:
+        checks.append(Check("postseason_series_wins_out_of_range", "app_postseason_series",
+                            scoped_count("app_postseason_series",
+                                         "row.club_a_wins < 0 OR row.club_b_wins < 0 "
+                                         "OR row.club_a_wins > row.games_played "
+                                         "OR row.club_b_wins > row.games_played")))
+        checks.append(Check("postseason_series_winner_mismatch", "app_postseason_series",
+                            scoped_count("app_postseason_series",
+                                         "row.winner_club_code IS NOT NULL AND ("
+                                         "row.winner_club_code NOT IN (row.club_a_code, row.club_b_code) "
+                                         "OR (row.winner_club_code = row.club_a_code "
+                                         "AND row.club_a_wins <= row.club_b_wins) "
+                                         "OR (row.winner_club_code = row.club_b_code "
+                                         "AND row.club_b_wins <= row.club_a_wins))")))
+        checks.append(Check("postseason_series_game_club_mismatch", "app_postseason_series", (
+            'SELECT count(*) FROM "app_postseason_series" AS row, '
+            "jsonb_array_elements(row.games) AS g "
+            "WHERE row.competition_code = %s AND row.season_code = %s "
+            "AND NOT ((g->>'localClubCode') IN (row.club_a_code, row.club_b_code) "
+            "AND (g->>'roadClubCode') IN (row.club_a_code, row.club_b_code))"
+        )))
     checks.extend(anomaly_checks(names))
     return checks
 

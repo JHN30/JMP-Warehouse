@@ -591,7 +591,26 @@ TABLES["app_coverage_games"] = table(
         f("items", "JSONB NOT NULL"),
     ),
 )
-AGGREGATE_TABLES = ("app_team_season_stats", "app_coverage_seasons", "app_coverage_games")
+# One row per club pairing per phase per season, for phase_code IN ('PI',
+# 'PO', 'FF') only. club_a_code < club_b_code alphabetically so the same
+# pairing never produces two rows regardless of which club was local/road
+# in a given game.
+TABLES["app_postseason_series"] = table(
+    "postseason_series", ("phase_code", "club_a_code", "club_b_code"), (
+        f("phase_code", "TEXT NOT NULL", "@phase_code"),
+        f("club_a_code", "TEXT NOT NULL", "@club_a_code"),
+        f("club_b_code", "TEXT NOT NULL", "@club_b_code"),
+        f("club_a_name", "TEXT"),
+        f("club_b_name", "TEXT"),
+        f("games_played", "INTEGER NOT NULL"),
+        f("club_a_wins", "INTEGER NOT NULL"),
+        f("club_b_wins", "INTEGER NOT NULL"),
+        f("winner_club_code", "TEXT"),
+        f("games", "JSONB NOT NULL"),
+    ),
+)
+AGGREGATE_TABLES = ("app_team_season_stats", "app_coverage_seasons", "app_coverage_games",
+                    "app_postseason_series")
 
 COMPARISON_NUMERIC = (
     "DefensiveReboundsA OffensiveReboundsB OffensiveReboundsA DefensiveReboundsB "
@@ -633,6 +652,7 @@ PUBLISHED_TABLES = (
     "app_standings",
     "app_records_player_seasons", "app_records_single_games", "app_records_team_seasons",
     "app_team_season_stats", "app_coverage_seasons", "app_coverage_games",
+    "app_postseason_series",
 )
 RENAMED_TABLES = frozenset(name for name in PUBLISHED_TABLES if not name.startswith("app_"))
 

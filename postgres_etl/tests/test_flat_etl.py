@@ -69,7 +69,8 @@ class FlatEtlTests(unittest.TestCase):
             self.assertNotIn("payload", {field.name for field in spec.fields})
             json_columns = {field.name for field in spec.fields if field.kind.startswith("JSONB")}
             # Page-shaped app tables may carry the lists their API returns.
-            allowed = {"form", "streak_history", "items"} if name.startswith("app_") else set()
+            allowed = ({"form", "streak_history", "items", "games"}
+                      if name.startswith("app_") else set())
             self.assertLessEqual(json_columns, allowed, name)
         self.assertNotIn("extra_1", create_table_sql("games"))
 
@@ -119,7 +120,7 @@ class FlatEtlTests(unittest.TestCase):
 
 class CleanTableNameTests(unittest.TestCase):
     def test_published_tables_have_app_names_and_the_rest_keep_theirs(self):
-        self.assertEqual(len(PUBLISHED_TABLES), 30)
+        self.assertEqual(len(PUBLISHED_TABLES), 31)
         self.assertEqual(physical_name("standings_basicstandings"), "app_standings_basicstandings")
         self.assertEqual(legacy_name("games"), "etl_flat_games")
         self.assertEqual(physical_name("play_by_play"), "app_play_by_play")

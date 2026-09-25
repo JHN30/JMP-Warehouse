@@ -1,6 +1,6 @@
 """No database required: exercise the coverage status rules, the per-game
-scoping quirk, the SQL shape, and CLI routing for the team-season/coverage
-tables with fakes."""
+scoping quirk, the postseason-series SQL shape, and CLI routing for the
+team-season/coverage/postseason-series tables with fakes."""
 
 import sys
 import unittest
@@ -12,8 +12,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import main as etl_main
 from aggregates import (
-    MEASURE_COLUMNS, TEAM_SEASON_COLUMNS, _game_items, _item, _season_counts_sql,
-    _season_items, _status, _team_season_stats_select_sql, build_aggregates,
+    MEASURE_COLUMNS, POSTSEASON_PHASES, POSTSEASON_SERIES_COLUMNS, TEAM_SEASON_COLUMNS,
+    _game_items, _item, _postseason_series_select_sql, _season_counts_sql, _season_items,
+    _status, _team_season_stats_select_sql, build_aggregates,
 )
 
 
@@ -103,6 +104,61 @@ class SqlShapeTests(unittest.TestCase):
         expected = {f"own_{c}" for c in MEASURE_COLUMNS} | {f"opp_{c}" for c in MEASURE_COLUMNS}
         self.assertTrue(expected.issubset(set(TEAM_SEASON_COLUMNS)))
 
+
+class PostseasonSeriesSqlTests(unittest.TestCase):
+    """The actual grouping/winner behavior is verified against real E2025
+    playoff and play-in data (see the feature spec's Step 2 evidence); these
+    tests pin the SQL constructs that behavior depends on, matching this
+    module's existing no-database convention (test_quality.py, SqlShapeTests)."""
+
+    def test_only_the_three_postseason_phases_are_included(self):
+        sql = _postseason_series_select_sql()
+        self.assertEqual(set(POSTSEASON_PHASES), {"PI", "PO", "FF"})
+        self.assertIn("phase_code IN ('PI', 'PO', 'FF')", sql)
+
+    def test_pairing_is_symmetric_regardless_of_local_or_road_side(self):
+        # LEAST/GREATEST make the pairing key independent of which club was
+        # local vs road in any individual game, so a club appearing as local
+        # in one game and road in another still collapses into one row.
+        sql = _postseason_series_select_sql()
+        self.assertIn("LEAST(local_club_code, road_club_code) AS club_a_code", sql)
+        self.assertIn("GREATEST(local_club_code, road_club_code) AS club_b_code", sql)
+        self.assertIn("GROUP BY competition_code, season_code, phase_code,", sql)
+        group_by = sql.split("GROUP BY", 1)[1]
+        self.assertIn("LEAST(local_club_code, road_club_code)", group_by)
+        self.assertIn("GREATEST(local_club_code, road_club_code)", group_by)
+
+    def test_winner_is_null_on_a_tie_not_defaulted_to_either_club(self):
+        sql = _postseason_series_select_sql()
+        self.assertIn(
+            "CASE WHEN club_a_wins > club_b_wins THEN club_a_code "
+            "WHEN club_b_wins > club_a_wins THEN club_b_code ELSE NULL END AS winner_club_code",
+            sql,
+        )
+
+    def test_wins_are_only_counted_from_played_games(self):
+        sql = _postseason_series_select_sql()
+        for part in sql.split("count(*) FILTER (WHERE")[1:]:
+            self.assertIn("played IS TRUE AND match_winner_club_code", part)
+        self.assertIn("LEAST(local_club_code, road_club_code)) AS club_a_wins", sql)
+        self.assertIn("GREATEST(local_club_code, road_club_code)) AS club_b_wins", sql)
+
+    def test_every_game_including_unplayed_ones_is_counted_and_listed(self):
+        # count(*) (not a played-only filter) drives games_played and the
+        # games array, so a scheduled-but-unplayed game still appears (with
+        # NULL scores/winner from the games table itself).
+        sql = _postseason_series_select_sql()
+        self.assertIn("count(*) AS games_played", sql)
+        self.assertIn("jsonb_agg(jsonb_build_object(", sql)
+        self.assertIn("ORDER BY round_number) AS games", sql)
+
+    def test_postseason_series_columns_include_the_key_and_derived_fields(self):
+        self.assertEqual(POSTSEASON_SERIES_COLUMNS, (
+            "competition_code", "season_code", "phase_code", "club_a_code", "club_b_code",
+            "club_a_name", "club_b_name", "games_played", "club_a_wins", "club_b_wins",
+            "winner_club_code", "games",
+        ))
+
     def test_season_counts_select_excludes_unplayed_games_for_game_scoped_counts(self):
         sql = _season_counts_sql()
         self.assertIn("g.played IS TRUE", sql)
@@ -182,6 +238,21 @@ class BuildAggregatesTests(unittest.TestCase):
     def test_unknown_table_is_rejected(self):
         with self.assertRaises(ValueError):
             build_aggregates("unused", ["E2026"], ["not_an_aggregate_table"])
+
+    def test_postseason_series_dry_run_and_real_run(self):
+        connection = FakeConnection(count=10, rows=[])
+        with patch("aggregates.connect", return_value=connection):
+            counts = build_aggregates("unused", ["E2025"], ["app_postseason_series"], dry_run=True)
+        self.assertEqual(counts, {("app_postseason_series", "E2025"): 10})
+        self.assertFalse(any(s.startswith("INSERT") for s in connection.fake_cursor.statements))
+
+        connection = FakeConnection(count=10, rows=[])
+        with patch("aggregates.connect", return_value=connection):
+            build_aggregates("unused", ["E2025"], ["app_postseason_series"], dry_run=False)
+        statements = connection.fake_cursor.statements
+        delete_index = next(i for i, s in enumerate(statements) if "DELETE FROM" in s)
+        insert_index = next(i for i, s in enumerate(statements) if s.startswith("INSERT INTO"))
+        self.assertLess(delete_index, insert_index)
 
 
 class AggregateRoutingTests(unittest.TestCase):

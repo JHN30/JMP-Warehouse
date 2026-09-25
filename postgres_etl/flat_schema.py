@@ -512,6 +512,54 @@ TABLES["app_standings"] = table(
     ), indexes=(("club_code",),),
 )
 
+# All-time leaderboards (top 50 per metric), computed by postgres_etl/records.py
+# from already-loaded local tables across every season, not from bronze files.
+# Unlike every other table, the row identity is not season-scoped: a table's
+# rows span every season loaded locally, so season_code is a plain data column
+# (which season a record happened in) rather than part of the key.
+RECORDS_KEY = ("competition_code", "metric", "rank_ordinal")
+TABLES["app_records_player_seasons"] = Table(
+    "records_player_seasons", RECORDS_KEY, (
+        f("competition_code", "TEXT NOT NULL"),
+        f("metric", "TEXT NOT NULL"),
+        f("rank_ordinal", "INTEGER NOT NULL"),
+        f("season_code", "TEXT NOT NULL"),
+        f("person_key", "TEXT NOT NULL"),
+        f("player_name", "TEXT"),
+        f("club_code", "TEXT"),
+        f("club_name", "TEXT"),
+        f("value", "NUMERIC NOT NULL"),
+    ),
+)
+TABLES["app_records_single_games"] = Table(
+    "records_single_games", RECORDS_KEY, (
+        f("competition_code", "TEXT NOT NULL"),
+        f("metric", "TEXT NOT NULL"),
+        f("rank_ordinal", "INTEGER NOT NULL"),
+        f("season_code", "TEXT NOT NULL"),
+        f("game_code", "INTEGER NOT NULL"),
+        f("scheduled_at", "TIMESTAMPTZ"),
+        f("person_key", "TEXT NOT NULL"),
+        f("player_name", "TEXT"),
+        f("club_code", "TEXT"),
+        f("club_name", "TEXT"),
+        f("value", "NUMERIC NOT NULL"),
+    ),
+)
+TABLES["app_records_team_seasons"] = Table(
+    "records_team_seasons", RECORDS_KEY, (
+        f("competition_code", "TEXT NOT NULL"),
+        f("metric", "TEXT NOT NULL"),
+        f("rank_ordinal", "INTEGER NOT NULL"),
+        f("season_code", "TEXT NOT NULL"),
+        f("club_code", "TEXT NOT NULL"),
+        f("club_name", "TEXT"),
+        f("value", "NUMERIC NOT NULL"),
+    ),
+)
+RECORDS_TABLES = ("app_records_player_seasons", "app_records_single_games",
+                  "app_records_team_seasons")
+
 COMPARISON_NUMERIC = (
     "DefensiveReboundsA OffensiveReboundsB OffensiveReboundsA DefensiveReboundsB "
     "TurnoversStartersA TurnoversBenchA TurnoversStartersB TurnoversBenchB "
@@ -550,6 +598,7 @@ PUBLISHED_TABLES = (
     "standings_calendar_streaks", "standings_basic_form",
     "play_by_play", "shots",
     "app_standings",
+    "app_records_player_seasons", "app_records_single_games", "app_records_team_seasons",
 )
 RENAMED_TABLES = frozenset(name for name in PUBLISHED_TABLES if not name.startswith("app_"))
 

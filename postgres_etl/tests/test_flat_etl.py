@@ -119,7 +119,7 @@ class FlatEtlTests(unittest.TestCase):
 
 class CleanTableNameTests(unittest.TestCase):
     def test_published_tables_have_app_names_and_the_rest_keep_theirs(self):
-        self.assertEqual(len(PUBLISHED_TABLES), 24)
+        self.assertEqual(len(PUBLISHED_TABLES), 27)
         self.assertEqual(physical_name("standings_basicstandings"), "app_standings_basicstandings")
         self.assertEqual(legacy_name("games"), "etl_flat_games")
         self.assertEqual(physical_name("play_by_play"), "app_play_by_play")

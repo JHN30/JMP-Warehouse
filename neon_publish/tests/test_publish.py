@@ -23,7 +23,7 @@ from postgres_etl.flat_schema import TABLES
 
 class PublishTests(unittest.TestCase):
     def test_app_tables_are_the_web_app_tables(self):
-        self.assertEqual(len(APP_TABLES), 24)
+        self.assertEqual(len(APP_TABLES), 27)
         self.assertIn("app_standings", APP_TABLES)
         self.assertIn("standings_basicstandings", APP_TABLES)  # kept until the app switches
         self.assertTrue(set(APP_TABLES) <= set(TABLES))

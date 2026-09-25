@@ -10,11 +10,13 @@ below omit the prefix: the web-app tables are stored as `app_<name>` (see
 
 ## Table names
 
-The 24 tables the web app reads are published to Neon and carry clean `app_*`
+The 27 tables the web app reads are published to Neon and carry clean `app_*`
 names, locally and in Neon: `app_standings`, the 21 v2/v3 tables below, which
-were called `etl_flat_*` until feature 22 (2026-09), and play-by-play and shots
-(feature 21, local-only `etl_flat_*` tables until then). Column names did not
-change. Every other table keeps its `etl_flat_` name.
+were called `etl_flat_*` until feature 22 (2026-09), play-by-play and shots
+(feature 21, local-only `etl_flat_*` tables until then), and the three
+all-time records tables (feature 11, `app_*`-named from the start; see
+[Web-app tables](#web-app-tables)). Column names did not change on the
+renamed tables. Every other table keeps its `etl_flat_` name.
 
 | Old name (until feature 22) | New name |
 | --- | --- |
@@ -271,6 +273,43 @@ queries):
 - Until the app switches, the 7 standings feed tables (`app_standings_*`,
   formerly `etl_flat_standings_*`) keep being published. Stop publishing and
   drop them only after the app no longer reads them.
+
+### `app_records_player_seasons`, `app_records_single_games`, `app_records_team_seasons`
+
+All-time EuroLeague leaderboards (top 50 per metric), computed by
+`postgres_etl/records.py` from already-loaded local data, not from bronze
+files. Unlike every other table, they are **not season-scoped**: a table's
+rows span every season loaded locally (`E2000`-current), so `season_code` is
+a plain column (which season a record happened in), not part of the key.
+Mirrors the `/records/player-seasons`, `/records/single-games` and
+`/records/team-seasons` routes in the jmp-euroleague2 Express backend, same
+metrics, source filters and tie-break order, so rows are self-contained
+(player and club names are already on the row; no join to `app_games` or
+`app_people` is needed to render one).
+
+| Table | Key | One row represents | Metrics |
+| --- | --- | --- | --- |
+| `app_records_player_seasons` | `competition_code`, `metric`, `rank_ordinal` | One player's season total, from `app_season_stats_traditional` (`phase_code = 'all'`, `mode = 'accumulated'`). | `points_scored`, `total_rebounds`, `assists`, `pir` |
+| `app_records_single_games` | `competition_code`, `metric`, `rank_ordinal` | One player's box score in one played game, from `app_game_player_stats`. | `points`, `valuation`, `total_rebounds`, `assistances` |
+| `app_records_team_seasons` | `competition_code`, `metric`, `rank_ordinal` | One club's season total (`stats_kind = 'total'`), summed from `app_game_team_stats`. | `points`, `valuation`, `total_rebounds`, `assistances` |
+
+- `rank_ordinal` is 1-50 per metric (fewer when a metric has fewer than 50
+  qualifying rows); dense, no gaps or duplicates.
+- Tie-break order: player-seasons and team-seasons by value desc, then
+  `season_code` asc, then `person_key`/`club_code` asc; single-games by value
+  desc, then `season_code` asc, `game_code` asc, `person_key` asc.
+- Forfeits are excluded from the two game-level tables via `app_games.played
+  = TRUE` (a forfeit has no box-score rows to rank in the first place);
+  `app_records_player_seasons` reads a season-level source aggregate, so no
+  separate forfeit filter applies there.
+- A rebuild (`python postgres_etl/main.py -tb app_records_player_seasons
+  app_records_single_games app_records_team_seasons`) always recomputes every
+  row from current local data and replaces prior contents; it ignores
+  `-sc`/`--season-code`. Neon publish is likewise a whole-table replace, not
+  the usual per-season delete.
+- The jmp-euroleague2 Express API still computes these records itself for
+  now (`SUPPORTED_SEASONS`, currently `E2025`-`E2026` only); switching it to
+  read these tables is a separate, coordinated change in that repo.
 
 ## Source archive
 

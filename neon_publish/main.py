@@ -8,9 +8,11 @@ from datetime import datetime
 from pathlib import Path
 
 if __package__:
-    from .publish import APP_TABLES, NEON_URL_ENV, drop_old_names, neon_connect, publish_season
+    from .publish import (APP_TABLES, NEON_URL_ENV, RECORDS_TABLES, drop_old_names, neon_connect,
+                          publish_records, publish_season)
 else:
-    from publish import APP_TABLES, NEON_URL_ENV, drop_old_names, neon_connect, publish_season
+    from publish import (APP_TABLES, NEON_URL_ENV, RECORDS_TABLES, drop_old_names, neon_connect,
+                         publish_records, publish_season)
 
 from common.db import DEFAULT_CONFIG, Tee, connect, elapsed, log_directory  # noqa: E402
 from common.seasons import COMPETITION_CODES, select_seasons  # noqa: E402
@@ -76,23 +78,38 @@ def run(args, names):
             print("Not loaded locally; skipping seasons: " + ", ".join(missing), flush=True)
         neon = neon_connect(args.neon_url_env)
         neon.set_client_encoding("UTF8")
+        season_names = [name for name in names if name not in RECORDS_TABLES]
+        records_names = [name for name in names if name in RECORDS_TABLES]
         print(f"Competition: {args.competition}", flush=True)
         print(f"Seasons: {', '.join(seasons)}", flush=True)
         print(f"Tables: {len(names)} web-app tables", flush=True)
         print(f"Mode: {'dry run (Neon unchanged)' if args.dry_run else 'publish to Neon'}",
               flush=True)
 
-        for season_code in seasons:
-            season_started = time.monotonic()
-            print(f"\nSeason {season_code} | elapsed {elapsed(started)}", flush=True)
-            result = publish_season(local, neon, args.competition, season_code, names,
-                                    dry_run=args.dry_run, allow_shrink=args.allow_shrink)
+        if season_names:
+            for season_code in seasons:
+                season_started = time.monotonic()
+                print(f"\nSeason {season_code} | elapsed {elapsed(started)}", flush=True)
+                result = publish_season(local, neon, args.competition, season_code, season_names,
+                                        dry_run=args.dry_run, allow_shrink=args.allow_shrink)
+                for name, (before, after) in result.items():
+                    shown = "missing" if before is None else f"{before:,}"
+                    verb = "would become" if args.dry_run else "->"
+                    print(f"  {physical_name(name)}: {shown} {verb} {after:,} rows", flush=True)
+                status = "checked" if args.dry_run else "committed"
+                print(f"Season {season_code} {status} in {elapsed(season_started)}", flush=True)
+
+        if records_names:
+            # Not season-scoped: always the full local table, independent of -sc.
+            print(f"\nRecords tables (all local history) | elapsed {elapsed(started)}", flush=True)
+            result = publish_records(local, neon, records_names,
+                                     dry_run=args.dry_run, allow_shrink=args.allow_shrink)
             for name, (before, after) in result.items():
                 shown = "missing" if before is None else f"{before:,}"
                 verb = "would become" if args.dry_run else "->"
                 print(f"  {physical_name(name)}: {shown} {verb} {after:,} rows", flush=True)
             status = "checked" if args.dry_run else "committed"
-            print(f"Season {season_code} {status} in {elapsed(season_started)}", flush=True)
+            print(f"Records tables {status} in {elapsed(started)}", flush=True)
 
         print(f"\nFinished {len(seasons)} season(s) in {elapsed(started)}", flush=True)
         return 0

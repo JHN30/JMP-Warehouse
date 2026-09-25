@@ -30,7 +30,7 @@ Items 1-8 were already shipped when the Blueprint was adopted (2026-09-24).
 - [x] 10. **Manual refresh command** - one command the owner runs when wanted that refreshes the current season end to end (fetch, load, quality checks, publish), handles the Neon URL safely, and ends with a clear summary and a log file
 - [x] 22. **Clean table names** - rename the 21 published `etl_flat_*` tables to clean `app_*` names in Neon's `public` schema (for example `app_games`), switched over together with the web-app repo
 - [x] 21. **Play-by-play and shots in Neon** - publish play-by-play and shots as `app_play_by_play` and `app_shots` for E2025 and E2026 so the app can show game play-by-play and shot charts (coordinated with the web-app repo)
-- [ ] 11. **Records tables** - precomputed player-season, single-game and team-season records, excluding forfeits, instead of computing them in the Express API
+- [x] 11. **Records tables** - precomputed player-season, single-game and team-season records, excluding forfeits, instead of computing them in the Express API
 - [ ] 12. **Coverage and team season stats** - precomputed coverage counts and team season aggregates for the app
 - [ ] 13. **Postseason series** - play-in, playoff and Final Four matchups derived from games
 - [ ] 14. **Player careers** - cross-season player dimension on `person_code` for careers, archives and head-to-head

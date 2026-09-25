@@ -6,8 +6,9 @@ import sys
 from pathlib import Path
 
 from flat_loader import FlatDatabaseLoader
-from flat_schema import TABLES as FLAT_TABLES, physical_name
+from flat_schema import RECORDS_TABLES, TABLES as FLAT_TABLES, physical_name
 from quality import validate_loaded
+from records import build_records, validate_records
 from shared import COMPETITION_CODES as PREFIX, DEFAULT_CONFIG, available_scopes, current_season_year
 
 
@@ -113,15 +114,28 @@ def main(argv=None):
         "dry run" if args.dry_run else "PostgreSQL load"
     )
     print(f"Mode: {mode}", flush=True)
+    season_tables = [name for name in tables if name not in RECORDS_TABLES]
+    records_tables = [name for name in tables if name in RECORDS_TABLES]
     loader = FlatDatabaseLoader(args.data_root, args.competition, seasons,
-                                tables, args.config, args.dry_run)
+                                season_tables, args.config, args.dry_run)
     try:
         if not args.quality_only:
-            loader.run()
+            if season_tables:
+                loader.run()
+            if records_tables:
+                # Not season-scoped: always recomputed from every season
+                # already loaded locally, regardless of -sc.
+                print("\nRecords tables (all local history)", flush=True)
+                build_records(args.config, records_tables, dry_run=args.dry_run)
         if args.quality_only or (not args.dry_run and not args.skip_quality_check):
             print("\nRead-only quality checks", flush=True)
-            if not validate_loaded(args.config, args.data_root, args.competition,
-                                   seasons, tables):
+            passed = True
+            if season_tables:
+                passed &= validate_loaded(args.config, args.data_root, args.competition,
+                                          seasons, season_tables)
+            if records_tables:
+                passed &= validate_records(args.config, records_tables)
+            if not passed:
                 print("Quality checks failed. Loaded rows were not rolled back; "
                       "inspect the reported issues.", file=sys.stderr, flush=True)
                 return 1

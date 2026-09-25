@@ -311,7 +311,9 @@ not set, `pipeline.py` asks for it with hidden input right before publishing.
 - Load into local PostgreSQL: `python postgres_etl/main.py -sc <seasons>`
 - Load dry run (no database): `python postgres_etl/main.py -sc <seasons> --dry-run`
 - Quality report only: `python postgres_etl/main.py -sc <seasons> --quality-only`
-- Publish to Neon: `python neon_publish/main.py -sc <seasons>` (always `--dry-run` first)
+- Publish to Neon: `python neon_publish/main.py -sc <seasons>` (always `--dry-run` first).
+  Play-by-play and shots only for E2025 and E2026 (first run for E2025:
+  `python neon_publish/main.py -sc 2025 -tb play_by_play shots`)
 - Drop the old `etl_flat_*` view names in Neon once the web app reads the `app_*`
   names: `python neon_publish/main.py --drop-old-names` (`--dry-run` first)
 - CSV export: `python tables_to_csv/main.py -sc <seasons>`

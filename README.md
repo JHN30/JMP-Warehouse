@@ -47,8 +47,8 @@ Or without typing: **Terminal > Run Task... > "Refresh current season"** (or
 | --- | --- |
 | [pipeline.py](pipeline.py) | Scheduled refresh: fetch → load (with quality checks) → publish. Stops after the fetch when nothing changed. |
 | [api_requests/](api_requests/README.md) | **Fetch.** Rate-limited downloader for the v2/v3 APIs plus live play-by-play and shots. Writes to `data/bronze/`. |
-| [postgres_etl/](postgres_etl/README.md) | **Load.** Turns bronze into typed tables in local PostgreSQL (`app_*` for the 22 web-app tables, `etl_flat_*` for the rest) and runs quality checks. |
-| [neon_publish/](neon_publish/README.md) | **Publish.** Replaces seasons of the 22 `app_*` web-app tables in Neon, one transaction per season. |
+| [postgres_etl/](postgres_etl/README.md) | **Load.** Turns bronze into typed tables in local PostgreSQL (`app_*` for the 24 web-app tables, `etl_flat_*` for the rest) and runs quality checks. |
+| [neon_publish/](neon_publish/README.md) | **Publish.** Replaces seasons of the 24 `app_*` web-app tables in Neon (play-by-play and shots game by game), one transaction per season. |
 | [tables_to_csv/](tables_to_csv/README.md) | **Export.** Local PostgreSQL tables → one CSV per season and table (e.g. for MSSQL analysis). |
 | `common/` | Code shared by all stages: the bronze store, database connection, season-code helpers. |
 | [docs/](docs/) | [Data dictionary](docs/DATA_DICTIONARY.md), [pipeline plan and status](docs/PIPELINE-ANALYSIS.md), and the original [handoff](docs/PIPELINE-HANDOFF.md) from the web-app repo. |

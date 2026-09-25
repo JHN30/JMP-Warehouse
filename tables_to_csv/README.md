@@ -57,7 +57,8 @@ Files are separated by competition and season, for example:
 ```text
 data/euroleague_csv/E2025/app_games.csv
 data/euroleague_csv/E2025/app_game_player_stats.csv
-data/euroleague_csv/E2025/etl_flat_play_by_play.csv
+data/euroleague_csv/E2025/app_play_by_play.csv
+data/euroleague_csv/E2025/etl_flat_live_boxscores.csv
 data/euroleague_csv/E2025/etl_source_payloads.csv
 ```
 

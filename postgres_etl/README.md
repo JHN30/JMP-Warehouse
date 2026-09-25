@@ -3,7 +3,7 @@
 `main.py` reads the latest version of each resource in the local bronze layer
 (`data/bronze/<competition>/<season>/`, written by `api_requests`). It does
 not call the EuroLeague APIs. The default output is a **column-first** set of
-tables: the 22 the web app reads are named `app_*` (for example `app_games`),
+tables: the 24 the web app reads are named `app_*` (for example `app_games`),
 the rest `etl_flat_*` (see [Table names](../docs/DATA_DICTIONARY.md#table-names)).
 Ordinary facts and metrics have named SQL columns;
 repeated data gets child tables. JSONB is used only by `etl_source_payloads`

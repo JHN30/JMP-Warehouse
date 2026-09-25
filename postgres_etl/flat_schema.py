@@ -537,7 +537,8 @@ TABLES["source_payloads"] = table("source_payloads", ("relative_path",), (
 
 
 # The tables the web app reads, in publish order. All of them have clean app_*
-# names; the first 21 were called etl_flat_* before feature 22.
+# names; the v2/v3 tables were called etl_flat_* before feature 22, and
+# play_by_play and shots (local only until feature 21) as well.
 PUBLISHED_TABLES = (
     "seasons", "clubs", "people", "registrations", "rounds", "games",
     "game_officials", "game_period_scores", "game_player_stats",
@@ -547,6 +548,7 @@ PUBLISHED_TABLES = (
     "standings_basicstandings", "standings_calendarstandings",
     "standings_streaks", "standings_aheadbehind", "standings_margins",
     "standings_calendar_streaks", "standings_basic_form",
+    "play_by_play", "shots",
     "app_standings",
 )
 RENAMED_TABLES = frozenset(name for name in PUBLISHED_TABLES if not name.startswith("app_"))

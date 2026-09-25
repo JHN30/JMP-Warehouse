@@ -14,19 +14,22 @@ from unittest import mock
 import pipeline
 from neon_publish import publish
 from neon_publish.main import build_parser, main as publish_main
-from neon_publish.publish import (APP_TABLES, drop_old_name_actions, drop_old_names,
-                                  publish_season, remote_counts, shrink_problems)
+from neon_publish.publish import (APP_TABLES, changed_games, drop_old_name_actions,
+                                  drop_old_names, export_season, publish_season,
+                                  remote_counts, shrink_problems)
 from pipeline import season_code_for
 from postgres_etl.flat_schema import TABLES
 
 
 class PublishTests(unittest.TestCase):
     def test_app_tables_are_the_web_app_tables(self):
-        self.assertEqual(len(APP_TABLES), 22)
+        self.assertEqual(len(APP_TABLES), 24)
         self.assertIn("app_standings", APP_TABLES)
         self.assertIn("standings_basicstandings", APP_TABLES)  # kept until the app switches
         self.assertTrue(set(APP_TABLES) <= set(TABLES))
-        self.assertNotIn("play_by_play", APP_TABLES)
+        self.assertIn("play_by_play", APP_TABLES)
+        self.assertIn("shots", APP_TABLES)
+        self.assertNotIn("live_boxscores", APP_TABLES)
         self.assertNotIn("source_payloads", APP_TABLES)
 
     def test_growth_and_small_changes_are_allowed(self):
@@ -291,10 +294,14 @@ def sql_text(query):
 class FakeDatabase:
     """Just enough of a psycopg2 connection: relations with row counts, a statement log."""
 
-    def __init__(self, tables=None, views=None):
+    def __init__(self, tables=None, views=None, games=None, missing_columns=()):
         self.tables = dict(tables or {})   # name -> rows of the tested season
         self.views = dict(views or {})     # name -> base table
+        # name -> {game_code: (rows, checksum)} for the per-game tables
+        self.games = {name: dict(sums) for name, sums in (games or {}).items()}
+        self.missing_columns = set(missing_columns)
         self.statements = []
+        self.params = []
         self.result = None
 
     # connection
@@ -317,8 +324,15 @@ class FakeDatabase:
     def execute(self, query, params=None):
         text = sql_text(query)
         self.statements.append(text)
+        self.params.append(params)
         names = re.findall(r'"(\w+)"', text)
-        if "FROM pg_class" in text:
+        if "md5(string_agg" in text:
+            table = re.search(r'FROM "(\w+)"', text).group(1)
+            self.result = [(game, rows, digest)
+                           for game, (rows, digest) in self.games.get(table, {}).items()]
+        elif text.startswith("SELECT game_code, count(*) FROM"):
+            self.result = [(game, rows) for game, (rows, _) in self.games.get(names[0], {}).items()]
+        elif "FROM pg_class" in text:
             self.result = [(name, "r") for name in params[0] if name in self.tables]
             self.result += [(name, "v") for name in params[0] if name in self.views]
         elif text.startswith("SELECT count(*)"):
@@ -326,13 +340,22 @@ class FakeDatabase:
             self.result = [(self.tables[relation],)]
         elif "information_schema.columns" in text:
             fields = TABLES[params[0].removeprefix("app_")].fields if params[0] in self.tables else ()
-            self.result = [(field.name,) for field in fields]
+            self.result = [(field.name,) for field in fields
+                           if field.name not in self.missing_columns]
         elif text.startswith("ALTER TABLE") and " RENAME TO " in text:
             self.tables[names[1]] = self.tables.pop(names[0])
+        elif text.startswith("CREATE TABLE"):
+            self.tables.setdefault(names[0], 0)
+        elif text.startswith("ALTER TABLE") and " ADD COLUMN " in text:
+            self.missing_columns.discard(names[1])
         elif text.startswith("CREATE VIEW"):
             self.views[names[0]] = names[1]
         elif text.startswith("DROP VIEW"):
             del self.views[names[0]]
+        elif text.startswith("DELETE FROM") and "ANY(%s)" in text:
+            for game in params[0]:
+                rows, _ = self.games.get(names[0], {}).pop(game, (0, None))
+                self.tables[names[0]] -= rows
         elif text.startswith("DELETE FROM"):
             self.tables[names[0]] = 0
 
@@ -340,7 +363,8 @@ class FakeDatabase:
         text = sql_text(query)
         self.statements.append(text)
         if "FROM STDIN" in text:
-            self.tables[re.findall(r'"(\w+)"', text)[0]] = len(spool.read().splitlines())
+            table = re.findall(r'"(\w+)"', text)[0]
+            self.tables[table] = self.tables.get(table, 0) + len(spool.read().splitlines())
 
     def fetchone(self):
         return self.result[0]
@@ -358,7 +382,7 @@ def publish_games(neon, dry_run=False):
     local = FakeDatabase({"app_games": 380})
     lines = []
     spools = {"games": io.BytesIO(b"row\n" * 380)}
-    with mock.patch.object(publish, "export_season", return_value=({"games": 380}, spools)):
+    with mock.patch.object(publish, "export_season", return_value=({"games": 380}, spools, {})):
         result = publish_season(local, neon, "euroleague", "E2025", ["games"],
                                 dry_run=dry_run, log=lines.append)
     return result, lines
@@ -371,7 +395,7 @@ def changes_schema(neon):
 class NeonRenameTests(unittest.TestCase):
     def test_counts_use_the_new_name_or_else_the_old_table(self):
         neon = FakeDatabase({"etl_flat_games": 380, "app_clubs": 20}, {"etl_flat_clubs": "app_clubs"})
-        counts, planned = remote_counts(neon, "E", "E2025", ["games", "clubs", "people"])
+        counts, planned, _ = remote_counts(neon, "E", "E2025", ["games", "clubs", "people"])
         self.assertEqual(counts, {"games": 380, "clubs": 20, "people": None})
         self.assertEqual(planned, [("rename", "etl_flat_games", "app_games"),
                                    ("view", "etl_flat_games", "app_games")])
@@ -447,6 +471,128 @@ class DropOldNamesTests(unittest.TestCase):
             with self.assertRaises(SystemExit), mock.patch("sys.stderr", io.StringIO()):
                 publish_main(["--drop-old-names", *extra])
         self.assertIn("--drop-old-names", build_parser().format_help())
+
+
+def publish_play_by_play(neon, local_sums, plan, local_rows):
+    """Publish only `play_by_play` with a faked export of `plan` = (replace, remove)."""
+    replace, remove = plan
+    copied = sum(local_sums[game][0] for game in replace)
+    spools = {"play_by_play": io.BytesIO(b"row\n" * copied)}
+    lines = []
+    exported = ({"play_by_play": local_rows}, spools,
+                {"play_by_play": (replace, remove, len(local_sums))})
+    with mock.patch.object(publish, "export_season", return_value=exported):
+        result = publish_season(FakeDatabase(), neon, "euroleague", "E2025", ["play_by_play"],
+                                log=lines.append)
+    return result, lines
+
+
+LOCAL_SUMS = {1: (10, "a"), 2: (12, "b"), 3: (8, "c")}
+
+
+class PerGamePublishTests(unittest.TestCase):
+    def test_changed_games_compares_rows_and_checksums(self):
+        remote = {1: (10, "a"), 2: (12, "old"), 4: (5, "d")}
+        self.assertEqual(changed_games(LOCAL_SUMS, remote), ([2, 3], [4]))
+        self.assertEqual(changed_games(LOCAL_SUMS, dict(LOCAL_SUMS)), ([], []))
+        self.assertEqual(changed_games(LOCAL_SUMS, {}), ([1, 2, 3], []))
+        self.assertEqual(changed_games({1: (10, "a")}, {1: (9, "a")}), ([1], []))
+
+    def test_first_publish_creates_the_table_and_copies_every_game(self):
+        neon = FakeDatabase()
+        result, lines = publish_play_by_play(neon, LOCAL_SUMS, ([1, 2, 3], []), 30)
+        self.assertEqual(result, {"play_by_play": (None, 30)})
+        self.assertTrue(neon.ddl()[0].startswith('CREATE TABLE IF NOT EXISTS "app_play_by_play"'))
+        self.assertEqual(neon.tables["app_play_by_play"], 30)
+        self.assertIn("  app_play_by_play: 3 of 3 game(s) replaced", lines)
+
+    def test_unchanged_games_copy_nothing(self):
+        neon = FakeDatabase({"app_play_by_play": 30}, games={"app_play_by_play": LOCAL_SUMS})
+        result, lines = publish_play_by_play(neon, LOCAL_SUMS, ([], []), 30)
+        self.assertEqual(result, {"play_by_play": (30, 30)})
+        self.assertEqual(neon.ddl(), [])
+        self.assertIn("  app_play_by_play: 0 of 3 game(s) replaced", lines)
+
+    def test_only_changed_games_are_deleted_and_copied_and_extra_games_removed(self):
+        remote = {1: (10, "a"), 2: (11, "old"), 3: (8, "c"), 4: (2, "d")}
+        neon = FakeDatabase({"app_play_by_play": 31}, games={"app_play_by_play": remote})
+        result, lines = publish_play_by_play(neon, LOCAL_SUMS, ([2], [4]), 30)
+        self.assertEqual(result, {"play_by_play": (31, 30)})
+        deletes = [(text, params) for text, params in zip(neon.statements, neon.params)
+                   if text.startswith("DELETE")]
+        self.assertEqual(len(deletes), 1)
+        self.assertIn("AND game_code = ANY(%s)", deletes[0][0])
+        self.assertEqual(deletes[0][1], ([2, 4],))
+        self.assertEqual(sum(text.startswith("COPY") for text in neon.ddl()), 1)
+        self.assertEqual(neon.tables["app_play_by_play"], 30)
+        self.assertIn("  app_play_by_play: 1 of 3 game(s) replaced, 1 removed", lines)
+
+    def test_dry_run_reports_games_and_changes_nothing(self):
+        local = FakeDatabase({"app_play_by_play": 30}, games={"app_play_by_play": LOCAL_SUMS})
+        neon = FakeDatabase({"app_play_by_play": 25},
+                            games={"app_play_by_play": {1: (10, "a"), 2: (15, "x")}})
+        lines = []
+        result = publish_season(local, neon, "euroleague", "E2025", ["play_by_play"],
+                                dry_run=True, log=lines.append)
+        self.assertEqual(result, {"play_by_play": (25, 30)})
+        self.assertEqual(lines, ["  app_play_by_play: 2 of 3 game(s) would be replaced"])
+        self.assertEqual(neon.ddl(), [])
+
+    def test_checksums_are_printed_in_utc_with_iso_dates(self):
+        neon = FakeDatabase({"app_shots": 3}, games={"app_shots": {7: (3, "s")}})
+        _, _, sums = remote_counts(neon, "E", "E2025", ["shots"])
+        self.assertEqual(sums, {"shots": {7: (3, "s")}})
+        checksum = neon.statements.index(next(text for text in neon.statements if "md5" in text))
+        self.assertEqual(neon.statements[checksum - 2:checksum],
+                         ["SET LOCAL TimeZone = 'UTC'", "SET LOCAL DateStyle = 'ISO'"])
+
+    def test_missing_table_or_column_in_neon_means_every_game_is_new(self):
+        _, _, sums = remote_counts(FakeDatabase(), "E", "E2025", ["play_by_play"])
+        self.assertEqual(sums, {"play_by_play": {}})
+        neon = FakeDatabase({"app_play_by_play": 30}, games={"app_play_by_play": LOCAL_SUMS},
+                            missing_columns={"play_info"})
+        _, _, sums = remote_counts(neon, "E", "E2025", ["play_by_play"])
+        self.assertEqual(sums, {"play_by_play": {1: (10, None), 2: (12, None), 3: (8, None)}})
+        self.assertFalse([text for text in neon.statements if "md5" in text])
+        self.assertEqual(changed_games(LOCAL_SUMS, sums["play_by_play"]), ([1, 2, 3], []))
+
+    def test_missing_column_still_removes_games_only_neon_has(self):
+        remote = {**LOCAL_SUMS, 4: (2, "d")}
+        neon = FakeDatabase({"app_play_by_play": 32}, games={"app_play_by_play": remote},
+                            missing_columns={"play_info"})
+        _, _, sums = remote_counts(neon, "E", "E2025", ["play_by_play"])
+        plan = changed_games(LOCAL_SUMS, sums["play_by_play"])
+        self.assertEqual(plan, ([1, 2, 3], [4]))
+        neon.statements.clear()
+        neon.params.clear()
+        result, lines = publish_play_by_play(neon, LOCAL_SUMS, plan, 30)
+        self.assertEqual(result, {"play_by_play": (32, 30)})
+        self.assertIn('ALTER TABLE "app_play_by_play" ADD COLUMN "play_info" TEXT', neon.statements)
+        delete = next(params for text, params in zip(neon.statements, neon.params)
+                      if text.startswith("DELETE"))
+        self.assertEqual(delete, ([1, 2, 3, 4],))
+        self.assertEqual(neon.tables["app_play_by_play"], 30)
+        self.assertIn("  app_play_by_play: 3 of 3 game(s) replaced, 1 removed", lines)
+
+    def test_export_copies_only_the_changed_games(self):
+        local = FakeDatabase({"app_play_by_play": 30, "app_games": 3},
+                             games={"app_play_by_play": LOCAL_SUMS})
+        counts, spools, plans = export_season(
+            local, "E", "E2025", ["games", "play_by_play"],
+            {"play_by_play": {1: (10, "a"), 2: (12, "old")}})
+        self.assertEqual(counts, {"games": 3, "play_by_play": 30})
+        self.assertEqual(plans, {"play_by_play": ([2, 3], [], 3)})
+        copies = [text for text in local.statements if text.startswith("COPY")]
+        self.assertNotIn("game_code = ANY", copies[0])
+        self.assertIn("AND game_code = ANY([2, 3])", copies[1])
+        for spool in spools.values():
+            spool.close()
+
+    def test_other_tables_still_replace_the_whole_season(self):
+        neon = FakeDatabase({"app_games": 380})
+        publish_games(neon)
+        delete = next(text for text in neon.ddl() if text.startswith("DELETE"))
+        self.assertNotIn("ANY", delete)
 
 
 if __name__ == "__main__":

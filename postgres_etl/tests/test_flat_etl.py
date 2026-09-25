@@ -119,11 +119,13 @@ class FlatEtlTests(unittest.TestCase):
 
 class CleanTableNameTests(unittest.TestCase):
     def test_published_tables_have_app_names_and_the_rest_keep_theirs(self):
-        self.assertEqual(len(PUBLISHED_TABLES), 22)
+        self.assertEqual(len(PUBLISHED_TABLES), 24)
         self.assertEqual(physical_name("standings_basicstandings"), "app_standings_basicstandings")
         self.assertEqual(legacy_name("games"), "etl_flat_games")
-        self.assertEqual(physical_name("play_by_play"), "etl_flat_play_by_play")
-        self.assertIsNone(legacy_name("play_by_play"))
+        self.assertEqual(physical_name("play_by_play"), "app_play_by_play")
+        self.assertEqual(legacy_name("shots"), "etl_flat_shots")
+        self.assertEqual(physical_name("live_boxscores"), "etl_flat_live_boxscores")
+        self.assertIsNone(legacy_name("live_boxscores"))
         self.assertEqual(physical_name("app_standings"), "app_standings")
         self.assertIsNone(legacy_name("app_standings"))
         self.assertEqual(physical_name("source_payloads"), "etl_source_payloads")
@@ -143,8 +145,8 @@ class CleanTableNameTests(unittest.TestCase):
                       {}):                                               # created fresh later
             for keep_views in (False, True):
                 self.assertEqual(rename_actions(kinds, ["games"], keep_views), [])
-        self.assertEqual(rename_actions({"etl_flat_play_by_play": "table"},
-                                        ["play_by_play", "app_standings"], True), [])
+        self.assertEqual(rename_actions({"etl_flat_live_boxscores": "table"},
+                                        ["live_boxscores", "app_standings"], True), [])
 
     def test_old_and_new_tables_side_by_side_are_refused(self):
         with self.assertRaisesRegex(ValueError, "Both etl_flat_games and app_games"):

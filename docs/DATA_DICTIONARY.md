@@ -10,10 +10,11 @@ below omit the prefix: the web-app tables are stored as `app_<name>` (see
 
 ## Table names
 
-The 22 tables the web app reads are published to Neon and carry clean `app_*`
-names, locally and in Neon: `app_standings` plus the 21 v2/v3 tables below,
-which were called `etl_flat_*` until feature 22 (2026-09). Column names did
-not change. Every other table keeps its `etl_flat_` name.
+The 24 tables the web app reads are published to Neon and carry clean `app_*`
+names, locally and in Neon: `app_standings`, the 21 v2/v3 tables below, which
+were called `etl_flat_*` until feature 22 (2026-09), and play-by-play and shots
+(feature 21, local-only `etl_flat_*` tables until then). Column names did not
+change. Every other table keeps its `etl_flat_` name.
 
 | Old name (until feature 22) | New name |
 | --- | --- |
@@ -38,6 +39,8 @@ not change. Every other table keeps its `etl_flat_` name.
 | `etl_flat_standings_margins` | `app_standings_margins` |
 | `etl_flat_standings_calendar_streaks` | `app_standings_calendar_streaks` |
 | `etl_flat_standings_basic_form` | `app_standings_basic_form` |
+| `etl_flat_play_by_play` (local only) | `app_play_by_play` |
+| `etl_flat_shots` (local only) | `app_shots` |
 
 **Switchover for the web app** (the app keeps working at every step):
 
@@ -147,11 +150,13 @@ behind closed doors (COVID period)" between March 2020 and June 2022, otherwise
 
 These tables supplement, and sometimes overlap, v2/v3. Older seasons may not
 have live-feed data. A missing live row should not automatically be interpreted
-as a zero-valued performance.
+as a zero-valued performance. Play-by-play and shots are stored as
+`app_play_by_play` and `app_shots` and published to Neon (see below); the other
+live tables stay local.
 
 | Table                                | Extra key                                          | One row represents                                                  | Essential use/filter                                                                                           |
 | ------------------------------------ | -------------------------------------------------- | ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `play_by_play`                       | `game_code`, `period`, `event_ordinal`             | One source event in a game period.                                  | Order within a game by period and event ordinal; `points_a`/`points_b` are often `NULL` on non-scoring events. |
+| `play_by_play`                       | `game_code`, `period`, `event_ordinal`             | One source event in a game period.                                  | Order within a game by period in play order (not alphabetically), then event ordinal; `points_a`/`points_b` are often `NULL` on non-scoring events. |
 | `shots`                              | `game_code`, `shot_ordinal`                        | One shooting-chart attempt, including misses.                       | `points = 0` can mean a miss. Coordinates use the source's system; do not assume screen pixels.                |
 | `live_boxscores`                     | `game_code`                                        | Game-level live box-score summary.                                  | Includes attendance, live flag, and referee text where supplied.                                               |
 | `live_boxscore_players`              | `game_code`, `side`, `player_ordinal`              | One live box-score player entry.                                    | Overlaps v2 `game_player_stats`; `minutes` is source text, not a numeric duration.                             |
@@ -162,6 +167,36 @@ as a zero-valued performance.
 | `live_evolution_largest_differences` | `game_code`, `side_index`, `slot_index`            | One non-null entry from the live largest-difference arrays.         | Indexes are source array positions; interpret with the source payload if needed.                               |
 | `live_comparison`                    | `game_code`                                        | One source comparison summary for a game.                           | A/B and starter/bench values are comparison metrics, not additional box scores.                                |
 | `live_scoring`                       | `game_code`                                        | One game's fast-break, turnover, and second-chance scoring summary. | A/B values come from the live source; do not add them to total points.                                         |
+
+### Web-app contract: `app_play_by_play` and `app_shots`
+
+- **Seasons in Neon:** E2025 and E2026 only (all seasons would be about 1.5 GB).
+  Older seasons exist locally from E2007.
+- **Play-by-play:** key `game_code`, `period`, `event_ordinal`. Order a game by
+  the period in play order (`FirstQuarter`, `SecondQuarter`, `ThirdQuarter`,
+  `ForthQuarter` (source spelling), `ExtraTime` for all overtime), then
+  `event_ordinal`, which restarts at 0 in each period. `period` is text, so
+  sorting on it directly puts `ExtraTime` first and `ForthQuarter` before
+  `SecondQuarter`; map it to its position instead. `play_number` is unique
+  within a season and game (it links each shot to its event) but is not
+  chronological, so do not order by it.
+  `play_type` is the source event code, `marker_time` the game clock text,
+  `comment`/`play_info` free source text.
+- **Shots:** key `game_code`, `shot_ordinal`, one row per attempt including
+  misses (`points = 0`). `coord_x`/`coord_y` use the source's court system (not
+  screen pixels); `zone`, `fastbreak`, `second_chance`, `points_off_turnover`
+  come from the source; `shot_at` is a UTC timestamp.
+- **Scores:** `points_a`/`points_b` are the source's A/B sides and are often
+  `NULL` on non-scoring events; join to `app_games` (local/road) before
+  labelling them.
+- **Players:** `player_code` is the live feed's id; use `person_code` to join to
+  `app_people` and box scores. `person_code_method` says how it was matched.
+  Team and game events (for example a team rebound or a period start) have no
+  `person_code` and no method; an `unmatched` player has no `person_code`
+  either. Every shot has a play-by-play event with the same `play_number`.
+- **Freshness:** a refresh replaces only games whose rows changed, so a game
+  appears after the refresh that follows it and corrections replace the whole
+  game at once.
 
 ## v3 season player statistics
 

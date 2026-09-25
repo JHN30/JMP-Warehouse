@@ -1,6 +1,6 @@
 # Publish to Neon
 
-Copies the 22 web-app tables (`app_standings` and 21 v2/v3 tables, all named `app_*`) for selected
+Copies the 24 web-app tables (`app_standings`, 21 v2/v3 tables, play-by-play and shots; all named `app_*`) for selected
 seasons from **local PostgreSQL** straight into **Neon**. It replaces the CSV
 export + `psql \copy` route (now in `old/code/`: `neon_csv_import/` and
 `import-e2025-e2026.psql`), which could only append and failed when a season was loaded twice.
@@ -41,6 +41,28 @@ python neon_publish/main.py --drop-old-names             # drop them
 ```
 
 It drops only views, never a table, and a later publish does not recreate them.
+
+## Play-by-play and shots: only changed games
+
+`app_play_by_play` and `app_shots` are large (E2025 alone is about 223,000 and
+64,000 rows, about 130 MB in Neon), so they are not replaced as a whole season.
+In the same season transaction, a checksum per game is compared between local
+PostgreSQL and Neon (every column, UTC and ISO dates), and only games that are
+new or differ are deleted and copied; games Neon has but local does not are
+deleted. The output says, for example, `app_play_by_play: 7 of 402 game(s)
+replaced`, and a dry run `... would be replaced`. The shrink guard and the
+row-count check still use the season totals.
+
+Publish them for **E2025 and E2026 only**; older seasons would not fit the
+current Neon plan (about 1.5 GB for all seasons). First run for E2025, after
+checking Neon's free storage:
+
+```powershell
+python neon_publish/main.py -sc 2025 -tb play_by_play shots --dry-run
+python neon_publish/main.py -sc 2025 -tb play_by_play shots
+```
+
+The normal refresh (`pipeline.py`) then keeps the current season up to date.
 
 ## Running it
 

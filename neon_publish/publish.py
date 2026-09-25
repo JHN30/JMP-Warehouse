@@ -27,6 +27,10 @@ from common.seasons import COMPETITION_CODES  # noqa: E402
 # The tables the web app reads (clean app_* names). Live-API tables and
 # etl_source_payloads stay local.
 APP_TABLES = PUBLISHED_TABLES
+# Large tables replaced game by game: only games whose rows differ between local
+# PostgreSQL and Neon are deleted and copied, so a refresh uploads the new games
+# instead of the whole season.
+GAME_DIFF_TABLES = ("play_by_play", "shots")
 NEON_URL_ENV = "NEON_DATABASE_URL"
 # Publishing is refused when a table would keep less than this share of its
 # current Neon rows; a failed or partial local load must not empty the site.
@@ -82,17 +86,56 @@ def _count(cursor, name, competition_code, season_code, relation=None):
     return cursor.fetchone()[0]
 
 
+def game_checksums(cursor, name, competition_code, season_code, relation=None):
+    """{game_code: (rows, md5 of the rows)} for one season of a table.
+
+    Values are printed with UTC and ISO dates, so the same rows give the same
+    checksum in local PostgreSQL and in Neon. Needs an open transaction.
+    """
+    from psycopg2 import sql
+
+    spec = TABLES[name]
+    cursor.execute("SET LOCAL TimeZone = 'UTC'")
+    cursor.execute("SET LOCAL DateStyle = 'ISO'")
+    cursor.execute(sql.SQL(
+        "SELECT game_code, count(*), md5(string_agg(ROW({})::text, E'\\n' ORDER BY {})) "
+        "FROM {} WHERE {} GROUP BY game_code"
+    ).format(_columns(name),
+             sql.SQL(", ").join(sql.Identifier(column) for column in spec.key),
+             sql.Identifier(relation or physical_name(name)),
+             _season_filter(competition_code, season_code)))
+    return {game: (rows, digest) for game, rows, digest in cursor.fetchall()}
+
+
+def game_rows(cursor, relation, competition_code, season_code):
+    """{game_code: (rows, None)}: Neon's games when a checksum cannot be computed
+    (a column is still missing), so every game is replaced and none is kept."""
+    from psycopg2 import sql
+
+    cursor.execute(sql.SQL(
+        "SELECT game_code, count(*) FROM {} WHERE {} GROUP BY game_code"
+    ).format(sql.Identifier(relation), _season_filter(competition_code, season_code)))
+    return {game: (rows, None) for game, rows in cursor.fetchall()}
+
+
+def changed_games(local_sums, remote_sums):
+    """(games to copy again, games to delete only) from local and Neon checksums."""
+    replace = sorted(game for game, value in local_sums.items() if remote_sums.get(game) != value)
+    remove = sorted(game for game in remote_sums if game not in local_sums)
+    return replace, remove
+
+
 def _relations(names):
     """The new and, for renamed tables, the old names of ``names``."""
     return [label for name in names
             for label in (physical_name(name), legacy_name(name)) if label]
 
 
-def _existing_columns(cursor, name):
+def _existing_columns(cursor, name, relation=None):
     cursor.execute(
         "SELECT column_name FROM information_schema.columns "
         "WHERE table_schema = current_schema() AND table_name = %s",
-        (physical_name(name),),
+        (relation or physical_name(name),),
     )
     return {row[0] for row in cursor.fetchall()}
 
@@ -118,21 +161,31 @@ def _ensure_table(cursor, name, log):
             )
 
 
-def export_season(local, competition_code, season_code, names):
-    """Read every table from one consistent local snapshot into CSV spools."""
+def export_season(local, competition_code, season_code, names, remote_sums):
+    """Read every table from one consistent local snapshot into CSV spools.
+
+    For GAME_DIFF_TABLES only the rows of games that differ from ``remote_sums``
+    are exported; the returned plans say which games to replace or remove.
+    """
     from psycopg2 import sql
 
-    counts, spools = {}, {}
+    counts, spools, plans = {}, {}, {}
     local.set_session(readonly=True, isolation_level="REPEATABLE READ")
     try:
         with local.cursor() as cursor:
             for name in names:
                 counts[name] = _count(cursor, name, competition_code, season_code)
+                where = _season_filter(competition_code, season_code)
+                if name in GAME_DIFF_TABLES:
+                    local_sums = game_checksums(cursor, name, competition_code, season_code)
+                    replace, remove = changed_games(local_sums, remote_sums[name])
+                    plans[name] = (replace, remove, len(local_sums))
+                    where = sql.SQL("{} AND game_code = ANY({})").format(
+                        where, sql.Literal(replace))
                 order = sql.SQL(", ").join(sql.Identifier(column) for column in TABLES[name].key)
                 query = sql.SQL(
                     "COPY (SELECT {} FROM {} WHERE {} ORDER BY {}) TO STDOUT WITH (FORMAT CSV)"
-                ).format(_columns(name), sql.Identifier(physical_name(name)),
-                         _season_filter(competition_code, season_code), order)
+                ).format(_columns(name), sql.Identifier(physical_name(name)), where, order)
                 spool = tempfile.SpooledTemporaryFile(max_size=SPOOL_BYTES, mode="w+b")
                 spools[name] = spool
                 cursor.copy_expert(query, spool)
@@ -144,17 +197,20 @@ def export_season(local, competition_code, season_code, names):
     finally:
         local.rollback()
         local.set_session(readonly=False, isolation_level="DEFAULT")
-    return counts, spools
+    return counts, spools, plans
 
 
 def remote_counts(neon, competition_code, season_code, names):
-    """Neon rows per table and the renames a publish would make.
+    """Neon rows per table, the renames a publish would make, and the per-game
+    checksums of GAME_DIFF_TABLES.
 
     A table not yet renamed is counted under its old name, so the shrink guard
     compares with the rows the web app reads now. A conflict raises before any
-    change.
+    change. A missing table has no games; one still lacking a column gets its
+    games without checksums; either way every local game counts as changed and
+    games only Neon has are removed.
     """
-    counts = {}
+    counts, sums = {}, {}
     with neon.cursor() as cursor:
         kinds = relation_kinds(cursor, _relations(names))
         planned = rename_actions(kinds, names, keep_views=True)
@@ -163,8 +219,16 @@ def remote_counts(neon, competition_code, season_code, names):
                              if label and kinds.get(label) == "table"), None)
             counts[name] = (None if relation is None
                             else _count(cursor, name, competition_code, season_code, relation))
+            if name in GAME_DIFF_TABLES and relation is None:
+                sums[name] = {}
+            elif name in GAME_DIFF_TABLES:
+                complete = ({field.name for field in TABLES[name].fields}
+                            <= _existing_columns(cursor, name, relation))
+                sums[name] = (game_checksums(cursor, name, competition_code, season_code, relation)
+                              if complete
+                              else game_rows(cursor, relation, competition_code, season_code))
     neon.rollback()
-    return counts, planned
+    return counts, planned, sums
 
 
 def drop_old_name_actions(kinds, names=APP_TABLES):
@@ -200,13 +264,18 @@ def drop_old_names(neon, dry_run=False, log=print):
     return actions
 
 
+def _games_line(name, replace, remove, total, verb):
+    line = f"  {physical_name(name)}: {len(replace)} of {total} game(s) {verb}"
+    return line + (f", {len(remove)} removed" if remove else "")
+
+
 def publish_season(local, neon, competition, season_code, names,
                    dry_run=False, allow_shrink=False, log=print):
     """Replace one season of ``names`` in Neon; return {table: (before, after)}."""
     from psycopg2 import sql
 
     competition_code = COMPETITION_CODES[competition]
-    before, planned = remote_counts(neon, competition_code, season_code, names)
+    before, planned, remote_sums = remote_counts(neon, competition_code, season_code, names)
     if dry_run:
         for action, old, new in planned:
             if action == "rename":
@@ -215,10 +284,16 @@ def publish_season(local, neon, competition, season_code, names,
         with local.cursor() as cursor:
             local_counts = {name: _count(cursor, name, competition_code, season_code)
                             for name in names}
+            for name in names:
+                if name in GAME_DIFF_TABLES:
+                    local_sums = game_checksums(cursor, name, competition_code, season_code)
+                    replace, remove = changed_games(local_sums, remote_sums[name])
+                    log(_games_line(name, replace, remove, len(local_sums), "would be replaced"))
         local.rollback()
         local.set_session(readonly=False)
     else:
-        local_counts, spools = export_season(local, competition_code, season_code, names)
+        local_counts, spools, plans = export_season(
+            local, competition_code, season_code, names, remote_sums)
 
     try:
         problems = shrink_problems(local_counts, before)
@@ -241,21 +316,32 @@ def publish_season(local, neon, competition, season_code, names,
                     _ensure_table(cursor, name, log)
                 for name in names:
                     table = sql.Identifier(physical_name(name))
-                    cursor.execute(sql.SQL("DELETE FROM {} WHERE {}").format(
-                        table, _season_filter(competition_code, season_code)
-                    ))
-                    cursor.copy_expert(
-                        sql.SQL("COPY {} ({}) FROM STDIN WITH (FORMAT CSV)").format(
-                            table, _columns(name)
-                        ),
-                        spools[name],
-                    )
+                    season = _season_filter(competition_code, season_code)
+                    copy = True
+                    if name in plans:
+                        replace, remove, _ = plans[name]
+                        games = replace + remove
+                        if games:
+                            cursor.execute(sql.SQL("DELETE FROM {} WHERE {} AND game_code = ANY(%s)")
+                                           .format(table, season), (games,))
+                        copy = bool(replace)
+                    else:
+                        cursor.execute(sql.SQL("DELETE FROM {} WHERE {}").format(table, season))
+                    if copy:
+                        cursor.copy_expert(
+                            sql.SQL("COPY {} ({}) FROM STDIN WITH (FORMAT CSV)").format(
+                                table, _columns(name)
+                            ),
+                            spools[name],
+                        )
                     published = _count(cursor, name, competition_code, season_code)
                     if published != local_counts[name]:
                         raise RuntimeError(
                             f"{physical_name(name)}: Neon has {published:,} rows after COPY "
                             f"but local PostgreSQL has {local_counts[name]:,}; rolled back."
                         )
+        for name, (replace, remove, total) in plans.items():
+            log(_games_line(name, replace, remove, total, "replaced"))
         return {name: (before[name], local_counts[name]) for name in names}
     finally:
         if not dry_run:

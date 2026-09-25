@@ -10,12 +10,13 @@ below omit the prefix: the web-app tables are stored as `app_<name>` (see
 
 ## Table names
 
-The 27 tables the web app reads are published to Neon and carry clean `app_*`
+The 30 tables the web app reads are published to Neon and carry clean `app_*`
 names, locally and in Neon: `app_standings`, the 21 v2/v3 tables below, which
 were called `etl_flat_*` until feature 22 (2026-09), play-by-play and shots
-(feature 21, local-only `etl_flat_*` tables until then), and the three
-all-time records tables (feature 11, `app_*`-named from the start; see
-[Web-app tables](#web-app-tables)). Column names did not change on the
+(feature 21, local-only `etl_flat_*` tables until then), the three all-time
+records tables (feature 11), and the three team-season/coverage tables
+(feature 12) — the last six `app_*`-named from the start; see
+[Web-app tables](#web-app-tables). Column names did not change on the
 renamed tables. Every other table keeps its `etl_flat_` name.
 
 | Old name (until feature 22) | New name |
@@ -310,6 +311,75 @@ metrics, source filters and tie-break order, so rows are self-contained
 - The jmp-euroleague2 Express API still computes these records itself for
   now (`SUPPORTED_SEASONS`, currently `E2025`-`E2026` only); switching it to
   read these tables is a separate, coordinated change in that repo.
+
+### `app_team_season_stats`
+
+Team-season totals, own and opponent, mirroring the Express
+`/teams/:clubCode/team-stats?phase=` route. Unlike the records tables above,
+**this table IS season-scoped** (one row set per season, like every other
+table) and fits the normal per-season load and Neon publish path.
+
+| Key | One row represents |
+| --- | --- |
+| `phase_code`, `club_code` | One club's totals in one phase of one season, from played games only (`stats_kind = 'total'`). |
+
+- `club_name`, `games_played`, then `own_<measure>` and `opp_<measure>`
+  (NUMERIC) for 20 measures: `points`, `field_goals_made_2/attempted_2`,
+  `field_goals_made_3/attempted_3`, `free_throws_made/attempted`,
+  `field_goals_made_total/attempted_total`, `total_rebounds`,
+  `defensive_rebounds`, `offensive_rebounds`, `assistances`, `steals`,
+  `turnovers`, `blocks_favour`, `blocks_against`, `fouls_commited`,
+  `fouls_received`, `valuation`.
+- "Own" sums the club's own `app_game_team_stats` row for a game; "opponent"
+  sums the other side's row in the same game.
+- One row per phase actually present in that season's games (`RS`, `PI`,
+  `PO`, `FF`, or older `TS`) — no synthetic "all phases" row; Express has
+  none either.
+
+### `app_coverage_seasons` and `app_coverage_games`
+
+Data-coverage counts, mirroring the Express `/coverage` route (with and
+without `?gameCode=`). Both **are season-scoped**. `app_coverage_seasons` has
+one row per season; `app_coverage_games` has one row per game (played or
+not).
+
+| Table | Key | One row represents |
+| --- | --- | --- |
+| `app_coverage_seasons` | (season only) | 8 data-coverage items for one season. |
+| `app_coverage_games` | `game_code` | The same 8 items, scoped to one game. |
+
+Both store their items as one `items JSONB NOT NULL` column: an array of
+exactly 8 objects, always in this order, each shaped
+`{key, label, status, availableCount, applicableCount}`:
+
+| # | `key` | `availableCount` / `applicableCount` (season row) | Status rule |
+| - | --- | --- | --- |
+| 1 | `boxScores` | games with an `app_game_team_stats` `total` row / played games | gameStatus |
+| 2 | `periodScores` | games with an `app_game_period_scores` row / played games | gameStatus |
+| 3 | `officialStandings` | distinct clubs in `app_standings_basicstandings` / distinct clubs in `app_clubs` | rosterStatus |
+| 4 | `rosters` | distinct clubs with a row in `app_registrations` / distinct clubs in `app_clubs` | rosterStatus |
+| 5 | `playerPhotos` | distinct `person_key` with a headshot in `app_game_player_stats` among played games / played games | gameStatus |
+| 6 | `seasonStatistics` | distinct `person_key` in `app_season_stats_traditional` / distinct clubs in `app_clubs` | rosterStatus |
+| 7 | `shotLocations` | games with an `app_shots` row / played games | gameStatus |
+| 8 | `playByPlay` | games with an `app_play_by_play` row / played games | gameStatus |
+
+Items 5 and 6 compare a player count against a game/club count — an existing
+Express quirk, replicated as-is, not a design choice made here.
+
+- **gameStatus**(available, applicable): `applicable = 0` →
+  `notYetApplicable`; `available = 0` → `unavailable`; `available >=
+  applicable` → `available`; otherwise `partial`.
+- **rosterStatus**: same as gameStatus, but `incomplete` instead of `partial`.
+- `app_coverage_games` scoping: items 1, 2, 5, 7, 8 narrow every count to that
+  one game (`applicableCount` becomes 0 or 1, per whether the game is
+  played); items 3, 4, 6 stay season-wide, identical to that season's
+  `app_coverage_seasons` row. This mismatched scoping is Express's existing
+  behavior, replicated exactly.
+- **Approved change from Express:** `shotLocations` and `playByPlay` are
+  computed from this pipeline's own `app_shots`/`app_play_by_play` data.
+  Express currently hardcodes both as `unavailable` always (stale — it
+  hasn't been updated since feature 21 added that data). Fixing that on the
+  Express side is separate, coordinated, later work.
 
 ## Source archive
 

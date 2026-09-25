@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from time import monotonic
 
+from aggregates import COVERAGE_ITEM_KEYS, MEASURE_COLUMNS
 from flat_schema import TABLES, physical_name
 from flat_transform import FlatSeason
 from shared import COMPETITION_CODES, connect, elapsed
@@ -119,6 +120,38 @@ def checks_for_tables(names):
             'AND COALESCE(page.season_code, basic.season_code) = %s '
             'AND (page.club_code IS NULL OR basic.club_code IS NULL)'
         )))
+    if "app_team_season_stats" in names:
+        negative = " OR ".join(
+            f'row."own_{c}" < 0 OR row."opp_{c}" < 0' for c in MEASURE_COLUMNS)
+        checks.append(Check("team_season_stats_negative", "app_team_season_stats", scoped_count(
+            "app_team_season_stats", f"row.games_played < 0 OR {negative}")))
+    for name in ("app_coverage_seasons", "app_coverage_games"):
+        if name in names:
+            keys_literal = ", ".join(f"'{key}'" for key in COVERAGE_ITEM_KEYS)
+            checks.append(Check(f"{name}_item_keys", name, scoped_count(
+                name,
+                "(SELECT array_agg(elem->>'key' ORDER BY ordinality) "
+                "FROM jsonb_array_elements(row.items) WITH ORDINALITY AS t(elem, ordinality)) "
+                f"IS DISTINCT FROM ARRAY[{keys_literal}]"
+            )))
+            checks.append(Check(f"{name}_item_status", name, (
+                f'SELECT count(*) FROM "{physical_name(name)}" AS row, '
+                "jsonb_array_elements(row.items) AS elem "
+                "WHERE row.competition_code = %s AND row.season_code = %s "
+                "AND (elem->>'status') NOT IN "
+                "('available', 'partial', 'incomplete', 'unavailable', 'notYetApplicable')"
+            )))
+    if {"app_coverage_games", "games"} <= names:
+        checks.append(Check("app_coverage_games_key_mismatch", "app_coverage_games", (
+            'SELECT count(*) FROM "app_coverage_games" AS page '
+            f'FULL JOIN "{physical_name("games")}" AS g '
+            'ON g.competition_code = page.competition_code '
+            'AND g.season_code = page.season_code '
+            'AND g.game_code = page.game_code '
+            'WHERE COALESCE(page.competition_code, g.competition_code) = %s '
+            'AND COALESCE(page.season_code, g.season_code) = %s '
+            'AND (page.game_code IS NULL OR g.game_code IS NULL)'
+        )))
     checks.extend(anomaly_checks(names))
     return checks
 
@@ -234,6 +267,32 @@ def validate_loaded(config_path, data_root, competition, season_codes, names):
                 print(f"  {issue.severity} {physical_name(issue.table)}: "
                       f"{issue.code} ({issue.count:,} row(s))", flush=True)
             connection.rollback()  # Fresh read-only snapshot for the next season.
+    finally:
+        connection.close()
+    return passed
+
+
+def validate_aggregates(config_path, competition, season_codes, names):
+    """Validate season-scoped derived tables (aggregates.py). Unlike
+    validate_loaded, there are no bronze source files to gate on: these
+    tables are computed from other already-loaded local tables."""
+    connection = connect(config_path)
+    passed = True
+    started = monotonic()
+    try:
+        connection.set_session(readonly=True, isolation_level="REPEATABLE READ")
+        for season_code in season_codes:
+            report = check_season(connection, competition, season_code, names)
+            passed &= report.passed
+            errors = sum(issue.severity == "ERROR" for issue in report.issues)
+            warnings = sum(issue.severity == "WARN" for issue in report.issues)
+            print(f"Quality {season_code}: {len(report.counts)} table(s), "
+                  f"{sum(report.counts.values()):,} rows, {errors} error(s), "
+                  f"{warnings} warning(s) | elapsed {elapsed(started)}", flush=True)
+            for issue in report.issues:
+                print(f"  {issue.severity} {physical_name(issue.table)}: "
+                      f"{issue.code} ({issue.count:,} row(s))", flush=True)
+            connection.rollback()
     finally:
         connection.close()
     return passed

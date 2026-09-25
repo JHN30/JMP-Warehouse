@@ -560,6 +560,39 @@ TABLES["app_records_team_seasons"] = Table(
 RECORDS_TABLES = ("app_records_player_seasons", "app_records_single_games",
                   "app_records_team_seasons")
 
+# Team-season totals and data-coverage counts, computed by
+# postgres_etl/aggregates.py from already-loaded local tables. Unlike the
+# records tables above, these ARE season-scoped (one season's rows depend
+# only on that season's data), so they use the normal table() SCOPE and fit
+# the existing per-season load/publish path.
+TEAM_SEASON_MEASURES = (
+    "points fieldGoalsMade2 fieldGoalsAttempted2 fieldGoalsMade3 fieldGoalsAttempted3 "
+    "freeThrowsMade freeThrowsAttempted fieldGoalsMadeTotal fieldGoalsAttemptedTotal "
+    "totalRebounds defensiveRebounds offensiveRebounds assistances steals turnovers "
+    "blocksFavour blocksAgainst foulsCommited foulsReceived valuation"
+)
+TABLES["app_team_season_stats"] = table(
+    "team_season_stats", ("phase_code", "club_code"), (
+        f("phase_code", "TEXT NOT NULL", "@phase_code"),
+        f("club_code", "TEXT NOT NULL", "@club_code"),
+        f("club_name", "TEXT"),
+        f("games_played", "INTEGER NOT NULL"),
+    ), keys(TEAM_SEASON_MEASURES, "NUMERIC", column_prefix="own_"),
+    keys(TEAM_SEASON_MEASURES, "NUMERIC", column_prefix="opp_"),
+)
+TABLES["app_coverage_seasons"] = table(
+    "coverage_seasons", (), (
+        f("items", "JSONB NOT NULL"),
+    ),
+)
+TABLES["app_coverage_games"] = table(
+    "coverage_games", ("game_code",), (
+        f("game_code", "INTEGER NOT NULL", "@game_code"),
+        f("items", "JSONB NOT NULL"),
+    ),
+)
+AGGREGATE_TABLES = ("app_team_season_stats", "app_coverage_seasons", "app_coverage_games")
+
 COMPARISON_NUMERIC = (
     "DefensiveReboundsA OffensiveReboundsB OffensiveReboundsA DefensiveReboundsB "
     "TurnoversStartersA TurnoversBenchA TurnoversStartersB TurnoversBenchB "
@@ -599,6 +632,7 @@ PUBLISHED_TABLES = (
     "play_by_play", "shots",
     "app_standings",
     "app_records_player_seasons", "app_records_single_games", "app_records_team_seasons",
+    "app_team_season_stats", "app_coverage_seasons", "app_coverage_games",
 )
 RENAMED_TABLES = frozenset(name for name in PUBLISHED_TABLES if not name.startswith("app_"))
 

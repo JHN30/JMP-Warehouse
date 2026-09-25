@@ -612,6 +612,31 @@ TABLES["app_postseason_series"] = table(
 AGGREGATE_TABLES = ("app_team_season_stats", "app_coverage_seasons", "app_coverage_games",
                     "app_postseason_series")
 
+# Cross-season player identity, like the records tables above (not
+# season-scoped): one row per person_code, computed by
+# postgres_etl/players.py from already-loaded local data.
+TABLES["app_players"] = Table(
+    "players", ("competition_code", "person_code"), (
+        f("competition_code", "TEXT NOT NULL"),
+        f("person_code", "TEXT NOT NULL"),
+        f("name", "TEXT"),
+        f("country_code", "TEXT"),
+        f("country_name", "TEXT"),
+        f("height_cm", "INTEGER"),
+        f("weight_kg", "INTEGER"),
+        f("birth_at", "TIMESTAMP"),
+        f("birth_country_code", "TEXT"),
+        f("birth_country_name", "TEXT"),
+        f("position", "INTEGER"),
+        f("position_name", "TEXT"),
+        f("first_season_code", "TEXT NOT NULL"),
+        f("last_season_code", "TEXT NOT NULL"),
+        f("seasons_played", "INTEGER NOT NULL"),
+        f("clubs", "JSONB NOT NULL"),
+    ),
+)
+PLAYER_TABLES = ("app_players",)
+
 COMPARISON_NUMERIC = (
     "DefensiveReboundsA OffensiveReboundsB OffensiveReboundsA DefensiveReboundsB "
     "TurnoversStartersA TurnoversBenchA TurnoversStartersB TurnoversBenchB "
@@ -653,6 +678,7 @@ PUBLISHED_TABLES = (
     "app_records_player_seasons", "app_records_single_games", "app_records_team_seasons",
     "app_team_season_stats", "app_coverage_seasons", "app_coverage_games",
     "app_postseason_series",
+    "app_players",
 )
 RENAMED_TABLES = frozenset(name for name in PUBLISHED_TABLES if not name.startswith("app_"))
 

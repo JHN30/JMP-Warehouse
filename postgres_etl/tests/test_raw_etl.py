@@ -232,10 +232,14 @@ class RawEtlTests(unittest.TestCase):
                 season, name, season.files(name), 0), 0)
 
     def test_schema_is_scoped_and_non_destructive(self):
+        # app_players spans a range of seasons per row (first_season_code..
+        # last_season_code), not one season, so it has no single season_code
+        # column; every other table keeps one even when not part of the key.
         for name in TABLES:
             sql = create_table_sql(name)
             self.assertIn('"competition_code"', sql)
-            self.assertIn('"season_code"', sql)
+            if name != "app_players":
+                self.assertIn('"season_code"', sql)
             self.assertNotIn("DROP", sql)
 
     def write_standings_round(self):

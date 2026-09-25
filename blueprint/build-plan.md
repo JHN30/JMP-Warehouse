@@ -33,7 +33,7 @@ Items 1-8 were already shipped when the Blueprint was adopted (2026-09-24).
 - [x] 11. **Records tables** - precomputed player-season, single-game and team-season records, excluding forfeits, instead of computing them in the Express API
 - [x] 12. **Coverage and team season stats** - precomputed coverage counts and team season aggregates for the app
 - [x] 13. **Postseason series** - play-in, playoff and Final Four matchups derived from games
-- [ ] 14. **Player careers** - cross-season player dimension on `person_code` for careers, archives and head-to-head
+- [x] 14. **Player careers** - cross-season player dimension on `person_code` for careers, archives and head-to-head
 - [ ] 15. **Historical seasons in Neon** - publish older seasons once Neon storage allows (app tables for all seasons are about 237 MB)
 - [ ] 16. **Clean app schema** - move the clean-named app tables (feature 22) into a Neon `app` schema with a read-only role, coordinated with the web app
 - [ ] 17. **Dependencies and CI** - `requirements.txt` and an automatic test run so the project installs and verifies anywhere

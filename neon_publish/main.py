@@ -8,11 +8,11 @@ from datetime import datetime
 from pathlib import Path
 
 if __package__:
-    from .publish import (APP_TABLES, NEON_URL_ENV, RECORDS_TABLES, drop_old_names, neon_connect,
-                          publish_records, publish_season)
+    from .publish import (APP_TABLES, NEON_URL_ENV, PLAYER_TABLES, RECORDS_TABLES, drop_old_names,
+                          neon_connect, publish_records, publish_season)
 else:
-    from publish import (APP_TABLES, NEON_URL_ENV, RECORDS_TABLES, drop_old_names, neon_connect,
-                         publish_records, publish_season)
+    from publish import (APP_TABLES, NEON_URL_ENV, PLAYER_TABLES, RECORDS_TABLES, drop_old_names,
+                         neon_connect, publish_records, publish_season)
 
 from common.db import DEFAULT_CONFIG, Tee, connect, elapsed, log_directory  # noqa: E402
 from common.seasons import COMPETITION_CODES, select_seasons  # noqa: E402
@@ -78,8 +78,9 @@ def run(args, names):
             print("Not loaded locally; skipping seasons: " + ", ".join(missing), flush=True)
         neon = neon_connect(args.neon_url_env)
         neon.set_client_encoding("UTF8")
-        season_names = [name for name in names if name not in RECORDS_TABLES]
-        records_names = [name for name in names if name in RECORDS_TABLES]
+        cross_season_tables = RECORDS_TABLES + PLAYER_TABLES
+        season_names = [name for name in names if name not in cross_season_tables]
+        cross_season_names = [name for name in names if name in cross_season_tables]
         print(f"Competition: {args.competition}", flush=True)
         print(f"Seasons: {', '.join(seasons)}", flush=True)
         print(f"Tables: {len(names)} web-app tables", flush=True)
@@ -99,17 +100,18 @@ def run(args, names):
                 status = "checked" if args.dry_run else "committed"
                 print(f"Season {season_code} {status} in {elapsed(season_started)}", flush=True)
 
-        if records_names:
+        if cross_season_names:
             # Not season-scoped: always the full local table, independent of -sc.
-            print(f"\nRecords tables (all local history) | elapsed {elapsed(started)}", flush=True)
-            result = publish_records(local, neon, records_names,
+            print(f"\nCross-season tables (all local history) | elapsed {elapsed(started)}",
+                  flush=True)
+            result = publish_records(local, neon, cross_season_names,
                                      dry_run=args.dry_run, allow_shrink=args.allow_shrink)
             for name, (before, after) in result.items():
                 shown = "missing" if before is None else f"{before:,}"
                 verb = "would become" if args.dry_run else "->"
                 print(f"  {physical_name(name)}: {shown} {verb} {after:,} rows", flush=True)
             status = "checked" if args.dry_run else "committed"
-            print(f"Records tables {status} in {elapsed(started)}", flush=True)
+            print(f"Cross-season tables {status} in {elapsed(started)}", flush=True)
 
         print(f"\nFinished {len(seasons)} season(s) in {elapsed(started)}", flush=True)
         return 0

@@ -10,14 +10,15 @@ below omit the prefix: the web-app tables are stored as `app_<name>` (see
 
 ## Table names
 
-The 31 tables the web app reads are published to Neon and carry clean `app_*`
+The 32 tables the web app reads are published to Neon and carry clean `app_*`
 names, locally and in Neon: `app_standings`, the 21 v2/v3 tables below, which
 were called `etl_flat_*` until feature 22 (2026-09), play-by-play and shots
 (feature 21, local-only `etl_flat_*` tables until then), the three all-time
 records tables (feature 11), the three team-season/coverage tables
-(feature 12), and `app_postseason_series` (feature 13) — the last seven
-`app_*`-named from the start; see [Web-app tables](#web-app-tables). Column
-names did not change on the renamed tables. Every other table keeps its
+(feature 12), `app_postseason_series` (feature 13), and `app_players`
+(feature 14) — the last eight `app_*`-named from the start; see
+[Web-app tables](#web-app-tables). Column names did not change on the
+renamed tables. Every other table keeps its
 `etl_flat_` name.
 
 | Old name (until feature 22) | New name |
@@ -420,6 +421,38 @@ that the source data doesn't carry.
   reliably derivable without hardcoding a best-of-N target per era, so it's
   intentionally not stored. `winner_club_code` plus the game list already
   show the state.
+
+### `app_players`
+
+One row per player (`person_code`), like the records tables above (not
+season-scoped: a player's row spans every season they appeared in). No
+existing Express contract exists for this table. The build-plan line named
+three uses — careers, archives, head-to-head — but only "identity lookup"
+needed a new table: archives (season-by-season club history) is already
+fully in `app_registrations`, and head-to-head (shared games) is already
+fully in `app_game_player_stats`, both joinable by `person_code` (confirmed
+identical to `person_key` for every player in local history). Career stat
+totals are deliberately not precomputed here either — `app_season_stats_traditional`
+already has the per-season numbers, summable by `person_code` like any other
+cross-season query.
+
+| Key | One row represents |
+| --- | --- |
+| `person_code` | One player who has at least one `role_code = 'J'` row in `app_registrations` (excludes coaches, staff, and referee-only people). |
+
+- `name`, `country_code`, `country_name`, `height_cm`, `weight_kg`,
+  `birth_at`, `birth_country_code`, `birth_country_name`, `position`,
+  `position_name`: "latest known" — taken from the row with the maximum
+  `season_code` for that player, since these can change slightly season to
+  season and the app needs one current-best answer.
+- `first_season_code`, `last_season_code`, `seasons_played` (INTEGER NOT
+  NULL): the player's career span, from every `role_code = 'J'`
+  registration.
+- `clubs` (JSONB NOT NULL): array of `{seasonCode, clubCode, clubName}`,
+  ordered by season, one entry per distinct season+club the player was
+  registered to as a player — the compact archive summary; full per-season
+  detail (dorsal, position that season, exact dates) stays in
+  `app_registrations`.
 
 ## Source archive
 

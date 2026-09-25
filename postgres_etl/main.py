@@ -7,7 +7,8 @@ from pathlib import Path
 
 from aggregates import AGGREGATE_TABLES, build_aggregates
 from flat_loader import FlatDatabaseLoader
-from flat_schema import RECORDS_TABLES, TABLES as FLAT_TABLES, physical_name
+from flat_schema import PLAYER_TABLES, RECORDS_TABLES, TABLES as FLAT_TABLES, physical_name
+from players import build_players, validate_players
 from quality import validate_aggregates, validate_loaded
 from records import build_records, validate_records
 from shared import COMPETITION_CODES as PREFIX, DEFAULT_CONFIG, available_scopes, current_season_year
@@ -116,9 +117,11 @@ def main(argv=None):
     )
     print(f"Mode: {mode}", flush=True)
     records_tables = [name for name in tables if name in RECORDS_TABLES]
+    player_tables = [name for name in tables if name in PLAYER_TABLES]
     aggregate_tables = [name for name in tables if name in AGGREGATE_TABLES]
     season_tables = [name for name in tables
-                     if name not in RECORDS_TABLES and name not in AGGREGATE_TABLES]
+                     if name not in RECORDS_TABLES and name not in AGGREGATE_TABLES
+                     and name not in PLAYER_TABLES]
     loader = FlatDatabaseLoader(args.data_root, args.competition, seasons,
                                 season_tables, args.config, args.dry_run)
     try:
@@ -130,6 +133,11 @@ def main(argv=None):
                 # already loaded locally, regardless of -sc.
                 print("\nRecords tables (all local history)", flush=True)
                 build_records(args.config, records_tables, dry_run=args.dry_run)
+            if player_tables:
+                # Not season-scoped: always recomputed from every season
+                # already loaded locally, regardless of -sc.
+                print("\nPlayer tables (all local history)", flush=True)
+                build_players(args.config, player_tables, dry_run=args.dry_run)
             if aggregate_tables:
                 print("\nAggregate tables", flush=True)
                 build_aggregates(args.config, seasons, aggregate_tables,
@@ -142,6 +150,8 @@ def main(argv=None):
                                           seasons, season_tables)
             if records_tables:
                 passed &= validate_records(args.config, records_tables)
+            if player_tables:
+                passed &= validate_players(args.config, player_tables)
             if aggregate_tables:
                 passed &= validate_aggregates(args.config, args.competition, seasons,
                                               aggregate_tables)

@@ -18,8 +18,8 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from postgres_etl.flat_schema import (  # noqa: E402
-    PUBLISHED_TABLES, RECORDS_TABLES, TABLES, create_index_sql, create_table_sql, legacy_name,
-    physical_name, relation_kinds, rename_actions, rename_legacy_tables,
+    PLAYER_TABLES, PUBLISHED_TABLES, RECORDS_TABLES, TABLES, create_index_sql, create_table_sql,
+    legacy_name, physical_name, relation_kinds, rename_actions, rename_legacy_tables,
 )
 from common.seasons import COMPETITION_CODES  # noqa: E402
 

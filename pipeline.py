@@ -25,11 +25,13 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from common.db import log_directory
+from common.dotenv import read_env_value
 from common.seasons import COMPETITION_CODES, current_season_year
 
 
 ROOT = Path(__file__).resolve().parent
 NEON_URL_ENV = "NEON_DATABASE_URL"
+NEON_DOTENV_PATH = ROOT / ".env"
 CHILD_ENV = {"PYTHONIOENCODING": "utf-8", "PYTHONUNBUFFERED": "1"}
 
 
@@ -186,11 +188,14 @@ def unquote(value):
     return value
 
 
-def resolve_neon_url(environ, prompt, interactive):
+def resolve_neon_url(environ, prompt, interactive, dotenv_path=NEON_DOTENV_PATH):
     """Return (url, source). The URL is kept in memory for this run only."""
     url = unquote(environ.get(NEON_URL_ENV))
     if url:
         return url, f"from {NEON_URL_ENV}"
+    url = unquote(read_env_value(dotenv_path, NEON_URL_ENV))
+    if url:
+        return url, "from .env"
     if not interactive:
         return None, "no interactive console to ask"
     url = unquote(prompt("Neon URL (hidden, used for this run only): "))
@@ -265,7 +270,8 @@ def build_parser():
 
 
 def refresh(args, season_code, log, state_file, facts, stage_runner=run_stage,
-            prompt=getpass.getpass, environ=None, interactive=None):
+            prompt=getpass.getpass, environ=None, interactive=None,
+            dotenv_path=NEON_DOTENV_PATH):
     """Run the stages, filling ``facts`` as they go; return (exit code, result, next step)."""
     environ = os.environ if environ is None else environ
     interactive = sys.stdin.isatty() if interactive is None else interactive
@@ -319,7 +325,7 @@ def refresh(args, season_code, log, state_file, facts, stage_runner=run_stage,
                 "Neon was NOT updated; the publish stays pending for the next run. "
                 "Fix the reported problem (see the log), then run again.")
 
-    url, source = resolve_neon_url(environ, prompt, interactive)
+    url, source = resolve_neon_url(environ, prompt, interactive, dotenv_path)
     if not url:
         log.line(f"No Neon URL ({source}); not publishing.")
         return (1, "STOPPED before Publish (no Neon URL)",

@@ -114,13 +114,15 @@ class RefreshCommandTests(unittest.TestCase):
         self.state = self.root / "state.json"
         self.facts = pipeline.StageFacts()
 
-    def run_refresh(self, stages, argv=(), environ=None, prompt=None, interactive=True):
+    def run_refresh(self, stages, argv=(), environ=None, prompt=None, interactive=True,
+                    dotenv_path=None):
         args = pipeline.build_parser().parse_args(list(argv))
         prompt = prompt or mock.Mock(side_effect=AssertionError("prompt not expected"))
         return pipeline.refresh(args, "E2026", self.log, self.state, self.facts,
                                 stage_runner=stages, prompt=prompt,
                                 environ={pipeline.NEON_URL_ENV: SECRET_URL} if environ is None else environ,
-                                interactive=interactive)
+                                interactive=interactive,
+                                dotenv_path=dotenv_path or self.root / ".env")
 
     def log_text(self):
         self.log.file.flush()
@@ -204,11 +206,22 @@ class RefreshCommandTests(unittest.TestCase):
         self.run_refresh(nothing, environ={}, prompt=prompt)
         prompt.assert_called_once()  # nothing to publish, so no second question
 
+    def test_neon_url_is_read_from_dotenv_only_when_publishing(self):
+        dotenv_path = self.root / ".env"
+        dotenv_path.write_text(f"NEON_DATABASE_URL={SECRET_URL}\n", encoding="utf-8")
+        stages = FakeStages()
+        self.assertEqual(self.run_refresh(stages, environ={}, dotenv_path=dotenv_path)[:2], (0, "OK"))
+        self.assertEqual(stages.ran("publish")[0][pipeline.NEON_URL_ENV], SECRET_URL)
+        self.assertNotIn(SECRET_URL, self.log_text())
+        self.assertIn("Neon URL: from .env.", self.log_text())
+
     def test_quoted_neon_url_is_unquoted(self):
         for quoted in (f'"{SECRET_URL}"', f"'{SECRET_URL}'", f'  "{SECRET_URL}" '):
-            self.assertEqual(pipeline.resolve_neon_url({pipeline.NEON_URL_ENV: quoted}, None, True)[0],
+            self.assertEqual(pipeline.resolve_neon_url(
+                             {pipeline.NEON_URL_ENV: quoted}, None, True, self.root / ".env")[0],
                              SECRET_URL)
-            self.assertEqual(pipeline.resolve_neon_url({}, lambda _: quoted, True)[0], SECRET_URL)
+            self.assertEqual(pipeline.resolve_neon_url(
+                             {}, lambda _: quoted, True, self.root / ".env")[0], SECRET_URL)
 
     def test_publish_output_echoing_the_url_or_password_is_redacted(self):
         leak = [f'Publish failed (Neon unchanged for the failing season): invalid dsn: '

@@ -22,6 +22,7 @@ from postgres_etl.flat_schema import (  # noqa: E402
     legacy_name, physical_name, relation_kinds, rename_actions, rename_legacy_tables,
 )
 from common.seasons import COMPETITION_CODES  # noqa: E402
+from common.dotenv import read_env_value  # noqa: E402
 
 
 # The tables the web app reads (clean app_* names). Live-API tables and
@@ -39,10 +40,14 @@ SPOOL_BYTES = 32 * 1024 * 1024
 
 
 def neon_connect(env_var=NEON_URL_ENV):
-    url = os.environ.get(env_var)
+    url = os.environ.get(env_var) or read_env_value(PROJECT_ROOT / ".env", env_var)
+    if url:
+        url = url.strip()
+        if len(url) >= 2 and url[0] == url[-1] and url[0] in "\"'":
+            url = url[1:-1].strip()
     if not url:
         raise RuntimeError(
-            f"Set the {env_var} environment variable to the Neon direct "
+            f"Set {env_var} in .env or as an environment variable to the Neon direct "
             "(non-pooled) connection URL."
         )
     try:

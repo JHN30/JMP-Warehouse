@@ -79,8 +79,10 @@ python neon_publish/main.py -sc 2025 2026        # several seasons, one transact
 python neon_publish/main.py -sc 2026 -tb standings_basicstandings games
 ```
 
-Use Neon's **direct (non-pooled)** URL. It is read from the environment variable
-(`--neon-url-env` selects another one) and is never written to a file.
+Use Neon's **direct (non-pooled)** URL. Put it in the `NEON_DATABASE_URL` entry
+in the project's `.env` file; it is read only when publishing. An environment
+variable takes precedence (`--neon-url-env` selects another one). The URL is
+never logged.
 `--config` selects the local connection JSON (default
 `postgres_etl/config_connection.json`). Logs go to `logs/neon_publish/`.
 

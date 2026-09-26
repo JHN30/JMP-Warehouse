@@ -28,6 +28,10 @@ Or without typing: **Terminal > Run Task... > "Refresh current season"** (or
   New, name `NEON_DATABASE_URL`, value = the direct (non-pooled) Neon URL, then
   restart VS Code. (Avoid typing it into a terminal command: PowerShell keeps a
   plain-text command history.)
+- **If publish fails:** put Neon's direct (non-pooled) connection URL in the
+  `NEON_DATABASE_URL` entry in `.env`, then retry. The pipeline reads `.env`
+  only when it is ready to publish; it does not load the URL during fetch or
+  local PostgreSQL load steps.
 - **What you see:** the live output of every step, then a summary: the result
   (`OK`, `NOTHING TO DO`, `OK (dry run)`, or `FAILED at <step>` with what to do
   next), what the download changed, rows loaded with quality errors and

@@ -10,61 +10,26 @@ below omit the prefix: the web-app tables are stored as `app_<name>` (see
 
 ## Table names
 
-The 32 tables the web app reads are published to Neon and carry clean `app_*`
-names, locally and in Neon: `app_standings`, the 21 v2/v3 tables below, which
-were called `etl_flat_*` until feature 22 (2026-09), play-by-play and shots
-(feature 21, local-only `etl_flat_*` tables until then), the three all-time
-records tables (feature 11), the three team-season/coverage tables
-(feature 12), `app_postseason_series` (feature 13), and `app_players`
-(feature 14) — the last eight `app_*`-named from the start; see
-[Web-app tables](#web-app-tables). Column names did not change on the
-renamed tables. Every other table keeps its
-`etl_flat_` name.
+The 32 tables the web app reads are published to Neon with clean `app_*`
+names, locally and in Neon: `app_standings`; the 21 v2/v3 tables, each named
+`app_<name>` (for example `app_games`, `app_game_player_stats`); play-by-play
+and shots (`app_play_by_play`, `app_shots`); and the eight newer tables from
+features 11-14 — `app_records_player_seasons`, `app_records_single_games`,
+`app_records_team_seasons`, `app_team_season_stats`, `app_coverage_seasons`,
+`app_coverage_games`, `app_postseason_series`, `app_players` — all `app_*`-named
+from the start. See [Web-app tables](#web-app-tables) for what each one is.
+Every other (non-web-app) table keeps its `etl_flat_` name.
 
-| Old name (until feature 22) | New name |
-| --- | --- |
-| `etl_flat_seasons` | `app_seasons` |
-| `etl_flat_clubs` | `app_clubs` |
-| `etl_flat_people` | `app_people` |
-| `etl_flat_registrations` | `app_registrations` |
-| `etl_flat_rounds` | `app_rounds` |
-| `etl_flat_games` | `app_games` |
-| `etl_flat_game_officials` | `app_game_officials` |
-| `etl_flat_game_period_scores` | `app_game_period_scores` |
-| `etl_flat_game_player_stats` | `app_game_player_stats` |
-| `etl_flat_game_team_stats` | `app_game_team_stats` |
-| `etl_flat_season_stats_traditional` | `app_season_stats_traditional` |
-| `etl_flat_season_stats_advanced` | `app_season_stats_advanced` |
-| `etl_flat_season_stats_scoring` | `app_season_stats_scoring` |
-| `etl_flat_season_stats_misc` | `app_season_stats_misc` |
-| `etl_flat_standings_basicstandings` | `app_standings_basicstandings` |
-| `etl_flat_standings_calendarstandings` | `app_standings_calendarstandings` |
-| `etl_flat_standings_streaks` | `app_standings_streaks` |
-| `etl_flat_standings_aheadbehind` | `app_standings_aheadbehind` |
-| `etl_flat_standings_margins` | `app_standings_margins` |
-| `etl_flat_standings_calendar_streaks` | `app_standings_calendar_streaks` |
-| `etl_flat_standings_basic_form` | `app_standings_basic_form` |
-| `etl_flat_play_by_play` (local only) | `app_play_by_play` |
-| `etl_flat_shots` (local only) | `app_shots` |
-
-**Switchover for the web app** (the app keeps working at every step):
-
-1. The owner runs the refresh (`python pipeline.py`, after a
-   `--dry-run-publish`). The first publish of each table renames it in Neon
-   and keeps a view under the old name in the same transaction, so
-   the app keeps reading `etl_flat_*` unchanged. Locally, the first load or
-   publish renames the tables (no views).
-2. The web-app repo moves every query, and any Drizzle table filter, to the
-   `app_*` names and deploys.
-3. The owner runs `python neon_publish/main.py --drop-old-names --dry-run`,
-   then `python neon_publish/main.py --drop-old-names`. It drops only the
-   old-name views, never a table.
-
-The old-name views keep the columns their table had when they were created;
-columns added later appear only under the `app_*` names. If the web app
-connects with a different database role than the publisher, grant it
-`SELECT` on the views. The renamed tables keep their `etl_flat_*_pkey` and
-`idx_flat_*` constraint and index names; they are internal.
+**Legacy `etl_flat_*` views:** the 21 v2/v3 tables and play-by-play/shots
+were called `etl_flat_<name>` before feature 22 (2026-09). Neon still keeps
+a view under each old name (`etl_flat_<name>` -> `app_<name>`) so the app
+doesn't break mid-switchover; a column added after the rename appears only
+under the `app_*` name, never the old view. Once the web app reads only
+`app_*` names (and any Drizzle table filter is updated to match), drop the
+old views with `python neon_publish/main.py --drop-old-names --dry-run`,
+then the same command without `--dry-run` — it drops only the views, never
+a table. Grant `SELECT` on the views if the web app connects with a
+different database role than the publisher.
 
 ## Conventions to apply to every query
 

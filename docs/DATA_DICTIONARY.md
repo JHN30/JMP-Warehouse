@@ -178,6 +178,33 @@ Join people by `person_key` and filter a single `phase_code` (for example
 `perGame`). The populations in these feeds can differ. Do not sum per-game
 rates or add an `all` row to its individual phase rows.
 
+The API's `perGame` feeds list only players with more than half of the
+phase's games (for example 20 of 38 in `RS`, 3 of 5 in `PO`). The API's
+no-phase `all` + `perGame` feed can come back empty (E2026 since 2026-09-24);
+the quality report flags that as `season_stats_phase_mode_missing`.
+
+**Postseason (`phase_code = 'PS'`)** is derived here, because the API cannot
+combine phases. It covers played Play-In, Playoffs and Final Four games, only
+in `season_stats_traditional` and `season_stats_misc` (not advanced or
+scoring), and is built from the box scores (`app_game_player_stats` source):
+
+- A player is included once they have time on court in one of those games.
+  `perGame` rows need more than half of the player's own club's postseason
+  games (the club of their latest postseason game).
+- Totals are sums; `perGame` divides by games played and rounds to 1 decimal,
+  half to even, like the API. Minutes are not rounded.
+- Shooting percentages come from made/attempted totals (0-100, 1 decimal) and
+  are `NULL` with no attempts (the API writes 0 there).
+- A measure that was not recorded in any of the player's games (see
+  `game_stat_gaps`) is `NULL`, never a partial sum.
+- `wins`/`losses` count the player's games their club won/lost. A double- or
+  triple-double is 10+ in two or three of points, rebounds, assists, steals,
+  blocks. Like the API's misc feed, misc rows are identical in both modes and
+  their `minutes_played` is the per-game average.
+- Name and club come from the latest postseason box score; age, images and TV
+  codes from the player's and club's API rows in the same season (`NULL` when
+  there are none). `player_ranking` is `NULL`.
+
 | Table                      | Metric family                                                                                    |
 | -------------------------- | ------------------------------------------------------------------------------------------------ |
 | `season_stats_traditional` | Games, minutes, scoring, shooting, rebounds, assists, steals, turnovers, blocks, fouls, and PIR. |

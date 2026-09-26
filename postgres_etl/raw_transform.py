@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from flat_schema import snake
+from postseason import POSTSEASON_PHASE, postseason_games, postseason_payloads
 from shared import BronzeStore, current_season_year
 
 
@@ -374,6 +375,26 @@ class RawSeason:
         return [path for path in pages
                 if int(path.stem.removeprefix("offset_")) < max(total, 1)]
 
+    def _postseason_rows(self, identities, clubs):
+        """Derived PS season-stats rows from the season's box scores (postseason.py)."""
+        games = postseason_games((self.store.read_json("v2/games") or {}).get("data") or [])
+        box_scores = {}
+        for item in games:
+            response = self.store.read_json(f"v2/game_stats/{item.get('gameCode')}")
+            if not response:
+                continue
+            gaps = box_score_gaps(response)
+            box_scores[item.get("gameCode")] = {side: {"players": [
+                dict(player, stats=without_measures(player.get("stats"), gaps))
+                for player in (response.get(side) or {}).get("players") or []
+            ]} for side in ("local", "road")}
+        payloads = postseason_payloads(games, box_scores, identities, clubs)
+        for (category, mode), items in payloads.items():
+            for ordinal, item in enumerate(items):
+                yield dict(self.scope, category=category, phase_code=POSTSEASON_PHASE, mode=mode,
+                           entry_ordinal=ordinal, person_key=item["player"]["code"],
+                           club_code=item["player"]["team"]["code"], payload=item)
+
     def files(self, table):
         single = {
             "seasons": ([self.catalog] if self.catalog_store.exists("v2/seasons") else []),
@@ -577,16 +598,24 @@ class RawSeason:
             pattern = re.compile(
                 r"players_(traditional|advanced|scoring|misc)_([A-Za-z0-9]+)_(perGame|accumulated)\.json$"
             )
+            identities, clubs = {}, {}
             for path in files:
                 match = pattern.fullmatch(path.name)
                 if not match:
                     raise ValueError(f"Unexpected season stats filename: {path}")
                 category, phase, mode = match.groups()
                 for ordinal, item in enumerate(read_json(path).get("players") or []):
+                    person_key = code(nested(item, "player", "code"))
+                    team = nested(item, "player", "team") or {}
+                    if person_key:
+                        identities[person_key] = item["player"]
+                    if code(team.get("code")):
+                        clubs[code(team["code"])] = team
                     yield dict(scope, category=category, phase_code=phase, mode=mode,
                                entry_ordinal=ordinal,
-                               person_key=code(nested(item, "player", "code")) or f"unknown-{ordinal}",
-                               club_code=nested(item, "player", "team", "code"), payload=item)
+                               person_key=person_key or f"unknown-{ordinal}",
+                               club_code=team.get("code"), payload=item)
+            yield from self._postseason_rows(identities, clubs)
             return
 
         if table == "standings_page":

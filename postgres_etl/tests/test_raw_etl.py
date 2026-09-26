@@ -212,6 +212,39 @@ class RawEtlTests(unittest.TestCase):
         self.assertEqual([(row["category"], row["phase_code"], row["mode"]) for row in rows],
                          [("misc", "TS", "perGame")])
 
+    def test_postseason_rows_are_derived_from_box_scores(self):
+        games = self.store.read_json("v2/games")
+        games["data"].append({"gameCode": 3, "played": True, "utcDate": "2026-05-01T18:00:00Z",
+                              "phaseType": {"code": "PO"},
+                              "local": {"club": {"code": "MAD"}, "score": 90},
+                              "road": {"club": {"code": "OLY"}, "score": 80}})
+        self.write("v2/games.json", games)
+        self.write("v2/game_stats/3.json", {"local": {"players": [
+            {"player": {"person": {"code": "000123", "name": "TEST, PLAYER"},
+                        "club": {"code": "MAD", "name": "Real Madrid"}},
+             "stats": {"timePlayed": 1500, "startFive": True, "points": 21, "valuation": 0,
+                       "fieldGoalsMade2": 6, "fieldGoalsAttempted2": 9}}]},
+            "road": {"players": []}})
+        self.write("v3/season_stats/players_traditional_RS_accumulated.json", {"players": [
+            {"player": {"code": "000123", "age": 30, "team": {"code": "MAD", "tvCodes": "RMB"}},
+             "pointsScored": 100}]})
+        season = FlatSeason(self.root, "euroleague", "E2025")
+        rows = [row for row in season.rows("season_stats_traditional")
+                if row["phase_code"] == "PS"]
+        self.assertEqual([(row["mode"], row["entry_ordinal"], row["person_key"]) for row in rows],
+                         [("accumulated", 0, "000123"), ("perGame", 0, "000123")])
+        accumulated = rows[0]
+        self.assertEqual((accumulated["points_scored"], accumulated["minutes_played"]),
+                         (Decimal("21"), Decimal("25")))
+        self.assertEqual(accumulated["two_pointers_percentage"], Decimal("66.7"))
+        self.assertIsNone(accumulated["pir"])  # valuation 0 for every player: not recorded
+        self.assertEqual((accumulated["player_age"], accumulated["club_tv_codes"]), (30, "RMB"))
+        misc = [row for row in season.rows("season_stats_misc") if row["phase_code"] == "PS"]
+        self.assertEqual([(row["mode"], row["wins"]) for row in misc],
+                         [("accumulated", Decimal("1")), ("perGame", Decimal("1"))])
+        self.assertFalse([row for row in season.rows("season_stats_advanced")
+                          if row["phase_code"] == "PS"])
+
     def test_people_pages_beyond_the_current_total_are_ignored(self):
         stale = {"person": {"code": "999"}, "club": {"code": "MAD"}, "type": "J"}
         self.write("v2/season_people_pages/offset_001000.json", {"data": [stale], "total": 1001})

@@ -70,6 +70,10 @@ keys. For example, `app_game_player_stats` has separate `points`,
 `field_goals_made2`, `assistances`, and other statistic columns, rather than a
 nested player-statistics object. V3 statistics and standings are split by
 category/feed so unrelated metric columns do not become mostly NULL.
+The season-stats load also adds derived postseason rows (`phase_code = 'PS'`,
+Play-In + Playoffs + Final Four) to `season_stats_traditional` and
+`season_stats_misc`, built from the box scores by `postseason.py`; see
+`docs/DATA_DICTIONARY.md` for the rules.
 
 Quarter and overtime scores are rows in `app_game_period_scores` (v2)
 and `etl_flat_live_boxscore_period_scores` (live). `period_number` 1–4 denotes

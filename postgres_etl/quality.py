@@ -17,6 +17,9 @@ class Check:
     severity: str = "ERROR"
 
 
+SEASON_STATS_TABLES = ("season_stats_traditional", "season_stats_advanced",
+                       "season_stats_scoring", "season_stats_misc")
+
 # Tables where no rows is the good outcome, not a warning.
 EMPTY_IS_NORMAL = {"game_stat_gaps"}
 
@@ -48,6 +51,28 @@ def scoped_count(table, predicate=None):
     query = (f'SELECT count(*) FROM "{physical_name(table)}" AS row '
              'WHERE row.competition_code = %s AND row.season_code = %s')
     return query + (f" AND ({predicate})" if predicate else "")
+
+
+def season_stats_missing_query(table):
+    """Count expected (phase, mode) feeds with no rows. The fetcher requests
+    'all' plus every phase with played games in both modes, and an empty API
+    answer (E2026 'all' perGame) would otherwise load silently."""
+    return (
+        "WITH scope AS (SELECT %s::text AS competition_code, %s::text AS season_code), "
+        "expected AS (SELECT scope.competition_code, scope.season_code, phase.phase_code, "
+        "mode.mode FROM scope CROSS JOIN LATERAL ("
+        "SELECT 'all' AS phase_code UNION "
+        f'SELECT g.phase_code FROM "{physical_name("games")}" AS g '
+        "WHERE g.competition_code = scope.competition_code "
+        "AND g.season_code = scope.season_code "
+        "AND g.played IS TRUE AND g.phase_code IS NOT NULL) AS phase "
+        "CROSS JOIN (VALUES ('accumulated'), ('perGame')) AS mode(mode)) "
+        "SELECT count(*) FROM expected "
+        f'WHERE NOT EXISTS (SELECT 1 FROM "{physical_name(table)}" AS row '
+        "WHERE row.competition_code = expected.competition_code "
+        "AND row.season_code = expected.season_code "
+        "AND row.phase_code = expected.phase_code AND row.mode = expected.mode)"
+    )
 
 
 def orphan_query(child, parent, key, condition=""):
@@ -209,11 +234,14 @@ def anomaly_checks(names):
     if "people" in names:
         checks.append(Check("fallback_person_key", "people", scoped_count(
             "people", "row.person_key LIKE 'anonymous-%%'"), "WARN"))
-    for name in ("game_player_stats", "season_stats_traditional", "season_stats_advanced",
-                 "season_stats_scoring", "season_stats_misc"):
+    for name in ("game_player_stats", *SEASON_STATS_TABLES):
         if name in names:
             checks.append(Check("fallback_person_key", name, scoped_count(
                 name, "row.person_key LIKE 'unknown-%%'"), "WARN"))
+    for name in SEASON_STATS_TABLES:
+        if {"games", name} <= names:
+            checks.append(Check("season_stats_phase_mode_missing", name,
+                                season_stats_missing_query(name), "WARN"))
     if "people" in names:
         for name in ("play_by_play", "shots", "live_boxscore_players"):
             if name in names:

@@ -50,6 +50,17 @@ class FakeConnection:
 
 
 class QualityRulesTests(unittest.TestCase):
+    def test_missing_season_stats_feeds_are_warned_when_games_are_checked(self):
+        checks = [check for check in checks_for_tables(["games", "season_stats_misc"])
+                  if check.code == "season_stats_phase_mode_missing"]
+        self.assertEqual([(check.table, check.severity) for check in checks],
+                         [("season_stats_misc", "WARN")])
+        self.assertIn("'all' AS phase_code", checks[0].query)
+        self.assertIn("('accumulated'), ('perGame')", checks[0].query)
+        self.assertEqual(checks[0].query.count("%s"), 2)  # run with the usual season scope
+        alone = {check.code for check in checks_for_tables(["season_stats_misc"])}
+        self.assertNotIn("season_stats_phase_mode_missing", alone)
+
     def test_partial_load_only_checks_its_own_tables(self):
         games_only = checks_for_tables(["games"])
         self.assertEqual({check.code for check in games_only if check.severity == "ERROR"}, {

@@ -92,15 +92,12 @@ class RawEtlTests(unittest.TestCase):
         self.assertEqual(shots[0]["player_code"], "P000123")
         self.assertEqual(shots[0]["person_code"], "000123")
 
-    def test_periods_officials_and_source_archive(self):
+    def test_periods_and_officials(self):
         periods = list(self.season().rows("game_period_scores"))
         self.assertEqual(len(periods), 4)
         self.assertEqual({row["game_code"] for row in periods}, {1})
         self.assertEqual({row["period_number"] for row in periods}, {1, 5})
         self.assertEqual(len(list(self.season().rows("game_officials"))), 1)
-        archived = list(self.season().rows("source_payloads"))
-        self.assertTrue(any(row["relative_path"] == "v2/games.json" for row in archived))
-        self.assertTrue(any(row["relative_path"] == "_catalog/v2/seasons.json" for row in archived))
 
     def test_live_ids_map_to_person_codes_and_markers_to_null(self):
         self.assertEqual(person_code_from_live("P014102   "), "014102")
@@ -251,16 +248,9 @@ class RawEtlTests(unittest.TestCase):
         codes = {row["person_key"] for row in self.season().rows("people")}
         self.assertEqual(codes, {"000123"})
 
-    def test_source_archive_hashes_the_exact_response_bytes(self):
-        import hashlib
-        content = b'{"data": [],  "total": 0}'
-        self.store.write("v2/clubs", content)
-        archived = {row["relative_path"]: row for row in self.season().rows("source_payloads")}
-        self.assertEqual(archived["v2/clubs.json"]["sha256"], hashlib.sha256(content).hexdigest())
-
     def test_dry_run_checks_keys_without_database(self):
         season = FlatSeason(self.root, "euroleague", "E2025")
-        for name in ("seasons", "games", "registrations", "shots", "source_payloads"):
+        for name in ("seasons", "games", "registrations", "shots"):
             self.assertGreater(FlatDatabaseLoader._dry_run_table(
                 season, name, season.files(name), 0), 0)
 
@@ -412,14 +402,6 @@ class RawEtlTests(unittest.TestCase):
         with patch.dict(sys.modules, {"psycopg2": package, "psycopg2.extras": extras}):
             FlatDatabaseLoader._load_table(Connection(), season, name, season.files(name), 0)
         return [row for sql, rows in operations if sql.startswith("INSERT") for row in rows]
-
-    def test_every_jsonb_column_is_wrapped_as_json(self):
-        rows = self.load_with_fake_database("source_payloads")
-        columns = [field.name for field in TABLES["source_payloads"].fields]
-        payload, sha = columns.index("payload"), columns.index("sha256")
-        self.assertTrue(rows)
-        self.assertTrue(all(row[payload][0] == "JSON" for row in rows))
-        self.assertTrue(all(isinstance(row[sha], str) for row in rows))
 
     def test_database_writer_replaces_only_selected_season(self):
         operations = []

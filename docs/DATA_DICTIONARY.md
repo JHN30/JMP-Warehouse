@@ -4,32 +4,33 @@ This describes the **column-first PostgreSQL tables** produced by
 `postgres_etl/main.py` and exported by `tables_to_csv/main.py`. The exact SQL
 columns, types, source-field paths, and primary keys are defined in
 [postgres_etl/flat_schema.py](postgres_etl/flat_schema.py). The table names
-below omit the prefix: the web-app tables are stored as `app_<name>` (see
-[Table names](#table-names)), the others as `etl_flat_<name>`;
-`source_payloads` is stored as `etl_source_payloads`.
+below omit the prefix: the web-app tables and the v3 standings feeds are
+stored as `app_<name>` (see [Table names](#table-names)); `game_stat_gaps`
+is stored as `etl_flat_game_stat_gaps`.
 
 ## Table names
 
-The 32 tables the web app reads are published to Neon with clean `app_*`
-names, locally and in Neon: `app_standings`; the 21 v2/v3 tables, each named
+The 25 tables the web app reads are published to Neon with clean `app_*`
+names, locally and in Neon: `app_standings`; the 14 v2/v3 tables, each named
 `app_<name>` (for example `app_games`, `app_game_player_stats`); play-by-play
 and shots (`app_play_by_play`, `app_shots`); and the eight newer tables from
 features 11-14 — `app_records_player_seasons`, `app_records_single_games`,
 `app_records_team_seasons`, `app_team_season_stats`, `app_coverage_seasons`,
 `app_coverage_games`, `app_postseason_series`, `app_players` — all `app_*`-named
 from the start. See [Web-app tables](#web-app-tables) for what each one is.
-Every other (non-web-app) table keeps its `etl_flat_` name.
 
-**Legacy `etl_flat_*` views:** the 21 v2/v3 tables and play-by-play/shots
-were called `etl_flat_<name>` before feature 22 (2026-09). Neon still keeps
-a view under each old name (`etl_flat_<name>` -> `app_<name>`) so the app
-doesn't break mid-switchover; a column added after the rename appears only
-under the `app_*` name, never the old view. Once the web app reads only
-`app_*` names (and any Drizzle table filter is updated to match), drop the
-old views with `python neon_publish/main.py --drop-old-names --dry-run`,
-then the same command without `--dry-run` — it drops only the views, never
-a table. Grant `SELECT` on the views if the web app connects with a
-different database role than the publisher.
+The 7 v3 standings feed tables keep their `app_standings_*` names locally but
+are no longer published (feature 23): the web app reads `app_standings`, which
+combines them. `game_stat_gaps` is the one table named `etl_flat_game_stat_gaps`.
+
+**Old `etl_flat_*` views:** the v2/v3 tables (including the standings feeds)
+and play-by-play/shots were called `etl_flat_<name>` before feature 22
+(2026-09), and Neon kept a view under each old name (`etl_flat_<name>` ->
+`app_<name>`) during the switchover. On 2026-09-27 (feature 23), with the web
+app reading only `app_*` names, `python neon_publish/main.py --drop-old-names`
+dropped those 21 views, and `python neon_publish/main.py --drop-retired` then
+dropped the 7 standings feed tables from Neon. Neon has no `etl_flat_*` names
+left. Both commands are safe to rerun; they report that nothing is left.
 
 ## Conventions to apply to every query
 
@@ -42,9 +43,8 @@ different database role than the publisher.
   leading zeroes are not lost.
 - `side` is `local` or `road`. In the legacy live feed, fields ending in `A`
   or `B` retain the source's labels; join to a game before assuming a team.
-- Live tables (`play_by_play`, `shots`, `live_boxscore_players`) carry two
-  player columns. `player_code` is the id exactly as the live API sends it
-  (padding trimmed): `P` + person code, such as `P014102` or `PKLT`, or a
+- Live tables (`play_by_play`, `shots`) carry two player columns.
+  `player_code` is the id exactly as the live API sends it (padding trimmed): `P` + person code, such as `P014102` or `PKLT`, or a
   team/coach marker such as `CO_A`. `person_code` is the standardized code
   (`014102`, `KLT`) that equals `people.person_key` everywhere else. It is `NULL`
   for markers, which are not people. **Join on `person_code`.**
@@ -118,25 +118,21 @@ behind closed doors (COVID period)" between March 2020 and June 2022, otherwise
 
 ## Live game detail
 
-These tables supplement, and sometimes overlap, v2/v3. Older seasons may not
-have live-feed data. A missing live row should not automatically be interpreted
-as a zero-valued performance. Play-by-play and shots are stored as
-`app_play_by_play` and `app_shots` and published to Neon (see below); the other
-live tables stay local.
+Play-by-play and shots come from the legacy live API (from E2007). They
+supplement, and sometimes overlap, v2/v3. Older seasons may not have live-feed
+data. A missing live row should not automatically be interpreted as a
+zero-valued performance. They are stored as `app_play_by_play` and `app_shots`
+and published to Neon (see below).
+
+The other legacy live feeds (Boxscore, Evolution, Comparison, ShootingGraphic)
+are not loaded: v2 game data, play-by-play and shots cover their content. Their
+tables (`etl_flat_live_*`) were dropped in feature 23; `api_requests` can still
+archive the feeds in bronze when named with `-ds`.
 
 | Table                                | Extra key                                          | One row represents                                                  | Essential use/filter                                                                                           |
 | ------------------------------------ | -------------------------------------------------- | ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
 | `play_by_play`                       | `game_code`, `period`, `event_ordinal`             | One source event in a game period.                                  | Order within a game by period in play order (not alphabetically), then event ordinal; `points_a`/`points_b` are often `NULL` on non-scoring events. |
 | `shots`                              | `game_code`, `shot_ordinal`                        | One shooting-chart attempt, including misses.                       | `points = 0` can mean a miss. Coordinates use the source's system; do not assume screen pixels.                |
-| `live_boxscores`                     | `game_code`                                        | Game-level live box-score summary.                                  | Includes attendance, live flag, and referee text where supplied.                                               |
-| `live_boxscore_players`              | `game_code`, `side`, `player_ordinal`              | One live box-score player entry.                                    | Overlaps v2 `game_player_stats`; `minutes` is source text, not a numeric duration.                             |
-| `live_boxscore_teams`                | `game_code`, `side`, `stats_kind`                  | One live team summary block.                                        | Filter `stats_kind` (`tmr` or `totr`) before comparing/aggregating.                                            |
-| `live_boxscore_period_scores`        | `game_code`, `side`, `score_kind`, `period_number` | One live period or end-of-period score.                             | `score_kind = 'period'` is that period's points; `cumulative` is the running score. Period 5+ is overtime.     |
-| `live_evolution`                     | `game_code`                                        | A game's live score-evolution summary.                              | Parent of minute and largest-difference rows.                                                                  |
-| `live_evolution_minutes`             | `game_code`, `minute_ordinal`                      | One entry in the minute-by-minute score progression.                | `minute_ordinal` is source list order; `score_difference` is local minus road where both scores exist.         |
-| `live_evolution_largest_differences` | `game_code`, `side_index`, `slot_index`            | One non-null entry from the live largest-difference arrays.         | Indexes are source array positions; interpret with the source payload if needed.                               |
-| `live_comparison`                    | `game_code`                                        | One source comparison summary for a game.                           | A/B and starter/bench values are comparison metrics, not additional box scores.                                |
-| `live_scoring`                       | `game_code`                                        | One game's fast-break, turnover, and second-chance scoring summary. | A/B values come from the live source; do not add them to total points.                                         |
 
 ### Web-app contract: `app_play_by_play` and `app_shots`
 
@@ -220,6 +216,10 @@ They are not season totals to sum across rounds. Filter the desired phase and
 round, or choose its latest available round. Not every phase has a standings
 feed; E2025 currently has 38 regular-season rounds in the basic feed.
 
+These seven tables are local only (named `app_standings_*`). The web app reads
+[`app_standings`](#app_standings), which combines them into one row per club
+and round.
+
 | Table                         | Feed-specific information                                                          |
 | ----------------------------- | ---------------------------------------------------------------------------------- |
 | `standings_basicstandings`    | Position, win percentage, points for/against, and record summaries.                |
@@ -268,9 +268,8 @@ queries):
   are strings like `2025-09-01T00:00:00.000Z`.
 - NUMERIC columns (`basic_win_percentage`, `ahead_behind_wins_percentage`)
   arrive as strings from node-postgres, as today.
-- Until the app switches, the 7 standings feed tables (`app_standings_*`,
-  formerly `etl_flat_standings_*`) keep being published. Stop publishing and
-  drop them only after the app no longer reads them.
+- The web app reads only `app_standings`. The 7 standings feed tables
+  (`app_standings_*`) are no longer published (feature 23) and stay local.
 
 ### `app_records_player_seasons`, `app_records_single_games`, `app_records_team_seasons`
 
@@ -446,13 +445,11 @@ cross-season query.
   detail (dorsal, position that season, exact dates) stays in
   `app_registrations`.
 
-## Source archive
+## Source responses
 
-`etl_source_payloads` has extra key `relative_path`: one cached source response
-per path. It stores `sha256` of the original file and its full parsed response
-in `payload JSONB`. This preserves fields not modeled in flat columns and is
-useful for provenance or reprocessing, but it is **not** a flat analytical
-table. Its CSV can be large because the JSON is included as text.
+The complete API responses are the bronze files under `data/bronze/` (see
+`README.md`), not a database table. `etl_source_payloads`, a copy of them in
+PostgreSQL, was dropped in feature 23.
 
 ## Common query patterns
 
@@ -471,11 +468,11 @@ WHERE competition_code = 'E' AND season_code = 'E2025'
   AND phase_code = 'RS' AND mode = 'accumulated';
 
 -- A standings snapshot, not a sum of all round rows.
-SELECT club_code, club_name, position, games_played
-FROM public.app_standings_basicstandings
+SELECT club_code, club_name, basic_position, basic_games_played
+FROM public.app_standings
 WHERE competition_code = 'E' AND season_code = 'E2025'
   AND phase_code = 'RS' AND round_number = 38
-ORDER BY position;
+ORDER BY group_name, basic_position;
 ```
 
 ## Post-load checks

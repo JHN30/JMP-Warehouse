@@ -54,7 +54,9 @@ The default all dataset selection caches:
 - shooting_charts
 
 Optional, only when named with `-ds`: live_boxscores, live_evolution,
-live_comparison, live_scoring.
+live_comparison, live_scoring. They are archived in bronze only; the loader
+does not read them, since v2 game data, play-by-play and shots cover their
+content.
 
 The legacy names have precise meanings:
 

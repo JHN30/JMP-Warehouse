@@ -82,7 +82,7 @@ class FlatDatabaseLoader:
         json_columns = {field.name for field in spec.fields if field.kind.startswith("JSONB")}
         column_sql = ", ".join(f'"{column}"' for column in columns)
         insert_sql = f'INSERT INTO "{physical}" ({column_sql}) VALUES %s'
-        batch_size = 25 if name == "source_payloads" else 1000
+        batch_size = 1000
         batch = []
         count = 0
         with connection:

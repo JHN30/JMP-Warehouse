@@ -1,15 +1,17 @@
+import io
 import json
 import sys
 import tempfile
 import unittest
 from decimal import Decimal
 from pathlib import Path
+from unittest import mock
 
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from flat_schema import (PUBLISHED_TABLES, TABLES, create_table_sql, legacy_name, physical_name,
-                         rename_actions)
+from flat_schema import (PUBLISHED_TABLES, RENAMED_TABLES, TABLES, create_table_sql, legacy_name,
+                         physical_name, rename_actions)
 from flat_transform import FlatSeason
 from main import main
 from shared import BronzeStore
@@ -43,17 +45,6 @@ class FlatEtlTests(unittest.TestCase):
             "teams": [{"club": {"code": "MAD"}, "position": 1,
                        "gamesPlayed": 1, "last5Form": ["W", "L"]}]
         })
-        self.write("live/1/live_boxscores.json", {
-            "Attendance": "1000", "Stats": [],
-            "ByQuarter": [{"Team": "MAD", "Quarter1": 20, "Extra1": 8},
-                          {"Team": "BAR", "Quarter1": 15, "Extra1": 5}],
-            "EndOfQuarter": []
-        })
-        self.write("live/1/live_evolution.json", {
-            "MinutesList": [0, 1], "PointsList": [[2, 4], [0, 2]],
-            "ScoreDiffPerMinute": [[2, 2], [None, None]],
-            "LargestDifference": [[3, None], [None, 1]]
-        })
 
     def write(self, relative, value):
         self.store.write(relative.removesuffix(".json"), json.dumps(value).encode("utf-8"))
@@ -64,8 +55,6 @@ class FlatEtlTests(unittest.TestCase):
     def test_curated_tables_are_column_first(self):
         self.assertEqual(physical_name("games"), "app_games")
         for name, spec in TABLES.items():
-            if name == "source_payloads":
-                continue
             self.assertNotIn("payload", {field.name for field in spec.fields})
             json_columns = {field.name for field in spec.fields if field.kind.startswith("JSONB")}
             # Page-shaped app tables may carry the lists their API returns.
@@ -103,33 +92,33 @@ class FlatEtlTests(unittest.TestCase):
         rows = list(self.season().rows("standings_basic_form"))
         self.assertEqual([row["result"] for row in rows], ["W", "L"])
 
-    def test_live_nested_lists_become_period_and_minute_rows(self):
-        periods = list(self.season().rows("live_boxscore_period_scores"))
-        self.assertEqual(len(periods), 4)
-        self.assertEqual({row["period_number"] for row in periods}, {1, 5})
-        minutes = list(self.season().rows("live_evolution_minutes"))
-        self.assertEqual([row["score_difference"] for row in minutes], [2, 2])
-        differences = list(self.season().rows("live_evolution_largest_differences"))
-        self.assertEqual([row["difference"] for row in differences], [Decimal(3), Decimal(1)])
-
     def test_cli_flat_dry_run(self):
         self.assertEqual(main(["-sc", "2025", "-tb", "games", "game_period_scores",
                                "--data-root", str(self.data_root), "--dry-run"]), 0)
+
+    def test_drop_retired_cannot_be_combined_with_a_load(self):
+        for extra in (["-tb", "games"], ["-sc", "2025"], ["--quality-only"],
+                      ["--skip-quality-check"]):
+            with self.assertRaises(SystemExit), mock.patch("sys.stderr", io.StringIO()):
+                main(["--drop-retired", *extra])
 
 
 
 class CleanTableNameTests(unittest.TestCase):
     def test_published_tables_have_app_names_and_the_rest_keep_theirs(self):
-        self.assertEqual(len(PUBLISHED_TABLES), 32)
+        self.assertEqual(len(PUBLISHED_TABLES), 25)
+        self.assertEqual(len(RENAMED_TABLES), 23)
+        # Standings feeds are no longer published but keep their app_* names locally.
+        self.assertNotIn("standings_basicstandings", PUBLISHED_TABLES)
         self.assertEqual(physical_name("standings_basicstandings"), "app_standings_basicstandings")
+        self.assertEqual(legacy_name("standings_basic_form"), "etl_flat_standings_basic_form")
         self.assertEqual(legacy_name("games"), "etl_flat_games")
         self.assertEqual(physical_name("play_by_play"), "app_play_by_play")
         self.assertEqual(legacy_name("shots"), "etl_flat_shots")
-        self.assertEqual(physical_name("live_boxscores"), "etl_flat_live_boxscores")
-        self.assertIsNone(legacy_name("live_boxscores"))
+        self.assertEqual(physical_name("game_stat_gaps"), "etl_flat_game_stat_gaps")
+        self.assertIsNone(legacy_name("game_stat_gaps"))
         self.assertEqual(physical_name("app_standings"), "app_standings")
         self.assertIsNone(legacy_name("app_standings"))
-        self.assertEqual(physical_name("source_payloads"), "etl_source_payloads")
         self.assertTrue(all(physical_name(name).startswith("app_") for name in PUBLISHED_TABLES))
 
     def test_legacy_table_is_renamed_and_optionally_kept_as_a_view(self):
@@ -146,8 +135,8 @@ class CleanTableNameTests(unittest.TestCase):
                       {}):                                               # created fresh later
             for keep_views in (False, True):
                 self.assertEqual(rename_actions(kinds, ["games"], keep_views), [])
-        self.assertEqual(rename_actions({"etl_flat_live_boxscores": "table"},
-                                        ["live_boxscores", "app_standings"], True), [])
+        self.assertEqual(rename_actions({"etl_flat_game_stat_gaps": "table"},
+                                        ["game_stat_gaps", "app_standings"], True), [])
 
     def test_old_and_new_tables_side_by_side_are_refused(self):
         with self.assertRaisesRegex(ValueError, "Both etl_flat_games and app_games"):

@@ -119,7 +119,8 @@ class ConfigParser(ArgumentParser):
                 "Datasets to cache. The default 'all' includes v2/v3 primary "
                 "data plus live play-by-play and shots. The redundant legacy "
                 "live_boxscores, live_evolution, live_comparison and "
-                "live_scoring are fetched only when named explicitly."
+                "live_scoring are fetched only when named explicitly and are "
+                "archived in bronze only (not loaded into PostgreSQL)."
             ),
         )
         self.add_argument(

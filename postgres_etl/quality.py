@@ -243,7 +243,7 @@ def anomaly_checks(names):
             checks.append(Check("season_stats_phase_mode_missing", name,
                                 season_stats_missing_query(name), "WARN"))
     if "people" in names:
-        for name in ("play_by_play", "shots", "live_boxscore_players"):
+        for name in ("play_by_play", "shots"):
             if name in names:
                 checks.append(Check("unmatched_live_player", name, (
                     f'SELECT count(*) FROM "{physical_name(name)}" AS child '
@@ -255,7 +255,7 @@ def anomaly_checks(names):
                     'AND child.player_code IS NOT NULL AND parent.person_key IS NULL '
                     f'AND child.player_code !~ {LIVE_TEAM_MARKERS}'
                 ), "WARN"))
-    for name in ("play_by_play", "shots", "live_boxscore_players"):
+    for name in ("play_by_play", "shots"):
         if name in names:
             # Live ids that are not simply "P" + person code were matched another way.
             checks.append(Check("live_player_matched_by_fallback", name, scoped_count(

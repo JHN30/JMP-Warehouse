@@ -3,12 +3,13 @@
 `main.py` reads the latest version of each resource in the local bronze layer
 (`data/bronze/<competition>/<season>/`, written by `api_requests`). It does
 not call the EuroLeague APIs. The default output is a **column-first** set of
-tables: the 24 the web app reads are named `app_*` (for example `app_games`),
-the rest `etl_flat_*` (see [Table names](../docs/DATA_DICTIONARY.md#table-names)).
+tables: the 25 the web app reads and the 7 local standings feeds are named
+`app_*` (for example `app_games`), and the stat gaps `etl_flat_game_stat_gaps`
+(see [Table names](../docs/DATA_DICTIONARY.md#table-names)).
 Ordinary facts and metrics have named SQL columns;
-repeated data gets child tables. JSONB is used only by `etl_source_payloads`
-(an archive of complete source responses) and by the list columns of
-page-shaped `app_*` tables such as `app_standings`.
+repeated data gets child tables. JSONB is used only by the list columns of
+page-shaped `app_*` tables such as `app_standings`. The complete source
+responses stay in the bronze files.
 
 
 ## First load
@@ -25,13 +26,26 @@ types, nullability, and primary-key uniqueness. The actual load requires
 `psycopg2` (`python -m pip install psycopg2-binary`) and the settings in
 `postgres_etl/config_connection.json`.
 
-The default command creates the flat tables and loads the shared
-`etl_source_payloads` archive. Replacement is transactional and restricted to one
+The default command creates and loads the flat tables. Replacement is
+transactional and restricted to one
 selected table, competition, and season. Rerunning E2025 refreshes only E2025
 rows in the selected flat tables; E2026 and EuroCup rows remain separate.
 Missing source files cause that table to be skipped, not emptied. The first
 load after the rename to `app_*` names renames the old `etl_flat_*` tables in
 place (all seasons, one transaction) and prints `Renamed local ...` lines.
+
+## Retired tables
+
+Tables the loader no longer creates (the `etl_flat_live_*` tables and
+`etl_source_payloads`, feature 23) are dropped with:
+
+```powershell
+python postgres_etl/main.py --drop-retired --dry-run   # list them with row counts
+python postgres_etl/main.py --drop-retired             # drop them
+```
+
+It drops only those named tables, all in one transaction, and a second run
+reports that nothing is left. Bronze files are not touched.
 
 ## Selecting data
 
@@ -62,8 +76,10 @@ the default. `--data-root` and `--config` override the default paths.
 | v3 season statistics | `season_stats_traditional`, `season_stats_advanced`, `season_stats_scoring`, `season_stats_misc` |
 | v3 standings | `standings_basicstandings`, `standings_calendarstandings`, `standings_streaks`, `standings_aheadbehind`, `standings_margins`, `standings_calendar_streaks`, `standings_basic_form` |
 | Live play and shooting feeds | `play_by_play`, `shots` |
-| Live Boxscore | `live_boxscores`, `live_boxscore_players`, `live_boxscore_teams`, `live_boxscore_period_scores` |
-| Live Evolution, Comparison, ShootingGraphic | `live_evolution`, `live_evolution_minutes`, `live_evolution_largest_differences`, `live_comparison`, `live_scoring` |
+
+The other legacy live feeds (Boxscore, Evolution, Comparison,
+ShootingGraphic) are not loaded; v2 game data, play-by-play and shots cover
+their content.
 
 All flat tables have `competition_code` and `season_code` in their primary
 keys. For example, `app_game_player_stats` has separate `points`,
@@ -75,19 +91,16 @@ Play-In + Playoffs + Final Four) to `season_stats_traditional` and
 `season_stats_misc`, built from the box scores by `postseason.py`; see
 `docs/DATA_DICTIONARY.md` for the rules.
 
-Quarter and overtime scores are rows in `app_game_period_scores` (v2)
-and `etl_flat_live_boxscore_period_scores` (live). `period_number` 1–4 denotes
-regulation; 5 and above denotes overtime. A game without overtime simply has
-no overtime rows. Similarly, recent-form results, calendar streaks, and
-minute-by-minute score evolution and largest-difference entries each get their
-own child rows.
+Quarter and overtime scores are rows in `app_game_period_scores`.
+`period_number` 1–4 denotes regulation; 5 and above denotes overtime. A game
+without overtime simply has no overtime rows. Similarly, recent-form results
+and calendar streaks each get their own child rows.
 
 The v2 feed represents unplayed fixtures with placeholder `0–0` scores and
 zero quarter scores. In the flat tables these fixtures still exist in
 `app_games`, but their scores are SQL `NULL`, and they have no period-score
-rows until played. The complete original response remains in
-`etl_source_payloads`. Its SHA-256 column hashes the original file bytes;
-JSONB itself is not byte-for-byte identical to the file.
+rows until played. The complete original response remains in the bronze
+files.
 
 The v2 game's `winner` object means **season champion**, not winner of that
 particular game. `champion_club_code` and `match_winner_club_code` are distinct

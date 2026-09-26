@@ -32,3 +32,36 @@ at fetch, plus those two quality ERRORs) was written up and not built. Until
 then: rerun the refresh the day after a game night, and never use
 `--allow-shrink` for this.
 **Resolution:**
+
+### F-02 [P3] open - --drop-retired does not report individual missing names
+
+**File:** postgres_etl/flat_schema.py:703
+**Found:** 2026-09-26 by /audit independent (scope: current; lenses: quality, security, performance, tests)
+**Why it matters:** The spec (Step 3) says the drop "reports names that are
+missing ("already gone") or not a table (left alone)". `drop_retired_tables`
+skips a missing name silently (`if kind is None: continue`) and only prints
+"No retired tables left." when nothing at all was dropped. After a partial
+earlier drop (or a table dropped by hand), the output lists only the remaining
+tables and never says which of the listed names were already gone, so the
+operator cannot confirm the full list was accounted for. Not a data risk: the
+drop list and the transaction are correct.
+**Suggested fix:** In the `kind is None` branch, log
+`f"  {name}: already gone"` (keep the final "No retired tables left." line),
+and extend the second-run test to assert one "already gone" line per name.
+Alternatively, amend the spec wording if the quieter output is preferred.
+**Resolution:**
+
+### F-03 [P3] open - Loader --dry-run help says it never connects, but --drop-retired --dry-run does
+
+**File:** postgres_etl/main.py:86
+**Found:** 2026-09-26 by /audit independent (scope: current; lenses: quality, security, performance, tests)
+**Why it matters:** `--dry-run` help reads "Read and validate rows without
+connecting to PostgreSQL." Combined with the new `--drop-retired`, the dry run
+connects to local PostgreSQL (`run_drop_retired` calls `connect(args.config)`)
+and reads catalog and row counts. The `--config` help ("unused in --dry-run
+mode") is likewise inaccurate for that combination. Read-only, so no data
+risk, only misleading help text.
+**Suggested fix:** Mention the exception in both help strings, for example
+"... without connecting to PostgreSQL (with --drop-retired: list what would be
+dropped, read-only)."
+**Resolution:**

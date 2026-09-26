@@ -18,19 +18,21 @@ from neon_publish.publish import (APP_TABLES, changed_games, drop_old_name_actio
                                   drop_old_names, export_season, publish_season,
                                   remote_counts, shrink_problems)
 from pipeline import season_code_for
-from postgres_etl.flat_schema import TABLES
+from postgres_etl.flat_schema import (RETIRED_LOCAL_TABLES, RETIRED_NEON_TABLES,
+                                      STANDINGS_FEED_TABLES, TABLES, drop_retired_tables,
+                                      physical_name)
 
 
 class PublishTests(unittest.TestCase):
     def test_app_tables_are_the_web_app_tables(self):
-        self.assertEqual(len(APP_TABLES), 32)
+        self.assertEqual(len(APP_TABLES), 25)
         self.assertIn("app_standings", APP_TABLES)
-        self.assertIn("standings_basicstandings", APP_TABLES)  # kept until the app switches
         self.assertTrue(set(APP_TABLES) <= set(TABLES))
         self.assertIn("play_by_play", APP_TABLES)
         self.assertIn("shots", APP_TABLES)
-        self.assertNotIn("live_boxscores", APP_TABLES)
-        self.assertNotIn("source_payloads", APP_TABLES)
+        # Local only: app_standings replaced the feeds in the web app.
+        self.assertFalse(set(STANDINGS_FEED_TABLES) & set(APP_TABLES))
+        self.assertNotIn("game_stat_gaps", APP_TABLES)
 
     def test_growth_and_small_changes_are_allowed(self):
         self.assertEqual(shrink_problems({"games": 380, "people": 95},
@@ -365,6 +367,8 @@ class FakeDatabase:
             self.views[names[0]] = names[1]
         elif text.startswith("DROP VIEW"):
             del self.views[names[0]]
+        elif text.startswith("DROP TABLE"):
+            del self.tables[names[0]]
         elif text.startswith("DELETE FROM") and "ANY(%s)" in text:
             for game in params[0]:
                 rows, _ = self.games.get(names[0], {}).pop(game, (0, None))
@@ -461,6 +465,12 @@ class DropOldNamesTests(unittest.TestCase):
                          [("keep", "etl_flat_clubs"), ("drop", "etl_flat_games")])
         self.assertEqual(drop_old_name_actions({}), [])
 
+    def test_unpublished_standings_feeds_still_have_their_old_views_dropped(self):
+        kinds = {"etl_flat_standings_basic_form": "view", "etl_flat_standings_margins": "view"}
+        self.assertEqual(drop_old_name_actions(kinds),
+                         [("drop", "etl_flat_standings_basic_form"),
+                          ("drop", "etl_flat_standings_margins")])
+
     def test_dry_run_lists_the_views_and_drops_nothing(self):
         neon = FakeDatabase({"app_games": 380, "etl_flat_clubs": 20}, {"etl_flat_games": "app_games"})
         lines = []
@@ -484,6 +494,57 @@ class DropOldNamesTests(unittest.TestCase):
             with self.assertRaises(SystemExit), mock.patch("sys.stderr", io.StringIO()):
                 publish_main(["--drop-old-names", *extra])
         self.assertIn("--drop-old-names", build_parser().format_help())
+
+
+class DropRetiredTests(unittest.TestCase):
+    def neon(self):
+        return FakeDatabase({"app_standings_basicstandings": 20, "app_standings_margins": 18,
+                             "app_standings": 20, "etl_flat_live_boxscores": 5},
+                            {"app_standings_streaks": "app_standings"})
+
+    def test_only_the_listed_tables_are_dropped(self):
+        neon = self.neon()
+        lines = []
+        dropped = drop_retired_tables(neon, RETIRED_NEON_TABLES, log=lines.append)
+        self.assertEqual(dropped, ["app_standings_basicstandings", "app_standings_margins"])
+        self.assertEqual(neon.ddl(), ['DROP TABLE "app_standings_basicstandings"',
+                                      'DROP TABLE "app_standings_margins"'])
+        # Tables outside the list (even retired local ones) and views stay.
+        self.assertEqual(set(neon.tables), {"app_standings", "etl_flat_live_boxscores"})
+        self.assertIn("  app_standings_basicstandings: 20 rows; dropped", lines)
+        self.assertIn("  app_standings_streaks: a view, not a table; left alone", lines)
+        self.assertEqual(neon.views, {"app_standings_streaks": "app_standings"})
+
+    def test_dry_run_lists_the_tables_and_drops_nothing(self):
+        neon = self.neon()
+        lines = []
+        dropped = drop_retired_tables(neon, RETIRED_NEON_TABLES, dry_run=True, log=lines.append)
+        self.assertEqual(dropped, ["app_standings_basicstandings", "app_standings_margins"])
+        self.assertEqual(neon.ddl(), [])
+        self.assertIn("  app_standings_margins: 18 rows; would be dropped", lines)
+
+    def test_a_second_run_reports_nothing_left(self):
+        neon = self.neon()
+        drop_retired_tables(neon, RETIRED_NEON_TABLES, log=lambda _: None)
+        lines = []
+        self.assertEqual(drop_retired_tables(neon, RETIRED_NEON_TABLES, log=lines.append), [])
+        self.assertEqual(lines[-1], "No retired tables left.")
+
+    def test_retired_names_are_neither_published_nor_loaded(self):
+        published = {physical_name(name) for name in APP_TABLES}
+        loaded = {physical_name(name) for name in TABLES}
+        self.assertEqual(len(RETIRED_NEON_TABLES), 7)
+        self.assertFalse(set(RETIRED_NEON_TABLES) & published)
+        self.assertEqual(len(RETIRED_LOCAL_TABLES), 10)
+        self.assertFalse(set(RETIRED_LOCAL_TABLES) & loaded)
+        # The standings feeds are still loaded locally; only Neon drops them.
+        self.assertLessEqual(set(RETIRED_NEON_TABLES), loaded)
+
+    def test_drop_retired_cannot_be_combined(self):
+        for extra in (["-tb", "games"], ["-sc", "2025"], ["--drop-old-names"]):
+            with self.assertRaises(SystemExit), mock.patch("sys.stderr", io.StringIO()):
+                publish_main(["--drop-retired", *extra])
+        self.assertIn("--drop-retired", build_parser().format_help())
 
 
 def publish_play_by_play(neon, local_sums, plan, local_rows):

@@ -1,6 +1,6 @@
 # Publish to Neon
 
-Copies the 24 web-app tables (`app_standings`, 21 v2/v3 tables, play-by-play and shots; all named `app_*`) for selected
+Copies the 25 web-app tables (14 v2/v3 tables, play-by-play and shots, `app_standings` and 8 other page-shaped tables; all named `app_*`) for selected
 seasons from **local PostgreSQL** straight into **Neon**. It replaces the CSV
 export + `psql \copy` route (now in `old/code/`: `neon_csv_import/` and
 `import-e2025-e2026.psql`), which could only append and failed when a season was loaded twice.
@@ -41,6 +41,23 @@ python neon_publish/main.py --drop-old-names             # drop them
 ```
 
 It drops only views, never a table, and a later publish does not recreate them.
+This includes the old views of the 7 standings feed tables, which are no
+longer published.
+
+## Retired standings feed tables
+
+The web app reads `app_standings`, so the 7 standings feed tables
+(`app_standings_basicstandings` and the rest) stay local since feature 23. To
+remove them from Neon, after `--drop-old-names`:
+
+```powershell
+python neon_publish/main.py --drop-retired --dry-run   # list them with row counts
+python neon_publish/main.py --drop-retired             # drop them
+```
+
+It drops only those 7 tables, all in one transaction, without `CASCADE`: if an
+old `etl_flat_standings_*` view still depends on one, nothing is dropped and it
+says to run `--drop-old-names` first. The local tables are kept.
 
 ## Play-by-play and shots: only changed games
 

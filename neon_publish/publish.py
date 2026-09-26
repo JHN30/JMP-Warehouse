@@ -18,15 +18,16 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from postgres_etl.flat_schema import (  # noqa: E402
-    PLAYER_TABLES, PUBLISHED_TABLES, RECORDS_TABLES, TABLES, create_index_sql, create_table_sql,
-    legacy_name, physical_name, relation_kinds, rename_actions, rename_legacy_tables,
+    PLAYER_TABLES, PUBLISHED_TABLES, RECORDS_TABLES, RENAMED_TABLES, TABLES, create_index_sql,
+    create_table_sql, legacy_name, physical_name, relation_kinds, rename_actions,
+    rename_legacy_tables,
 )
 from common.seasons import COMPETITION_CODES  # noqa: E402
 from common.dotenv import read_env_value  # noqa: E402
 
 
-# The tables the web app reads (clean app_* names). Live-API tables and
-# etl_source_payloads stay local.
+# The tables the web app reads (clean app_* names). The standings feeds and
+# etl_flat_game_stat_gaps stay local.
 APP_TABLES = PUBLISHED_TABLES
 # Large tables replaced game by game: only games whose rows differ between local
 # PostgreSQL and Neon are deleted and copied, so a refresh uploads the new games
@@ -236,7 +237,7 @@ def remote_counts(neon, competition_code, season_code, names):
     return counts, planned, sums
 
 
-def drop_old_name_actions(kinds, names=APP_TABLES):
+def drop_old_name_actions(kinds, names=tuple(sorted(RENAMED_TABLES))):
     """("drop", old) for each old name that is a view; ("keep", old) for one still a table."""
     actions = []
     for name in names:
@@ -254,7 +255,9 @@ def drop_old_names(neon, dry_run=False, log=print):
 
     with neon:
         with neon.cursor() as cursor:
-            olds = [legacy_name(name) for name in APP_TABLES if legacy_name(name)]
+            # Every renamed table, including the standings feeds that are no
+            # longer published but whose old views may still exist.
+            olds = [legacy_name(name) for name in sorted(RENAMED_TABLES)]
             actions = drop_old_name_actions(relation_kinds(cursor, olds))
             for action, old in actions:
                 if action == "keep":

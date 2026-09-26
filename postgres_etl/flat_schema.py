@@ -1,9 +1,8 @@
 """Column-first analytical schema for the cached v2, v3, and live responses.
 
-Repeated objects (quarters, overtime, streaks, minute evolution) get child rows
-rather than many mostly-NULL columns on their parent. JSONB appears only in the
-source-response archive and in page-shaped `app_*` tables, whose list columns
-match what the web app's API returns.
+Repeated objects (quarters, overtime, streaks) get child rows rather than many
+mostly-NULL columns on their parent. JSONB appears only in page-shaped `app_*`
+tables, whose list columns match what the web app's API returns.
 """
 
 import re
@@ -77,13 +76,6 @@ GAME_STATS = keys(
     "fieldGoalsAttemptedTotal accuracyMade accuracyAttempted totalRebounds "
     "defensiveRebounds offensiveRebounds assistances steals turnovers "
     "blocksFavour blocksAgainst foulsCommited foulsReceived plusMinus", "NUMERIC",
-)
-
-LIVE_PLAYER_STATS = keys(
-    "Points FieldGoalsMade2 FieldGoalsAttempted2 FieldGoalsMade3 FieldGoalsAttempted3 "
-    "FreeThrowsMade FreeThrowsAttempted OffensiveRebounds DefensiveRebounds "
-    "TotalRebounds Assistances Steals Turnovers BlocksFavour BlocksAgainst "
-    "FoulsCommited FoulsReceived Valuation Plusminus", "NUMERIC",
 )
 
 STATS_IDENTITY = (
@@ -321,70 +313,6 @@ TABLES = {
         f("points_b", "INTEGER", "POINTS_B"),
         f("shot_at", "TIMESTAMPTZ", "UTC"),
     ), indexes=(("person_code",),)),
-    "live_boxscores": table("live_boxscores", ("game_code",), (
-        f("game_code", "INTEGER NOT NULL", "@game_code"),
-        f("attendance", "INTEGER", "@attendance"),
-        f("is_live", "BOOLEAN", "Live"),
-        f("referees_text", "TEXT", "Referees"),
-    )),
-    "live_boxscore_players": table("live_boxscore_players", ("game_code", "side", "player_ordinal"), (
-        f("game_code", "INTEGER NOT NULL", "@game_code"),
-        f("side", "TEXT NOT NULL", "@side"),
-        f("player_ordinal", "INTEGER NOT NULL", "@player_ordinal"),
-        f("player_code", "TEXT", "@player_code"),
-        f("person_code", "TEXT", "@person_code"),
-        f("person_code_method", "TEXT", "@person_code_method"),
-        f("club_code", "TEXT", "Team"),
-        f("player_name", "TEXT", "Player"),
-        f("dorsal", "TEXT", "Dorsal"),
-        f("minutes", "TEXT", "Minutes"),
-        f("is_starter", "BOOLEAN", "IsStarter"),
-        f("is_playing", "BOOLEAN", "IsPlaying"),
-    ), LIVE_PLAYER_STATS, indexes=(("person_code",),)),
-    "live_boxscore_teams": table("live_boxscores", ("game_code", "side", "stats_kind"), (
-        f("game_code", "INTEGER NOT NULL", "@game_code"),
-        f("side", "TEXT NOT NULL", "@side"),
-        f("stats_kind", "TEXT NOT NULL", "@stats_kind"),
-        f("club_code", "TEXT", "@club_code"),
-        f("club_name", "TEXT", "@club_name"),
-        f("coach_name", "TEXT", "@coach_name"),
-        f("minutes", "TEXT", "Minutes"),
-    ), tuple(field for field in LIVE_PLAYER_STATS if field.name != "plusminus")),
-    "live_boxscore_period_scores": table("live_boxscores", ("game_code", "side", "score_kind", "period_number"), (
-        f("game_code", "INTEGER NOT NULL", "@game_code"),
-        f("side", "TEXT NOT NULL", "@side"),
-        f("score_kind", "TEXT NOT NULL", "@score_kind"),
-        f("period_number", "INTEGER NOT NULL", "@period_number"),
-        f("club_name", "TEXT", "@club_name"),
-        f("score", "INTEGER", "@score"),
-    )),
-    "live_evolution": table("live_evolution", ("game_code",), (
-        f("game_code", "INTEGER NOT NULL", "@game_code"),
-        f("minute_max_a", "INTEGER", "MinuteMaxA"),
-        f("minute_max_b", "INTEGER", "MinuteMaxB"),
-        f("score_max_a", "TEXT", "ScoreMaxA"),
-        f("score_max_b", "TEXT", "ScoreMaxB"),
-    )),
-    "live_evolution_minutes": table("live_evolution", ("game_code", "minute_ordinal"), (
-        f("game_code", "INTEGER NOT NULL", "@game_code"),
-        f("minute_ordinal", "INTEGER NOT NULL", "@minute_ordinal"),
-        f("minute", "INTEGER", "@minute"),
-        f("score_a", "INTEGER", "@score_a"),
-        f("score_b", "INTEGER", "@score_b"),
-        f("score_difference", "INTEGER", "@score_difference"),
-    )),
-    "live_evolution_largest_differences": table(
-        "live_evolution", ("game_code", "side_index", "slot_index"), (
-            f("game_code", "INTEGER NOT NULL", "@game_code"),
-            f("side_index", "INTEGER NOT NULL", "@side_index"),
-            f("slot_index", "INTEGER NOT NULL", "@slot_index"),
-            f("difference", "NUMERIC NOT NULL", "@difference"),
-        ),
-    ),
-    "live_scoring": table("live_scoring", ("game_code",), (
-        f("game_code", "INTEGER NOT NULL", "@game_code"),
-    ), keys("FastbreakPointsA FastbreakPointsB TurnoversPointsA TurnoversPointsB "
-            "SecondChancePointsA SecondChancePointsB", "INTEGER")),
 }
 
 # Each v3 category/feed has its own table. This avoids large blocks of NULLs
@@ -637,29 +565,12 @@ TABLES["app_players"] = Table(
 )
 PLAYER_TABLES = ("app_players",)
 
-COMPARISON_NUMERIC = (
-    "DefensiveReboundsA OffensiveReboundsB OffensiveReboundsA DefensiveReboundsB "
-    "TurnoversStartersA TurnoversBenchA TurnoversStartersB TurnoversBenchB "
-    "StealsStartersA StealsBenchA StealsStartersB StealsBenchB "
-    "AssistsStartersA AssistsBenchA AssistsStartersB AssistsBenchB "
-    "PointsStartersA PointsBenchA PointsStartersB PointsBenchB "
-    "maxA minutePrevA minuteStrA maxB minutePrevB minuteStrB "
-    "maxLeadA maxLeadB minuteMaxLeadA minuteMaxLeadB minutoActual"
-)
-TABLES["live_comparison"] = table(
-    "live_comparison", ("game_code",), (
-        f("game_code", "INTEGER NOT NULL", "@game_code"),
-        f("is_live", "BOOLEAN", "isLive"),
-    ), keys(COMPARISON_NUMERIC, "NUMERIC"),
-    keys("prevA strA prevB strB puntosMaxLeadA puntosMaxLeadB", "TEXT"),
-)
 
-TABLES["source_payloads"] = table("source_payloads", ("relative_path",), (
-    f("relative_path", "TEXT NOT NULL", "@relative_path"),
-    f("sha256", "TEXT NOT NULL", "@sha256"),
-    f("payload", "JSONB NOT NULL", "@payload"),
-))
-
+STANDINGS_FEED_TABLES = (
+    "standings_basicstandings", "standings_calendarstandings",
+    "standings_streaks", "standings_aheadbehind", "standings_margins",
+    "standings_calendar_streaks", "standings_basic_form",
+)
 
 # The tables the web app reads, in publish order. All of them have clean app_*
 # names; the v2/v3 tables were called etl_flat_* before feature 22, and
@@ -670,9 +581,6 @@ PUBLISHED_TABLES = (
     "game_team_stats",
     "season_stats_traditional", "season_stats_advanced",
     "season_stats_scoring", "season_stats_misc",
-    "standings_basicstandings", "standings_calendarstandings",
-    "standings_streaks", "standings_aheadbehind", "standings_margins",
-    "standings_calendar_streaks", "standings_basic_form",
     "play_by_play", "shots",
     "app_standings",
     "app_records_player_seasons", "app_records_single_games", "app_records_team_seasons",
@@ -680,12 +588,26 @@ PUBLISHED_TABLES = (
     "app_postseason_series",
     "app_players",
 )
-RENAMED_TABLES = frozenset(name for name in PUBLISHED_TABLES if not name.startswith("app_"))
+# The tables feature 22 renamed from etl_flat_* to app_*. The standings feeds
+# are among them but, since feature 23, stay local: app_standings replaced them
+# in the web app. They keep their app_* names until feature 16 moves them.
+RENAMED_TABLES = frozenset(
+    name for name in PUBLISHED_TABLES + STANDINGS_FEED_TABLES if not name.startswith("app_")
+)
+
+# Dropped by --drop-retired (feature 23); never loaded or published again.
+# Physical names, listed explicitly so a drop never depends on what TABLES holds.
+RETIRED_LOCAL_TABLES = (
+    "etl_flat_live_boxscores", "etl_flat_live_boxscore_players",
+    "etl_flat_live_boxscore_teams", "etl_flat_live_boxscore_period_scores",
+    "etl_flat_live_evolution", "etl_flat_live_evolution_minutes",
+    "etl_flat_live_evolution_largest_differences", "etl_flat_live_comparison",
+    "etl_flat_live_scoring", "etl_source_payloads",
+)
+RETIRED_NEON_TABLES = tuple(f"app_{name}" for name in STANDINGS_FEED_TABLES)
 
 
 def physical_name(name):
-    if name == "source_payloads":
-        return "etl_source_payloads"
     if name.startswith("app_"):
         return name
     if name in RENAMED_TABLES:
@@ -757,10 +679,43 @@ def rename_local_tables(connection, log=print):
     """Move local legacy tables to their app_* names (no views), all or none."""
     with connection:
         with connection.cursor() as cursor:
-            actions = rename_legacy_tables(cursor, PUBLISHED_TABLES)
+            actions = rename_legacy_tables(cursor, sorted(RENAMED_TABLES))
     for _, old, new in actions:
         log(f"Renamed local {old} -> {new}")
     return actions
+
+
+def drop_retired_tables(connection, names, dry_run=False, log=print):
+    """Drop the retired tables ``names`` in one transaction, all or none; never a view.
+
+    Missing names are skipped, so running it again reports nothing left. DROP
+    TABLE has no CASCADE: an object that still depends on a table (such as an
+    old etl_flat_* view in Neon) fails the whole drop and it rolls back.
+    """
+    from psycopg2 import sql
+
+    dropped = []
+    with connection:
+        with connection.cursor() as cursor:
+            kinds = relation_kinds(cursor, names)
+            for name in names:
+                kind = kinds.get(name)
+                if kind is None:
+                    continue
+                if kind != "table":
+                    log(f"  {name}: a {kind}, not a table; left alone")
+                    continue
+                cursor.execute(sql.SQL("SELECT count(*) FROM {}").format(sql.Identifier(name)))
+                rows = cursor.fetchone()[0]
+                if dry_run:
+                    log(f"  {name}: {rows:,} rows; would be dropped")
+                else:
+                    cursor.execute(sql.SQL("DROP TABLE {}").format(sql.Identifier(name)))
+                    log(f"  {name}: {rows:,} rows; dropped")
+                dropped.append(name)
+    if not dropped:
+        log("No retired tables left.")
+    return dropped
 
 
 def create_table_sql(name):

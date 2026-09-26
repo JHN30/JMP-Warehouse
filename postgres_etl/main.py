@@ -7,11 +7,13 @@ from pathlib import Path
 
 from aggregates import AGGREGATE_TABLES, build_aggregates
 from flat_loader import FlatDatabaseLoader
-from flat_schema import PLAYER_TABLES, RECORDS_TABLES, TABLES as FLAT_TABLES, physical_name
+from flat_schema import (PLAYER_TABLES, RECORDS_TABLES, RETIRED_LOCAL_TABLES, TABLES as FLAT_TABLES,
+                         drop_retired_tables, physical_name)
 from players import build_players, validate_players
 from quality import validate_aggregates, validate_loaded
 from records import build_records, validate_records
-from shared import COMPETITION_CODES as PREFIX, DEFAULT_CONFIG, available_scopes, current_season_year
+from shared import (COMPETITION_CODES as PREFIX, DEFAULT_CONFIG, available_scopes, connect,
+                    current_season_year)
 
 
 HERE = Path(__file__).resolve().parent
@@ -88,11 +90,25 @@ def build_parser():
                         help="Skip the default read-only checks after loading flat tables.")
     parser.add_argument("--list-tables", action="store_true",
                         help="List available table names and exit.")
+    parser.add_argument("--drop-retired", action="store_true",
+                        help="Drop the local tables that are no longer loaded (the live-API "
+                             "etl_flat_live_* tables and etl_source_payloads). Try --dry-run first.")
     parser.add_argument("--data-root", type=Path, default=DEFAULT_DATA_ROOT,
                         help="Data directory containing bronze/<competition>/.")
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG,
                         help="PostgreSQL connection JSON; unused in --dry-run mode.")
     return parser
+
+
+def run_drop_retired(args):
+    connection = connect(args.config)
+    try:
+        print("Mode: " + ("dry run (PostgreSQL unchanged)" if args.dry_run
+                          else "drop the retired local tables"), flush=True)
+        drop_retired_tables(connection, RETIRED_LOCAL_TABLES, dry_run=args.dry_run)
+        return 0
+    finally:
+        connection.close()
 
 
 def main(argv=None):
@@ -103,6 +119,12 @@ def main(argv=None):
     if args.list_tables:
         print("\n".join(FLAT_TABLES))
         return 0
+    if args.drop_retired:
+        if (args.table != ["all"] or args.season_code != ["latest"] or args.quality_only
+                or args.skip_quality_check):
+            parser.error("--drop-retired cannot be combined with --table, --season-code, "
+                         "--quality-only or --skip-quality-check")
+        return run_drop_retired(args)
     unknown = set(args.table) - {"all", *FLAT_TABLES}
     if unknown:
         parser.error("Unknown table(s): " + ", ".join(sorted(unknown)))

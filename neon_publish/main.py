@@ -16,7 +16,9 @@ else:
 
 from common.db import DEFAULT_CONFIG, Tee, connect, elapsed, log_directory  # noqa: E402
 from common.seasons import COMPETITION_CODES, select_seasons  # noqa: E402
-from postgres_etl.flat_schema import physical_name, rename_local_tables  # noqa: E402  (path set by publish)
+from postgres_etl.flat_schema import (  # noqa: E402  (path set by publish)
+    RETIRED_NEON_TABLES, drop_retired_tables, physical_name, rename_local_tables,
+)
 from tables_to_csv.utils import available_seasons  # noqa: E402
 
 
@@ -41,6 +43,10 @@ def build_parser():
                         help="Drop the old etl_flat_* views left in Neon by the rename to app_* "
                              "names. Only after the web app reads the app_* names; try "
                              "--dry-run first.")
+    parser.add_argument("--drop-retired", action="store_true",
+                        help="Drop the app_standings_* feed tables, no longer published since "
+                             "the web app reads app_standings. Run --drop-old-names first; try "
+                             "--dry-run first.")
     parser.add_argument("--allow-shrink", action="store_true",
                         help="Publish even if a table would lose more than 10%% of its "
                              "current Neon rows for the season.")
@@ -59,6 +65,24 @@ def run_drop_old_names(args):
         print("The web app must already read the app_* names; after this, the old names "
               "no longer exist in Neon.", flush=True)
         drop_old_names(neon, dry_run=args.dry_run)
+        return 0
+    finally:
+        neon.close()
+
+
+def run_drop_retired(args):
+    import psycopg2.errors
+
+    neon = neon_connect(args.neon_url_env)
+    try:
+        print("Mode: " + ("dry run (Neon unchanged)" if args.dry_run
+                          else "drop the retired app_standings_* feed tables in Neon"), flush=True)
+        try:
+            drop_retired_tables(neon, RETIRED_NEON_TABLES, dry_run=args.dry_run)
+        except psycopg2.errors.DependentObjectsStillExist as error:
+            print(f"Nothing dropped (Neon unchanged): {str(error).strip()}", flush=True)
+            print("Run --drop-old-names first to remove the old etl_flat_* views.", flush=True)
+            return 1
         return 0
     finally:
         neon.close()
@@ -130,6 +154,10 @@ def main(argv=None):
         return 0
     if args.drop_old_names and (args.table != ["all"] or args.season_code != ["current"]):
         parser.error("--drop-old-names cannot be combined with --table or --season-code")
+    if args.drop_retired and (args.table != ["all"] or args.season_code != ["current"]
+                              or args.drop_old_names):
+        parser.error("--drop-retired cannot be combined with --table, --season-code "
+                     "or --drop-old-names")
     unknown = set(args.table) - {"all", *APP_TABLES}
     if unknown:
         parser.error("Unknown or non-app table(s): " + ", ".join(sorted(unknown)))
@@ -143,6 +171,8 @@ def main(argv=None):
             try:
                 if args.drop_old_names:
                     return run_drop_old_names(args)
+                if args.drop_retired:
+                    return run_drop_retired(args)
                 return run(args, names)
             except KeyboardInterrupt:
                 print("\nInterrupted. The open Neon transaction was rolled back.", flush=True)

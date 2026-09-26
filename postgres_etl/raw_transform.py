@@ -1,8 +1,7 @@
 """Turn bronze endpoint responses into season-scoped relational rows.
 
-Every row keeps its complete source object in ``payload``. The separate
-``source_payloads`` table retains the complete response, including metadata
-that does not belong to any flattened row.
+Every row keeps its complete source object in ``payload``. The complete
+responses stay in the bronze files.
 
 Sources are the latest bronze version of each resource. They are addressed by
 logical paths such as ``<season dir>/v2/games.json`` or
@@ -418,34 +417,15 @@ class RawSeason:
         }
         if table in patterns:
             return self._paths(patterns[table])
-        live_names = {
-            "play_by_play": "play_by_play", "shots": "shooting_charts",
-            "live_boxscores": "live_boxscores",
-            "live_boxscore_players": "live_boxscores",
-            "live_evolution": "live_evolution",
-            "live_comparison": "live_comparison",
-            "live_scoring": "live_scoring",
-        }
+        live_names = {"play_by_play": "play_by_play", "shots": "shooting_charts"}
         if table in live_names:
             return self._paths(f"live/*/{live_names[table]}")
-        if table == "source_payloads":
-            return self.files("seasons") + self._paths("**")
         raise KeyError(table)
 
     def rows(self, table, files=None):
         files = self.files(table) if files is None else files
         scope = self.scope
         read_json = self.read
-        if table == "source_payloads":
-            for path in files:
-                raw_bytes = self.read_bytes(path)
-                relative = ("_catalog/v2/seasons.json" if path == self.catalog
-                            else path.relative_to(self.raw).as_posix())
-                yield dict(scope, relative_path=relative,
-                           sha256=hashlib.sha256(raw_bytes).hexdigest(),
-                           payload=json.loads(raw_bytes.decode("utf-8")))
-            return
-
         if table == "seasons":
             for path in files:
                 for item in read_json(path).get("data", []):
@@ -636,8 +616,7 @@ class RawSeason:
                                    payload=item)
             return
 
-        if table in ("play_by_play", "shots", "live_boxscores", "live_boxscore_players",
-                     "live_evolution", "live_comparison", "live_scoring"):
+        if table in ("play_by_play", "shots"):
             for path in files:
                 game = integer(path.parent.name)
                 if game is None:
@@ -667,22 +646,6 @@ class RawSeason:
                                                                        item.get("PLAYER")))),
                                    points=integer(item.get("POINTS")), coord_x=item.get("COORD_X"),
                                    coord_y=item.get("COORD_Y"), payload=item)
-                elif table == "live_boxscores":
-                    yield dict(scope, game_code=game,
-                               attendance=integer(response.get("Attendance")), payload=response)
-                elif table == "live_boxscore_players":
-                    for side, team in enumerate(response.get("Stats") or []):
-                        for ordinal, item in enumerate(team.get("PlayersStats") or []):
-                            yield dict(scope, game_code=game, side="local" if side == 0 else "road",
-                                       player_ordinal=ordinal,
-                                       player_code=code(item.get("Player_ID")),
-                                       **dict(zip(("person_code", "person_code_method"),
-                                                  self.resolve_live_person(game, item.get("Player_ID"),
-                                                                           item.get("Team"), item.get("Dorsal"),
-                                                                           item.get("Player")))),
-                                       payload=item)
-                else:
-                    yield dict(scope, game_code=game, payload=response)
             return
 
         raise KeyError(table)

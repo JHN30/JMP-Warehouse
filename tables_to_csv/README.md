@@ -4,8 +4,8 @@ This tool exports the **current column-first PostgreSQL ETL tables**. It reads
 the database; it does not call the EuroLeague APIs or change database rows.
 Run it after loading data with `postgres_etl/main.py`.
 
-The default export covers every available `app_*` and `etl_flat_*` table plus
-the `etl_source_payloads` archive. Table names come from
+The default export covers every available `app_*` and `etl_flat_*` table.
+Table names come from
 `postgres_etl/flat_schema.py`, so they stay aligned with the loader. The
 previous seven `euroleague_header`/`euroleague_box_score`-style tables are not
 used by this command.
@@ -58,8 +58,7 @@ Files are separated by competition and season, for example:
 data/euroleague_csv/E2025/app_games.csv
 data/euroleague_csv/E2025/app_game_player_stats.csv
 data/euroleague_csv/E2025/app_play_by_play.csv
-data/euroleague_csv/E2025/etl_flat_live_boxscores.csv
-data/euroleague_csv/E2025/etl_source_payloads.csv
+data/euroleague_csv/E2025/etl_flat_game_stat_gaps.csv
 ```
 
 Files take the table's name, so the web-app tables export as `app_*.csv` since
@@ -74,9 +73,7 @@ files untouched. A temporary file is used so a failed export does not replace
 an existing completed CSV.
 
 PostgreSQL streams the CSV directly to disk, avoiding a large pandas DataFrame
-for tables such as play-by-play. The `etl_source_payloads` file includes the
-JSONB archive as CSV text and may be large; omit it with `-tb` if you only need
-flat analytical tables. CSV is a text format: PostgreSQL NULL becomes an empty
+for tables such as play-by-play. CSV is a text format: PostgreSQL NULL becomes an empty
 field, while a real empty string is quoted.
 
 Progress, per-table row counts, and elapsed times are printed to the console

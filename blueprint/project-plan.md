@@ -41,25 +41,48 @@ Existing (shipped):
 - One-command refresh (`pipeline.py`) that skips work when nothing changed
 - CSV export of local tables
 
-Next: page-shaped tables for the web app (standings first), scheduling, then
-the items in `build-plan.md`.
+Shipped since adoption: page-shaped web-app tables (standings, records,
+coverage, team season stats, postseason series, players), clean `app_*` names,
+and play-by-play and shots in Neon.
+
+Next (agreed 2026-09-26): clean up unused tables, split the database into
+schemas, then advanced statistics computed from API data (box scores,
+play-by-play, shots), stored for every round so they serve the web app's
+standings page, the owner's JMP rating model and general analytics. The API's
+own team and player season numbers are kept as reference and used to check our
+calculations; where we can calculate more exactly than the API (for example
+possessions counted from play-by-play), we do, keeping both values. Order and
+details are in `build-plan.md`.
 
 ## 4. Data - What are we storing?
 
 - **Bronze** (`data/bronze/`): exact API responses per competition, season and
   resource, with `manifest.jsonl`. EuroLeague E2000-E2026, about 174 MB.
-- **Local PostgreSQL** (about 2 GB): 33 `etl_flat_*` tables. Seasons, clubs,
-  people, registrations, rounds, games (with status and attendance notes),
-  officials, period scores, player and team box scores, stat gaps, v3 season
-  stats (4 categories), v3 standings (7 feeds), play-by-play and shots (from
-  E2007), plus `etl_source_payloads`.
-- **Neon** (`public` schema): the 22 v2/v3 `etl_flat_*` tables the app reads,
-  currently for E2025 and E2026 only. All seasons would be about 237 MB.
-  Feature 22 renames them to clean `app_*` names in `public` (the `app` schema
-  and read-only role stay in feature 16). Feature 21 then adds play-by-play
-  and shots as `app_play_by_play` and `app_shots`, for E2025 and E2026 only
-  (all seasons would be about 1.5 GB, too large for the current plan). Derived
-  analytics (feature 19) stay local.
+- **Local PostgreSQL** (about 2 GB), today all in `public`: the `app_*` tables
+  (seasons, clubs, people, registrations, rounds, games with status and
+  attendance notes, officials, period scores, player and team box scores, v3
+  player season stats in 4 categories, v3 standings feeds, play-by-play and
+  shots from E2007, and the page-shaped tables), plus `etl_flat_game_stat_gaps`,
+  the unused `etl_flat_live_*` tables and `etl_source_payloads` (a copy of
+  bronze), the last two to be dropped.
+- **Target local schemas:**
+  - `core` - typed, cleaned source tables, including the API team season stats
+    feeds (traditional, advanced and their opponent versions).
+  - `analytics` - local-only derived tables: per-game and per-round advanced
+    stats for teams and players, play-by-play possessions and features,
+    lineups. Never published to Neon.
+  - `app` - exactly the tables Neon gets, page-shaped. `app` tables may be
+    built from `analytics`, never the reverse.
+  - Clean names inside each schema (for example `core.games`, `app.standings`).
+- **Advanced stats grain:** cumulative after every round, for the scopes `all`,
+  each phase (`RS`, `PI`, `PO`, `FF`, older `TS`) and `PS` (all postseason
+  phases).
+- **Neon:** today the `app_*` tables in `public`, for E2025 and E2026 only (all
+  seasons of the app tables would be about 237 MB; play-by-play and shots for
+  all seasons about 1.5 GB, too large for the current plan). Target: an `app`
+  schema with a read-only role, with `public.app_*` compatibility views until the
+  web app switches. Per-round team advanced stats go to Neon for the standings
+  page; per-round player advanced stats stay local because of storage.
 - Keys are source natural keys scoped by `competition_code` + `season_code`.
   `person_code` is stable across seasons.
 

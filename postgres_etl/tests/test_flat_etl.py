@@ -10,8 +10,7 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from flat_schema import (PUBLISHED_TABLES, RENAMED_TABLES, TABLES, create_table_sql, legacy_name,
-                         physical_name, rename_actions)
+from flat_schema import COLUMN_NAMES, TABLES, create_table_sql, physical_name
 from flat_transform import FlatSeason
 from main import main
 from shared import BronzeStore
@@ -53,14 +52,11 @@ class FlatEtlTests(unittest.TestCase):
         return FlatSeason(self.data_root, "euroleague", "E2025")
 
     def test_curated_tables_are_column_first(self):
-        self.assertEqual(physical_name("games"), "app_games")
+        self.assertEqual(physical_name("games"), "games")
         for name, spec in TABLES.items():
             self.assertNotIn("payload", {field.name for field in spec.fields})
             json_columns = {field.name for field in spec.fields if field.kind.startswith("JSONB")}
-            # Page-shaped app tables may carry the lists their API returns.
-            allowed = ({"form", "streak_history", "items", "games", "clubs"}
-                      if name.startswith("app_") else set())
-            self.assertLessEqual(json_columns, allowed, name)
+            self.assertFalse(json_columns, name)
         self.assertNotIn("extra_1", create_table_sql("games"))
 
     def test_future_placeholders_are_not_results(self):
@@ -80,12 +76,12 @@ class FlatEtlTests(unittest.TestCase):
         self.assertEqual({row["score"] for row in overtime}, {8, 5})
 
     def test_categories_and_percentages(self):
-        rows = list(self.season().rows("season_stats_traditional"))
+        rows = list(self.season().rows("season_player_stats_traditional"))
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["two_pointers_percentage"], Decimal("45.5"))
-        self.assertEqual(list(self.season().rows("season_stats_advanced")), [])
+        self.assertEqual(list(self.season().rows("season_player_stats_advanced")), [])
         self.assertNotIn("two_pointers_percentage", {
-            field.name for field in TABLES["season_stats_advanced"].fields
+            field.name for field in TABLES["season_player_stats_advanced"].fields
         })
 
     def test_standings_form_is_a_child_table(self):
@@ -96,54 +92,30 @@ class FlatEtlTests(unittest.TestCase):
         self.assertEqual(main(["-sc", "2025", "-tb", "games", "game_period_scores",
                                "--data-root", str(self.data_root), "--dry-run"]), 0)
 
-    def test_drop_retired_cannot_be_combined_with_a_load(self):
-        for extra in (["-tb", "games"], ["-sc", "2025"], ["--quality-only"],
-                      ["--skip-quality-check"]):
-            with self.assertRaises(SystemExit), mock.patch("sys.stderr", io.StringIO()):
-                main(["--drop-retired", *extra])
-
-
-
 class CleanTableNameTests(unittest.TestCase):
-    def test_published_tables_have_app_names_and_the_rest_keep_theirs(self):
-        self.assertEqual(len(PUBLISHED_TABLES), 25)
-        self.assertEqual(len(RENAMED_TABLES), 23)
-        # Standings feeds are no longer published but keep their app_* names locally.
-        self.assertNotIn("standings_basicstandings", PUBLISHED_TABLES)
-        self.assertEqual(physical_name("standings_basicstandings"), "app_standings_basicstandings")
-        self.assertEqual(legacy_name("standings_basic_form"), "etl_flat_standings_basic_form")
-        self.assertEqual(legacy_name("games"), "etl_flat_games")
-        self.assertEqual(physical_name("play_by_play"), "app_play_by_play")
-        self.assertEqual(legacy_name("shots"), "etl_flat_shots")
-        self.assertEqual(physical_name("game_stat_gaps"), "etl_flat_game_stat_gaps")
-        self.assertIsNone(legacy_name("game_stat_gaps"))
-        self.assertEqual(physical_name("app_standings"), "app_standings")
-        self.assertIsNone(legacy_name("app_standings"))
-        self.assertTrue(all(physical_name(name).startswith("app_") for name in PUBLISHED_TABLES))
+    def test_silver_names_and_columns(self):
+        self.assertEqual(len(TABLES), 28)
+        self.assertEqual(physical_name("games"), "games")
+        self.assertEqual(physical_name("standings_basic"), "standings_basic")
+        self.assertEqual(physical_name("season_player_stats_misc"),
+                         "season_player_stats_misc")
+        for name, spec in TABLES.items():
+            columns = {field.name for field in spec.fields}
+            self.assertTrue(columns.isdisjoint(COLUMN_NAMES), name)
+            self.assertEqual(spec.key[:2], ("competition_code", "season_code"))
+            self.assertIn('"competition_code"', create_table_sql(name))
 
-    def test_legacy_table_is_renamed_and_optionally_kept_as_a_view(self):
-        kinds = {"etl_flat_games": "table"}
-        self.assertEqual(rename_actions(kinds, ["games"]),
-                         [("rename", "etl_flat_games", "app_games")])
-        self.assertEqual(rename_actions(kinds, ["games"], keep_views=True),
-                         [("rename", "etl_flat_games", "app_games"),
-                          ("view", "etl_flat_games", "app_games")])
-
-    def test_already_renamed_missing_or_unrenamed_tables_need_nothing(self):
-        for kinds in ({"app_games": "table", "etl_flat_games": "view"},  # renamed, view kept
-                      {"app_games": "table"},                            # renamed, view dropped
-                      {}):                                               # created fresh later
-            for keep_views in (False, True):
-                self.assertEqual(rename_actions(kinds, ["games"], keep_views), [])
-        self.assertEqual(rename_actions({"etl_flat_game_stat_gaps": "table"},
-                                        ["game_stat_gaps", "app_standings"], True), [])
-
-    def test_old_and_new_tables_side_by_side_are_refused(self):
-        with self.assertRaisesRegex(ValueError, "Both etl_flat_games and app_games"):
-            rename_actions({"etl_flat_games": "table", "app_games": "table"}, ["games"])
-        with self.assertRaisesRegex(ValueError, "app_games exists but is not a table"):
-            rename_actions({"etl_flat_games": "table", "app_games": "view"}, ["games"])
-
+    def test_local_connection_uses_silver_search_path(self):
+        from common.db import connect
+        with tempfile.TemporaryDirectory() as root:
+            config = Path(root) / "connection.json"
+            config.write_text('{"dbname": "test"}', encoding="utf-8")
+            connection = mock.MagicMock()
+            with mock.patch("psycopg2.connect", return_value=connection):
+                self.assertIs(connect(config), connection)
+            connection.cursor.return_value.__enter__.return_value.execute.assert_called_once_with(
+                'SET search_path TO silver')
+            connection.commit.assert_called_once()
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,79 +1,49 @@
 # EuroleagueDataETL
 
-Python + PostgreSQL pipeline that downloads EuroLeague and EuroCup data, loads
-it into a local PostgreSQL database, and publishes the web-app tables to Neon.
+Python 3.13 and PostgreSQL pipeline for EuroLeague and EuroCup data. The fetcher
+stores exact versioned API responses in bronze. The loader builds 28 typed
+tables in the local `silver` schema and runs quality checks. Neon publishing is
+paused until feature 30 builds the gold layer. The web app continues reading
+its existing Neon data during the pause.
 
-```
-API ──fetch──▶ data/bronze (exact responses) ──load──▶ local PostgreSQL ──publish──▶ Neon
-   api_requests/                          postgres_etl/                neon_publish/
-                                                       └──export──▶ CSV (tables_to_csv/)
-```
+## Refresh
 
-## Run a refresh
-
-Open the project in VS Code, then in its terminal (Terminal > New Terminal):
+Run from the repository root:
 
 ```powershell
-python pipeline.py                     # refresh the current season: fetch, load, checks, publish
-python pipeline.py --dry-run-publish   # the same, but Neon is only compared, never written
+python pipeline.py
+python pipeline.py --skip-fetch
 ```
 
-Or without typing: **Terminal > Run Task... > "Refresh current season"** (or
-"Refresh current season (dry run)"). Both run the same command in the terminal.
+The first command fetches and loads the current season. `--skip-fetch` loads
+cached bronze responses. Each run ends with a summary and writes a log under
+`logs/refresh/`. The summary says
+`Publish:  paused (no gold tables until feature 30)`. The existing
+`--dry-run-publish` option and VS Code task remain accepted while publishing
+is paused; they do not connect to Neon.
 
-- **Neon URL:** if the `NEON_DATABASE_URL` environment variable is set, it is
-  used. Otherwise the command asks for it with hidden input, only when it is
-  about to publish, and forgets it after the run. To set it once for your
-  Windows user: Start menu > "Edit environment variables for your account" >
-  New, name `NEON_DATABASE_URL`, value = the direct (non-pooled) Neon URL, then
-  restart VS Code. (Avoid typing it into a terminal command: PowerShell keeps a
-  plain-text command history.)
-- **If publish fails:** put Neon's direct (non-pooled) connection URL in the
-  `NEON_DATABASE_URL` entry in `.env`, then retry. The pipeline reads `.env`
-  only when it is ready to publish; it does not load the URL during fetch or
-  local PostgreSQL load steps.
-- **What you see:** the live output of every step, then a summary: the result
-  (`OK`, `NOTHING TO DO`, `OK (dry run)`, or `FAILED at <step>` with what to do
-  next), what the download changed, rows loaded with quality errors and
-  warnings, and each Neon table's rows before -> after.
-- **Log:** every run is saved to `logs/refresh/refresh_<date>_<time>.log`.
-- **Options:** `-sc 2025` (another season), `--allow-shrink` (only after
-  checking why a table would lose rows), `--force` (load and publish even if
-  nothing changed), `--skip-fetch` (use the files already downloaded),
-  `--help` for all.
-- When nothing new was downloaded and nothing is waiting to be published, the
-  run stops after the download and leaves Neon alone. A failed load or publish
-  stays pending and is retried by the next run.
+The loader needs `postgres_etl/config_connection.json` (copy the example,
+then set your local PostgreSQL credentials). A dry run needs no database:
+
+```powershell
+python postgres_etl/main.py --list-tables
+python postgres_etl/main.py -sc 2025 --dry-run
+python postgres_etl/main.py -sc 2025
+python postgres_etl/main.py -sc all
+```
 
 ## Layout
 
-| Path | What it is |
+| Path | Purpose |
 | --- | --- |
-| [pipeline.py](pipeline.py) | Scheduled refresh: fetch → load (with quality checks) → publish. Stops after the fetch when nothing changed. |
-| [api_requests/](api_requests/README.md) | **Fetch.** Rate-limited downloader for the v2/v3 APIs plus live play-by-play and shots. Writes to `data/bronze/`. |
-| [postgres_etl/](postgres_etl/README.md) | **Load.** Turns bronze into typed tables in local PostgreSQL (`app_*` for the 25 web-app tables and the local standings feeds, `etl_flat_game_stat_gaps` for the stat gaps) and runs quality checks. |
-| [neon_publish/](neon_publish/README.md) | **Publish.** Replaces seasons of the 25 `app_*` web-app tables in Neon (play-by-play and shots game by game), one transaction per season. |
-| [tables_to_csv/](tables_to_csv/README.md) | **Export.** Local PostgreSQL tables → one CSV per season and table (e.g. for MSSQL analysis). |
-| `common/` | Code shared by all stages: the bronze store, database connection, season-code helpers. |
-| [docs/](docs/) | [Data dictionary](docs/DATA_DICTIONARY.md): every table, its key, columns and rules. |
-| `data/` | Local data, not code (see below). |
-| `logs/` | One folder per tool with a log file per run. |
-| [old/](old/README.md) | Code, logs and data retired in the 2026-09-24 cleanup, kept until you decide what to keep. Nothing reads it. |
-
-### data/
-
-- `bronze/<competition>/<season>/`: exact, gzipped, versioned API responses plus
-  a request manifest. This is the only input of `postgres_etl`.
-- `state/`: `pipeline.py` bookkeeping (pending publishes).
-- `<competition>_csv/`: CSV exports created by `tables_to_csv`.
-
-## Configuration
-
-- Local PostgreSQL: `postgres_etl/config_connection.json` (database, user,
-  password, host, port). It holds a password, so keep it out of version control
-  (it is listed in `.gitignore`).
-- Neon: the `NEON_DATABASE_URL` environment variable (direct, non-pooled URL).
-  It is never written to a file.
+| [api_requests/](api_requests/README.md) | Fetch API responses into versioned bronze files. |
+| [postgres_etl/](postgres_etl/README.md) | Load and check the local silver tables. |
+| [neon_publish/](neon_publish/README.md) | Paused publisher; season transaction engine retained for feature 30. |
+| [tables_to_csv/](tables_to_csv/README.md) | Export silver tables to CSV. |
+| [docs/DATA_DICTIONARY.md](docs/DATA_DICTIONARY.md) | Silver table names, keys, columns, and historical gold reference. |
+| `data/bronze/` | Exact source responses; the loader's only input. |
+| `data/state/` | Refresh bookkeeping. |
+| `logs/` | Per-run logs. |
 
 ## Tests
 

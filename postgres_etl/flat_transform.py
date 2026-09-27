@@ -91,8 +91,8 @@ class FlatSeason:
 
     @staticmethod
     def _expand(name, row):
-        if name.startswith("season_stats_"):
-            if row["category"] == name.removeprefix("season_stats_"):
+        if name.startswith("season_player_stats_"):
+            if row["category"] == name.removeprefix("season_player_stats_"):
                 yield row
             return
         if name.startswith("season_team_stats_"):
@@ -102,7 +102,10 @@ class FlatSeason:
         if name.startswith("standings_") and name not in (
             "standings_calendar_streaks", "standings_basic_form"
         ):
-            if row["feed"] == name.removeprefix("standings_"):
+            feed_names = {"basic": "basicstandings", "calendar": "calendarstandings",
+                          "ahead_behind": "aheadbehind"}
+            feed = name.removeprefix("standings_")
+            if row["feed"] == feed_names.get(feed, feed):
                 yield row
             return
         if name == "standings_calendar_streaks":

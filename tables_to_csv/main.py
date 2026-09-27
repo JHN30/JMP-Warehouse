@@ -26,7 +26,7 @@ DEFAULT_OUTPUT_ROOT = HERE.parent / "data"
 
 def build_parser():
     parser = argparse.ArgumentParser(
-        description="Export the loaded app_* and etl_flat_* PostgreSQL tables to CSV (no API requests)."
+        description="Export the loaded silver PostgreSQL tables to CSV (no API requests)."
     )
     parser.add_argument("-cp", "--competition", choices=COMPETITION_CODES,
                         default="euroleague", help="Default: euroleague.")

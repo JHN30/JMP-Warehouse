@@ -1,12 +1,12 @@
-"""Refresh one season end to end: fetch -> load local PostgreSQL -> publish to Neon.
+"""Refresh one season: fetch -> load silver in local PostgreSQL.
 
 Run it from the VS Code terminal whenever you want (for example nightly and
-after each round). When the API returned nothing new and no earlier publish is
-pending, the run stops after the fetch and Neon is left untouched. Every run
+after each round). When the API returned nothing new, the run stops after the
+fetch. Neon is untouched while publishing is paused. Every run
 writes one log file to logs/refresh/ and ends with a summary.
 
     python pipeline.py                     # current EuroLeague season
-    python pipeline.py --dry-run-publish   # everything, but Neon only compared
+    python pipeline.py --dry-run-publish   # accepted while publishing is paused
     python pipeline.py -sc 2025
 """
 
@@ -171,7 +171,7 @@ def build_summary(season_code, result, facts, seconds, log_path, next_step=None)
         if failure:
             lines.append(f"            {failure}")
     if not facts.publish_lines:
-        lines.append("Publish:  not run")
+        lines.append("Publish:  paused (no gold tables until feature 30)")
     else:
         tables, mode, failure = publish_facts(facts.publish_lines)
         lines.append(f"Publish:  {mode or 'not completed'}")
@@ -259,14 +259,13 @@ def build_parser():
     parser.add_argument("-sc", "--season-code", default="current",
                         help="current (default), a start year such as 2026, or E2026.")
     parser.add_argument("--force", action="store_true",
-                        help="Load and publish even if the fetch changed nothing.")
+                        help="Load even if the fetch changed nothing.")
     parser.add_argument("--skip-fetch", action="store_true",
                         help="Use the existing raw cache; implies --force.")
     parser.add_argument("--dry-run-publish", action="store_true",
-                        help="Compare row counts with Neon instead of publishing.")
+                        help="Accepted for the existing task; publishing is currently paused.")
     parser.add_argument("--allow-shrink", action="store_true",
-                        help="Passed to the publisher: allow a table to lose more than 10%% "
-                             "of its Neon rows (only after checking why).")
+                        help="Reserved for publishing after feature 30; currently unused.")
     parser.add_argument("--hot-hours", type=float, default=48,
                         help="Passed to the fetcher; see api_requests --hot-hours.")
     parser.add_argument("--request-interval", type=float, default=2.5,
@@ -321,7 +320,7 @@ def refresh(args, season_code, log, state_file, facts, stage_runner=run_stage,
 
     pending = read_state(state_file).get("publish_pending", False)
     if not (pending or args.force or args.skip_fetch):
-        log.line("Nothing changed and no publish is pending; Neon left as is.")
+        log.line("Nothing changed; local silver and Neon left as is.")
         return 0, "NOTHING TO DO", None
 
     code = stage("Load local PostgreSQL",
@@ -329,43 +328,12 @@ def refresh(args, season_code, log, state_file, facts, stage_runner=run_stage,
                  into=facts.load_lines)
     if code != 0:
         return (code, f"FAILED at Load (exit {code})",
-                "Neon was NOT updated; the publish stays pending for the next run. "
-                "Fix the reported problem (see the log), then run again.")
+                "Neon was not updated. Fix the load problem (see the log), "
+                "then run again.")
 
-    url, source = resolve_neon_url(environ, prompt, interactive, dotenv_path)
-    if not url:
-        log.line(f"No Neon URL ({source}); not publishing.")
-        return (1, "STOPPED before Publish (no Neon URL)",
-                f"The local database is up to date; the publish stays pending. Set "
-                f"{NEON_URL_ENV} or enter the URL when asked, then run again.")
-    if not looks_like_postgres_url(url):
-        log.line(f"The Neon URL ({source}) is not a postgresql://user:password@host/... URL; "
-                 "not publishing. Check it for stray or curly quotes; an @ inside the "
-                 "password must be written as %40.")
-        return (1, "STOPPED before Publish (Neon URL is malformed)",
-                "The local database is up to date; the publish stays pending. Fix the URL "
-                f"({NEON_URL_ENV} or the prompt), then run again.")
-    log.line(f"Neon URL: {source}.")
-
-    publish_command = [python, "neon_publish/main.py", "-cp", args.competition,
-                       "-sc", season_code]
-    if args.dry_run_publish:
-        publish_command.append("--dry-run")
-    if args.allow_shrink:
-        publish_command.append("--allow-shrink")
-    code = stage("Publish to Neon", publish_command, into=facts.publish_lines,
-                 env=dict(child_env, **{NEON_URL_ENV: url}), redact=redactor(url))
-    if code != 0:
-        return (code, f"FAILED at Publish (exit {code})",
-                "Neon keeps its previous rows; the publish stays pending for the next run. "
-                "See the log for the reason.")
-
-    if args.dry_run_publish:
-        return 0, "OK (dry run)", "Nothing was written to Neon; the publish stays pending."
-    write_state(state_file, publish_pending=False,
-                last_published_at_utc=datetime.now(timezone.utc).isoformat())
+    write_state(state_file, publish_pending=False)
+    log.line("Publishing paused (no gold tables until feature 30). Neon unchanged.")
     return 0, "OK", None
-
 
 def main(argv=None):
     args = build_parser().parse_args(argv)

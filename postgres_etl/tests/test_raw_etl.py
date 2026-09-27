@@ -149,7 +149,7 @@ class RawEtlTests(unittest.TestCase):
         def player(code, points, plus_minus):
             return {"player": {"person": {"code": code}, "club": {"code": "MAD"}},
                     "stats": {"points": points, "plusMinus": plus_minus, "timePlayed": 600,
-                              "foulsReceived": 2}}
+                              "foulsReceived": 0}}
         self.write("v2/game_stats/1.json", {
             "local": {"players": [player("A", 10, 0), player("B", 0, 0)],
                       "total": {"points": 10, "plusMinus": 0}},
@@ -161,7 +161,8 @@ class RawEtlTests(unittest.TestCase):
         teams = list(self.season().rows("game_team_stats"))
         self.assertIsNone(teams[0]["payload"]["total"]["plusMinus"])
         gaps = list(self.season().rows("game_stat_gaps"))
-        self.assertEqual([(g["game_code"], g["stat_name"]) for g in gaps], [(1, "plus_minus")])
+        self.assertEqual([(g["game_code"], g["stat_name"]) for g in gaps],
+                         [(1, "fouls_drawn"), (1, "plus_minus")])
 
     def test_forfeit_without_players_gets_null_team_stats(self):
         self.write("v2/game_stats/2.json", {
@@ -227,56 +228,23 @@ class RawEtlTests(unittest.TestCase):
         self.assertEqual((own[0]["phase_code"], own[0]["mode"], own[0]["club_code"],
                           own[0]["club_tv_codes"], own[0]["team_ranking"]),
                          ("RS", "accumulated", "MAD", "RMB", 1))
-        self.assertEqual(own[0]["points_scored"], Decimal("3100.0"))
+        self.assertEqual(own[0]["points"], Decimal("3100.0"))
         self.assertEqual(own[0]["two_pointers_percentage"], Decimal("55.1"))
         self.assertIsNone(own[0]["free_throws_percentage"])  # "NaN%": undefined
         opponents = list(season.rows("season_team_stats_opponents_traditional"))
-        self.assertEqual([row["points_scored"] for row in opponents], [Decimal("2900.0")])
+        self.assertEqual([row["points"] for row in opponents], [Decimal("2900.0")])
         advanced = list(season.rows("season_team_stats_opponents_advanced"))
         self.assertEqual([(row["phase_code"], row["mode"], row["true_shooting_percentage"])
                           for row in advanced], [("all", "perGame", Decimal("59.3"))])
         self.assertEqual(list(season.rows("season_team_stats_advanced")), [])
         # The player feeds ignore the team files next to them.
-        self.assertEqual([row["person_key"] for row in season.rows("season_stats_traditional")],
+        self.assertEqual([row["person_key"] for row in season.rows("season_player_stats_traditional")],
                          ["000123"])
 
     def test_unexpected_team_stats_filename_is_refused(self):
         self.write("v3/season_stats/teams_scoring_RS_perGame.json", {"teams": []})
         with self.assertRaisesRegex(ValueError, "Unexpected team stats filename"):
             list(self.season().rows("season_team_stats"))
-
-    def test_postseason_rows_are_derived_from_box_scores(self):
-        games = self.store.read_json("v2/games")
-        games["data"].append({"gameCode": 3, "played": True, "utcDate": "2026-05-01T18:00:00Z",
-                              "phaseType": {"code": "PO"},
-                              "local": {"club": {"code": "MAD"}, "score": 90},
-                              "road": {"club": {"code": "OLY"}, "score": 80}})
-        self.write("v2/games.json", games)
-        self.write("v2/game_stats/3.json", {"local": {"players": [
-            {"player": {"person": {"code": "000123", "name": "TEST, PLAYER"},
-                        "club": {"code": "MAD", "name": "Real Madrid"}},
-             "stats": {"timePlayed": 1500, "startFive": True, "points": 21, "valuation": 0,
-                       "fieldGoalsMade2": 6, "fieldGoalsAttempted2": 9}}]},
-            "road": {"players": []}})
-        self.write("v3/season_stats/players_traditional_RS_accumulated.json", {"players": [
-            {"player": {"code": "000123", "age": 30, "team": {"code": "MAD", "tvCodes": "RMB"}},
-             "pointsScored": 100}]})
-        season = FlatSeason(self.root, "euroleague", "E2025")
-        rows = [row for row in season.rows("season_stats_traditional")
-                if row["phase_code"] == "PS"]
-        self.assertEqual([(row["mode"], row["entry_ordinal"], row["person_key"]) for row in rows],
-                         [("accumulated", 0, "000123"), ("perGame", 0, "000123")])
-        accumulated = rows[0]
-        self.assertEqual((accumulated["points_scored"], accumulated["minutes_played"]),
-                         (Decimal("21"), Decimal("25")))
-        self.assertEqual(accumulated["two_pointers_percentage"], Decimal("66.7"))
-        self.assertIsNone(accumulated["pir"])  # valuation 0 for every player: not recorded
-        self.assertEqual((accumulated["player_age"], accumulated["club_tv_codes"]), (30, "RMB"))
-        misc = [row for row in season.rows("season_stats_misc") if row["phase_code"] == "PS"]
-        self.assertEqual([(row["mode"], row["wins"]) for row in misc],
-                         [("accumulated", Decimal("1")), ("perGame", Decimal("1"))])
-        self.assertFalse([row for row in season.rows("season_stats_advanced")
-                          if row["phase_code"] == "PS"])
 
     def test_people_pages_beyond_the_current_total_are_ignored(self):
         stale = {"person": {"code": "999"}, "club": {"code": "MAD"}, "type": "J"}
@@ -291,65 +259,11 @@ class RawEtlTests(unittest.TestCase):
                 season, name, season.files(name), 0), 0)
 
     def test_schema_is_scoped_and_non_destructive(self):
-        # app_players spans a range of seasons per row (first_season_code..
-        # last_season_code), not one season, so it has no single season_code
-        # column; every other table keeps one even when not part of the key.
         for name in TABLES:
             sql = create_table_sql(name)
             self.assertIn('"competition_code"', sql)
-            if name != "app_players":
-                self.assertIn('"season_code"', sql)
+            self.assertIn('"season_code"', sql)
             self.assertNotIn("DROP", sql)
-
-    def write_standings_round(self):
-        def team(club, **values):
-            return dict({"club": {"code": club, "name": f"{club} name", "tvCode": club[:2]},
-                         "groupName": "Regular Season", "position": 1, "gamesPlayed": 3,
-                         "gamesWon": 2, "gamesLost": 1}, **values)
-        self.write("v2/clubs.json", {"data": [
-            {"code": "MAD", "images": {"crest": "https://img/mad.png"}}]})
-        self.write("v3/standings/RS_3_basicstandings.json", {"teams": [
-            team("MAD", winPercentage="66.7%", last5Form=["W", "L", "W"]),
-            team("BAR", winPercentage="NaN%", last5Form=[])]})
-        self.write("v3/standings/RS_3_calendarstandings.json", {"teams": [
-            team("MAD", streaks=[
-                {"startDate": "2025-09-01T00:00:00", "endDate": "2025-09-30T00:00:00",
-                 "winLossRecord": "1-0"},
-                {"startDate": "2025-10-01T00:00:00", "endDate": None, "winLossRecord": "1-1"}])]})
-        self.write("v3/standings/RS_3_streaks.json", {"teams": [
-            team("MAD", longestWinsStreakCurrentSeason=2)]})
-        self.write("v3/standings/RS_3_aheadbehind.json", {"teams": [
-            team("MAD", quater1Ahead="2-0")]})
-        self.write("v3/standings/RS_3_margins.json", {"teams": [
-            team("OLY", pointDifference1to5="1-0")]})
-
-    def test_app_standings_merges_every_feed_into_one_row_per_club(self):
-        self.write_standings_round()
-        rows = {row["club_code"]: row for row in
-                FlatSeason(self.root, "euroleague", "E2025").rows("app_standings")}
-        self.assertEqual(sorted(rows), ["BAR", "MAD"])  # OLY is only in margins
-        mad, bar = rows["MAD"], rows["BAR"]
-        self.assertEqual((mad["phase_code"], mad["round_number"]), ("RS", 3))
-        self.assertEqual(mad["club_name"], "MAD name")
-        self.assertEqual(mad["crest_url"], "https://img/mad.png")
-        self.assertIsNone(bar["crest_url"])
-        self.assertEqual(mad["basic_win_percentage"], Decimal("66.7"))
-        self.assertIsNone(bar["basic_win_percentage"])  # "NaN%"
-        self.assertEqual(mad["calendar_games_won"], 2)
-        self.assertEqual(mad["streaks_longest_win_streak_current_season"], 2)
-        self.assertEqual(mad["ahead_behind_quarter1_ahead"], "2-0")
-        self.assertIsNone(mad["margins_position"])  # no margins row for MAD
-        self.assertTrue(all(value is None for name, value in bar.items()
-                            if name.startswith(("calendar_", "streaks_", "ahead_behind_"))))
-        self.assertEqual(mad["form"], [{"resultOrdinal": 0, "result": "W"},
-                                       {"resultOrdinal": 1, "result": "L"},
-                                       {"resultOrdinal": 2, "result": "W"}])
-        self.assertEqual(mad["streak_history"], [
-            {"streakOrdinal": 0, "startAt": "2025-09-01T00:00:00.000Z",
-             "endAt": "2025-09-30T00:00:00.000Z", "winLossRecord": "1-0"},
-            {"streakOrdinal": 1, "startAt": "2025-10-01T00:00:00.000Z",
-             "endAt": None, "winLossRecord": "1-1"}])
-        self.assertEqual((bar["form"], bar["streak_history"]), ([], []))
 
     def test_js_iso_and_timestamp_casts_share_one_parsing_rule(self):
         from flat_transform import cast
@@ -374,33 +288,6 @@ class RawEtlTests(unittest.TestCase):
         self.assertEqual(cast("2025-09-01T12:00:00+02:00", "TIMESTAMPTZ"),
                          datetime(2025, 9, 1, 10, 0, tzinfo=timezone.utc))
         self.assertIsNotNone(cast("20250901100000", "TIMESTAMPTZ").tzinfo)
-
-    def test_bad_streak_date_names_the_table_field_and_season(self):
-        self.write_standings_round()
-        self.write("v3/standings/RS_3_calendarstandings.json", {"teams": [
-            {"club": {"code": "MAD"}, "streaks": [{"startDate": "not-a-date"}]}]})
-        with self.assertRaisesRegex(ValueError,
-                                    r"app_standings\.streak_history\.startAt .*RS_3_calendarstandings.*E2025"):
-            list(RawSeason(self.root, "euroleague", "E2025").rows("standings_page"))
-
-    def test_app_standings_uses_clean_names_and_is_not_prefixed(self):
-        from flat_schema import physical_name
-        columns = {field.name for field in TABLES["app_standings"].fields}
-        self.assertEqual(physical_name("app_standings"), "app_standings")
-        for clean in ("ahead_behind_quarter3_tied", "streaks_longest_lose_streak_any_season",
-                      "margins_point_difference_more_than_15", "margins_point_difference_1_to_5",
-                      "basic_last_ten_record", "streaks_last10", "calendar_qualified"):
-            self.assertIn(clean, columns)
-        self.assertFalse([name for name in columns if "quater" in name or "loses" in name
-                          or "wins_streak" in name or "1to5" in name])
-
-    def test_app_standings_lists_are_loaded_as_json(self):
-        self.write_standings_round()
-        rows = self.load_with_fake_database("app_standings")
-        columns = [field.name for field in TABLES["app_standings"].fields]
-        form, history = columns.index("form"), columns.index("streak_history")
-        self.assertEqual(len(rows), 2)
-        self.assertTrue(all(row[form][0] == "JSON" and row[history][0] == "JSON" for row in rows))
 
     def load_with_fake_database(self, name):
         """Run _load_table against a fake psycopg2 that marks Json-wrapped values."""

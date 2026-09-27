@@ -5,14 +5,10 @@ import re
 import sys
 from pathlib import Path
 
-from aggregates import AGGREGATE_TABLES, build_aggregates
 from flat_loader import FlatDatabaseLoader
-from flat_schema import (PLAYER_TABLES, RECORDS_TABLES, RETIRED_LOCAL_TABLES, TABLES as FLAT_TABLES,
-                         drop_retired_tables, physical_name)
-from players import build_players, validate_players
-from quality import validate_aggregates, validate_loaded
-from records import build_records, validate_records
-from shared import (COMPETITION_CODES as PREFIX, DEFAULT_CONFIG, available_scopes, connect,
+from flat_schema import TABLES as FLAT_TABLES, physical_name
+from quality import validate_loaded
+from shared import (COMPETITION_CODES as PREFIX, DEFAULT_CONFIG, available_scopes,
                     current_season_year)
 
 
@@ -90,25 +86,11 @@ def build_parser():
                         help="Skip the default read-only checks after loading flat tables.")
     parser.add_argument("--list-tables", action="store_true",
                         help="List available table names and exit.")
-    parser.add_argument("--drop-retired", action="store_true",
-                        help="Drop the local tables that are no longer loaded (the live-API "
-                             "etl_flat_live_* tables and etl_source_payloads). Try --dry-run first.")
     parser.add_argument("--data-root", type=Path, default=DEFAULT_DATA_ROOT,
                         help="Data directory containing bronze/<competition>/.")
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG,
                         help="PostgreSQL connection JSON; unused in --dry-run mode.")
     return parser
-
-
-def run_drop_retired(args):
-    connection = connect(args.config)
-    try:
-        print("Mode: " + ("dry run (PostgreSQL unchanged)" if args.dry_run
-                          else "drop the retired local tables"), flush=True)
-        drop_retired_tables(connection, RETIRED_LOCAL_TABLES, dry_run=args.dry_run)
-        return 0
-    finally:
-        connection.close()
 
 
 def main(argv=None):
@@ -119,12 +101,6 @@ def main(argv=None):
     if args.list_tables:
         print("\n".join(FLAT_TABLES))
         return 0
-    if args.drop_retired:
-        if (args.table != ["all"] or args.season_code != ["latest"] or args.quality_only
-                or args.skip_quality_check):
-            parser.error("--drop-retired cannot be combined with --table, --season-code, "
-                         "--quality-only or --skip-quality-check")
-        return run_drop_retired(args)
     unknown = set(args.table) - {"all", *FLAT_TABLES}
     if unknown:
         parser.error("Unknown table(s): " + ", ".join(sorted(unknown)))
@@ -138,45 +114,16 @@ def main(argv=None):
         "dry run" if args.dry_run else "PostgreSQL load"
     )
     print(f"Mode: {mode}", flush=True)
-    records_tables = [name for name in tables if name in RECORDS_TABLES]
-    player_tables = [name for name in tables if name in PLAYER_TABLES]
-    aggregate_tables = [name for name in tables if name in AGGREGATE_TABLES]
-    season_tables = [name for name in tables
-                     if name not in RECORDS_TABLES and name not in AGGREGATE_TABLES
-                     and name not in PLAYER_TABLES]
     loader = FlatDatabaseLoader(args.data_root, args.competition, seasons,
-                                season_tables, args.config, args.dry_run)
+                                tables, args.config, args.dry_run)
     try:
         if not args.quality_only:
-            if season_tables:
-                loader.run()
-            if records_tables:
-                # Not season-scoped: always recomputed from every season
-                # already loaded locally, regardless of -sc.
-                print("\nRecords tables (all local history)", flush=True)
-                build_records(args.config, records_tables, dry_run=args.dry_run)
-            if player_tables:
-                # Not season-scoped: always recomputed from every season
-                # already loaded locally, regardless of -sc.
-                print("\nPlayer tables (all local history)", flush=True)
-                build_players(args.config, player_tables, dry_run=args.dry_run)
-            if aggregate_tables:
-                print("\nAggregate tables", flush=True)
-                build_aggregates(args.config, seasons, aggregate_tables,
-                                 competition=args.competition, dry_run=args.dry_run)
+            loader.run()
         if args.quality_only or (not args.dry_run and not args.skip_quality_check):
             print("\nRead-only quality checks", flush=True)
             passed = True
-            if season_tables:
-                passed &= validate_loaded(args.config, args.data_root, args.competition,
-                                          seasons, season_tables)
-            if records_tables:
-                passed &= validate_records(args.config, records_tables)
-            if player_tables:
-                passed &= validate_players(args.config, player_tables)
-            if aggregate_tables:
-                passed &= validate_aggregates(args.config, args.competition, seasons,
-                                              aggregate_tables)
+            passed &= validate_loaded(args.config, args.data_root, args.competition,
+                                      seasons, tables)
             if not passed:
                 print("Quality checks failed. Loaded rows were not rolled back; "
                       "inspect the reported issues.", file=sys.stderr, flush=True)

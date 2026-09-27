@@ -2,8 +2,7 @@
 
 import time
 
-from flat_schema import (TABLES, add_column_sql, create_index_sql, create_table_sql, physical_name,
-                         rename_local_tables)
+from flat_schema import TABLES, add_column_sql, create_index_sql, create_table_sql, physical_name
 from flat_transform import FlatSeason
 from shared import connect, elapsed
 
@@ -24,7 +23,9 @@ class FlatDatabaseLoader:
         try:
             if not self.dry_run:
                 connection = connect(self.config_path)
-                rename_local_tables(connection, lambda line: print(line, flush=True))
+                with connection:
+                    with connection.cursor() as cursor:
+                        cursor.execute('CREATE SCHEMA IF NOT EXISTS silver')
             for season_code in self.season_codes:
                 season = FlatSeason(self.data_root, self.competition, season_code)
                 print(f"\nSeason {season_code} | elapsed {elapsed(started)}", flush=True)

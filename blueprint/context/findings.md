@@ -7,21 +7,6 @@
 > finding is `open` or `fixed`, then archives resolved findings with the work
 > and resets this file.
 
-### F-04 [P3] fixed - The pipeline summary does not report stats feeds kept from an earlier fetch
-
-**File:** pipeline.py:309
-**Found:** 2026-09-27 by /audit (scope: current; lenses: quality, security, performance, tests)
-**Why it matters:** `python pipeline.py` is the owner's normal command. The
-`[kept]` lines print while the fetch runs, but the final Refresh summary reads
-only `changed_resources` and `failed_requests` from the fetch summary file, so
-a feed kept from an earlier fetch is not mentioned where the owner looks. The
-owner asked for a visible warning when the API answers badly.
-**Suggested fix:** read `kept_resources` from the fetch summary (default `[]`
-for older files) and add it to the `Fetch:` summary line, e.g. `…, 2 stats
-feed(s) kept from an earlier fetch (API answered worse)`, with a
-`build_summary` test.
-**Resolution:** fixed on 2026-09-27 (same fix branch, step 4): the Refresh summary lists kept feeds under `Fetch:`; test `test_summary_lists_stats_feeds_kept_from_an_earlier_fetch`. Awaiting /audit to close.
-
 ### F-05 [P3] unverified - A legitimate correction that lowers an accumulated feed would be refused
 
 **File:** api_requests/scrapper.py:497
@@ -35,4 +20,12 @@ such correction has been observed; the manifest keeps the refused answer.
 **Suggested fix:** none needed unless it happens. If it does, the `rejected`
 manifest records show it; a one-off manual re-fetch without the guard (or a
 `--refresh-current` override flag) would accept the correction.
+**Resolution:**
+
+### F-06 [P2] open - Refresh regression tests were removed during the publish pause
+
+**File:** neon_publish/tests/test_publish.py:23
+**Found:** 2026-09-27 by independent /audit (scope: current; lenses: quality, security, performance, tests)
+**Why it matters:** The former `RefreshCommandTests` covered load failure and retry state, fetch no-op, summary parsing, and reporting stats feeds kept from an earlier fetch. The replacement has one successful `--skip-fetch` test. A regression in the normal fetch path or the pending-load state can now pass all configured suites while `python pipeline.py` skips or misreports a needed load.
+**Suggested fix:** Restore focused fake-stage tests for a changed fetch, unchanged fetch, load failure and retry, and the kept-feed summary, using the paused publishing contract.
 **Resolution:**

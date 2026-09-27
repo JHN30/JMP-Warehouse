@@ -20,7 +20,11 @@ def connect(config_path=DEFAULT_CONFIG):
         ) from error
     with Path(config_path).open("r", encoding="utf-8") as handle:
         config = json.load(handle)
-    return psycopg2.connect(**config)
+    connection = psycopg2.connect(**config)
+    with connection.cursor() as cursor:
+        cursor.execute('SET search_path TO silver')
+    connection.commit()
+    return connection
 
 
 def elapsed(started):

@@ -65,23 +65,29 @@ details are in `build-plan.md`.
   shots from E2007, and the page-shaped tables), plus `etl_flat_game_stat_gaps`,
   the unused `etl_flat_live_*` tables and `etl_source_payloads` (a copy of
   bronze), the last two to be dropped.
-- **Target local schemas:**
-  - `core` - typed, cleaned source tables, including the API team season stats
-    feeds (traditional, advanced and their opponent versions).
-  - `analytics` - local-only derived tables: per-game and per-round advanced
-    stats for teams and players, play-by-play possessions and features,
-    lineups. Never published to Neon.
-  - `app` - exactly the tables Neon gets, page-shaped. `app` tables may be
-    built from `analytics`, never the reverse.
-  - Clean names inside each schema (for example `core.games`, `app.standings`).
+- **Target layers (medallion, agreed 2026-09-27):**
+  - **Bronze** - the downloaded files in `data/bronze/` (not in the database).
+  - `silver` schema - one validated, non-aggregated table per source (28
+    tables): typed, deduplicated, `NULL` for unrecorded values, source errors
+    corrected, clean table names and one standard column name per stat
+    (for example `assists`, `fouls_committed`, `pir`), provenance columns (bronze version, load
+    time), API data only. Per-record enrichment (per-game advanced stats) also
+    lives here.
+  - `gold` schema - built from silver: page-shaped and aggregate tables
+    (standings, records, coverage, postseason series, team season stats,
+    derived `PS` stats, per-round advanced stats), cross-season player and club
+    identity tables. Neon gets a subset of gold; some gold tables stay local.
+  - Gold may be built from silver, never the reverse. The old `public` tables
+    (`app_*`, `etl_flat_*`) are dropped when silver is built.
 - **Advanced stats grain:** cumulative after every round, for the scopes `all`,
   each phase (`RS`, `PI`, `PO`, `FF`, older `TS`) and `PS` (all postseason
   phases).
 - **Neon:** today the `app_*` tables in `public`, for E2025 and E2026 only (all
   seasons of the app tables would be about 237 MB; play-by-play and shots for
-  all seasons about 1.5 GB, too large for the current plan). Target: an `app`
-  schema with a read-only role, with `public.app_*` compatibility views until the
-  web app switches. Per-round team advanced stats go to Neon for the standings
+  all seasons about 1.5 GB, too large for the current plan). Target: gold tables
+  published with a read-only role (feature 30); the web app is still in
+  development and is updated after the rename, so no compatibility views.
+  Per-round team advanced stats go to Neon for the standings
   page; per-round player advanced stats stay local because of storage.
 - Keys are source natural keys scoped by `competition_code` + `season_code`.
   `person_code` is stable across seasons.

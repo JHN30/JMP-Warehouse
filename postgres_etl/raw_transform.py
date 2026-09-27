@@ -15,8 +15,7 @@ import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
 
-from flat_schema import snake
-from postseason import POSTSEASON_PHASE, postseason_games, postseason_payloads
+from flat_schema import COLUMN_NAMES, snake
 from shared import BronzeStore, current_season_year
 
 
@@ -310,59 +309,6 @@ class RawSeason:
             return candidate, "season_roster"
         return None, "unmatched"
 
-    def _standings_page_rows(self, files):
-        """One row per basicstandings club and round, with every feed merged.
-
-        Mirrors the web app's standings query: basicstandings drives the rows,
-        the other feeds join by club, and form and streak history become the
-        same lists the API returns.
-        """
-        rounds = {}
-        for path in files:
-            match = STANDINGS_FILE.fullmatch(path.name)
-            if not match:
-                raise ValueError(f"Unexpected standings filename: {path}")
-            phase, round_number, feed = match.groups()
-            teams = {}
-            for item in self.read(path).get("teams") or []:
-                club = nested(item, "club", "code")
-                if club:
-                    teams[club] = item
-            rounds.setdefault((phase, int(round_number)), {})[feed] = teams
-        clubs = self._paths("v2/clubs")
-        crests = ({code(item.get("code")): code(nested(item, "images", "crest"))
-                   for item in self.read(clubs[0]).get("data", [])} if clubs else {})
-
-        def streak_date(value, field, phase, round_number, club):
-            try:
-                return js_iso(value)
-            except (TypeError, ValueError) as error:
-                raise ValueError(
-                    f"app_standings.streak_history.{field} from "
-                    f"{phase}_{round_number}_calendarstandings, club {club} "
-                    f"({self.season_code}): {error}"
-                ) from error
-
-        for (phase, round_number), feeds in sorted(rounds.items()):
-            for club, basic in (feeds.get("basicstandings") or {}).items():
-                payload = {feed: teams.get(club) for feed, teams in feeds.items()}
-                calendar = payload.get("calendarstandings") or {}
-                where = (phase, round_number, club)
-                yield dict(
-                    self.scope, phase_code=phase, round_number=round_number, club_code=club,
-                    crest_url=crests.get(code(club)),
-                    form=[{"resultOrdinal": ordinal, "result": code(result)}
-                          for ordinal, result in enumerate(basic.get("last5Form") or [])],
-                    streak_history=[
-                        {"streakOrdinal": ordinal,
-                         "startAt": streak_date(streak.get("startDate"), "startAt", *where),
-                         "endAt": streak_date(streak.get("endDate"), "endAt", *where),
-                         "winLossRecord": code(streak.get("winLossRecord"))}
-                        for ordinal, streak in enumerate(calendar.get("streaks") or [])
-                    ],
-                    payload=payload,
-                )
-
     def _people_pages(self):
         """Latest page versions, ignoring stale pages beyond the current total."""
         pages = self._paths("v2/season_people_pages/*")
@@ -373,26 +319,6 @@ class RawSeason:
             return pages
         return [path for path in pages
                 if int(path.stem.removeprefix("offset_")) < max(total, 1)]
-
-    def _postseason_rows(self, identities, clubs):
-        """Derived PS season-stats rows from the season's box scores (postseason.py)."""
-        games = postseason_games((self.store.read_json("v2/games") or {}).get("data") or [])
-        box_scores = {}
-        for item in games:
-            response = self.store.read_json(f"v2/game_stats/{item.get('gameCode')}")
-            if not response:
-                continue
-            gaps = box_score_gaps(response)
-            box_scores[item.get("gameCode")] = {side: {"players": [
-                dict(player, stats=without_measures(player.get("stats"), gaps))
-                for player in (response.get(side) or {}).get("players") or []
-            ]} for side in ("local", "road")}
-        payloads = postseason_payloads(games, box_scores, identities, clubs)
-        for (category, mode), items in payloads.items():
-            for ordinal, item in enumerate(items):
-                yield dict(self.scope, category=category, phase_code=POSTSEASON_PHASE, mode=mode,
-                           entry_ordinal=ordinal, person_key=item["player"]["code"],
-                           club_code=item["player"]["team"]["code"], payload=item)
 
     def files(self, table):
         single = {
@@ -414,7 +340,6 @@ class RawSeason:
             "season_player_stats": "v3/season_stats/players_*",
             "season_team_stats": "v3/season_stats/teams_*",
             "standings": "v3/standings/*",
-            "standings_page": "v3/standings/*",
         }
         if table in patterns:
             return self._paths(patterns[table])
@@ -548,7 +473,8 @@ class RawSeason:
                                    reason="no player box score (e.g. forfeit); team stats are NULL",
                                    payload={})
                     for name in sorted(gaps if gaps != NO_BOX_SCORE else ()):
-                        yield dict(scope, game_code=game, stat_name=snake(name),
+                        yield dict(scope, game_code=game,
+                                   stat_name=COLUMN_NAMES.get(snake(name), snake(name)),
                                    reason="0 for every player: not recorded; stored as NULL",
                                    payload={})
                     continue
@@ -579,7 +505,6 @@ class RawSeason:
             pattern = re.compile(
                 r"players_(traditional|advanced|scoring|misc)_([A-Za-z0-9]+)_(perGame|accumulated)\.json$"
             )
-            identities, clubs = {}, {}
             for path in files:
                 match = pattern.fullmatch(path.name)
                 if not match:
@@ -588,15 +513,10 @@ class RawSeason:
                 for ordinal, item in enumerate(read_json(path).get("players") or []):
                     person_key = code(nested(item, "player", "code"))
                     team = nested(item, "player", "team") or {}
-                    if person_key:
-                        identities[person_key] = item["player"]
-                    if code(team.get("code")):
-                        clubs[code(team["code"])] = team
                     yield dict(scope, category=category, phase_code=phase, mode=mode,
                                entry_ordinal=ordinal,
                                person_key=person_key or f"unknown-{ordinal}",
                                club_code=team.get("code"), payload=item)
-            yield from self._postseason_rows(identities, clubs)
             return
 
         if table == "season_team_stats":
@@ -611,10 +531,6 @@ class RawSeason:
                 for item in read_json(path).get("teams") or []:
                     yield dict(scope, feed=feed, phase_code=phase, mode=mode,
                                club_code=code(nested(item, "team", "code")), payload=item)
-            return
-
-        if table == "standings_page":
-            yield from self._standings_page_rows(files)
             return
 
         if table == "standings":

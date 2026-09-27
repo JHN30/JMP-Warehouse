@@ -3,7 +3,6 @@
 from dataclasses import dataclass
 from time import monotonic
 
-from aggregates import COVERAGE_ITEM_KEYS, MEASURE_COLUMNS
 from flat_schema import TABLES, TEAM_STATS_TABLES, physical_name
 from flat_transform import FlatSeason
 from shared import COMPETITION_CODES, connect, elapsed
@@ -20,8 +19,8 @@ class Check:
     requires: tuple[str, ...] = ()
 
 
-SEASON_STATS_TABLES = ("season_stats_traditional", "season_stats_advanced",
-                       "season_stats_scoring", "season_stats_misc")
+SEASON_STATS_TABLES = ("season_player_stats_traditional", "season_player_stats_advanced",
+                       "season_player_stats_scoring", "season_player_stats_misc")
 
 # Tables where no rows is the good outcome, not a warning.
 EMPTY_IS_NORMAL = {"game_stat_gaps"}
@@ -82,7 +81,7 @@ def season_stats_partial_query(table):
     """Count accumulated feeds with rows that list fewer clubs than played in
     that phase ('all': in any phase). The API sometimes answers a stale or
     partial list on game days. Per-game feeds are skipped: they list only clubs
-    with more than half of the phase's games. Derived PS rows are not API feeds."""
+    with more than half of the phase's games."""
     return (
         "WITH scope AS (SELECT %s::text AS competition_code, %s::text AS season_code), "
         "played AS (SELECT g.phase_code, side.club_code "
@@ -97,29 +96,10 @@ def season_stats_partial_query(table):
         f'FROM "{physical_name(table)}" AS row JOIN scope '
         "ON row.competition_code = scope.competition_code "
         "AND row.season_code = scope.season_code "
-        "WHERE row.phase_code <> 'PS' AND row.mode = 'accumulated' "
+        "WHERE row.mode = 'accumulated' "
         "GROUP BY row.phase_code, row.mode) "
         "SELECT count(*) FROM feeds JOIN expected ON expected.phase_code = feeds.phase_code "
         "WHERE feeds.clubs < expected.clubs"
-    )
-
-
-def team_stats_points_mismatch_query():
-    """Count clubs whose API accumulated points (own or opponents) differ from
-    the totals summed from box scores in app_team_season_stats, per phase."""
-    def feed_join(alias, name):
-        return (f'JOIN "{physical_name(name)}" AS {alias} '
-                f"ON {alias}.competition_code = agg.competition_code "
-                f"AND {alias}.season_code = agg.season_code "
-                f"AND {alias}.phase_code = agg.phase_code "
-                f"AND {alias}.club_code = agg.club_code AND {alias}.mode = 'accumulated' ")
-    return (
-        f'SELECT count(*) FROM "{physical_name("app_team_season_stats")}" AS agg '
-        + feed_join("own", "season_team_stats_traditional")
-        + feed_join("opp", "season_team_stats_opponents_traditional")
-        + "WHERE agg.competition_code = %s AND agg.season_code = %s "
-        "AND (own.points_scored IS DISTINCT FROM agg.own_points "
-        "OR opp.points_scored IS DISTINCT FROM agg.opp_points)"
     )
 
 
@@ -179,73 +159,6 @@ def checks_for_tables(names):
     if {"game_player_stats", "clubs"} <= names:
         checks.append(Check("orphan_club", "game_player_stats",
                             orphan_query("game_player_stats", "clubs", "club_code")))
-    if {"app_standings", "standings_basicstandings"} <= names:
-        # The page table must have exactly one row per basicstandings row.
-        checks.append(Check("app_standings_key_mismatch", "app_standings", (
-            'SELECT count(*) FROM "app_standings" AS page '
-            f'FULL JOIN "{physical_name("standings_basicstandings")}" AS basic '
-            'ON basic.competition_code = page.competition_code '
-            'AND basic.season_code = page.season_code '
-            'AND basic.phase_code = page.phase_code '
-            'AND basic.round_number = page.round_number '
-            'AND basic.club_code = page.club_code '
-            'WHERE COALESCE(page.competition_code, basic.competition_code) = %s '
-            'AND COALESCE(page.season_code, basic.season_code) = %s '
-            'AND (page.club_code IS NULL OR basic.club_code IS NULL)'
-        )))
-    if "app_team_season_stats" in names:
-        negative = " OR ".join(
-            f'row."own_{c}" < 0 OR row."opp_{c}" < 0' for c in MEASURE_COLUMNS)
-        checks.append(Check("team_season_stats_negative", "app_team_season_stats", scoped_count(
-            "app_team_season_stats", f"row.games_played < 0 OR {negative}")))
-    for name in ("app_coverage_seasons", "app_coverage_games"):
-        if name in names:
-            keys_literal = ", ".join(f"'{key}'" for key in COVERAGE_ITEM_KEYS)
-            checks.append(Check(f"{name}_item_keys", name, scoped_count(
-                name,
-                "(SELECT array_agg(elem->>'key' ORDER BY ordinality) "
-                "FROM jsonb_array_elements(row.items) WITH ORDINALITY AS t(elem, ordinality)) "
-                f"IS DISTINCT FROM ARRAY[{keys_literal}]"
-            )))
-            checks.append(Check(f"{name}_item_status", name, (
-                f'SELECT count(*) FROM "{physical_name(name)}" AS row, '
-                "jsonb_array_elements(row.items) AS elem "
-                "WHERE row.competition_code = %s AND row.season_code = %s "
-                "AND (elem->>'status') NOT IN "
-                "('available', 'partial', 'incomplete', 'unavailable', 'notYetApplicable')"
-            )))
-    if {"app_coverage_games", "games"} <= names:
-        checks.append(Check("app_coverage_games_key_mismatch", "app_coverage_games", (
-            'SELECT count(*) FROM "app_coverage_games" AS page '
-            f'FULL JOIN "{physical_name("games")}" AS g '
-            'ON g.competition_code = page.competition_code '
-            'AND g.season_code = page.season_code '
-            'AND g.game_code = page.game_code '
-            'WHERE COALESCE(page.competition_code, g.competition_code) = %s '
-            'AND COALESCE(page.season_code, g.season_code) = %s '
-            'AND (page.game_code IS NULL OR g.game_code IS NULL)'
-        )))
-    if "app_postseason_series" in names:
-        checks.append(Check("postseason_series_wins_out_of_range", "app_postseason_series",
-                            scoped_count("app_postseason_series",
-                                         "row.club_a_wins < 0 OR row.club_b_wins < 0 "
-                                         "OR row.club_a_wins > row.games_played "
-                                         "OR row.club_b_wins > row.games_played")))
-        checks.append(Check("postseason_series_winner_mismatch", "app_postseason_series",
-                            scoped_count("app_postseason_series",
-                                         "row.winner_club_code IS NOT NULL AND ("
-                                         "row.winner_club_code NOT IN (row.club_a_code, row.club_b_code) "
-                                         "OR (row.winner_club_code = row.club_a_code "
-                                         "AND row.club_a_wins <= row.club_b_wins) "
-                                         "OR (row.winner_club_code = row.club_b_code "
-                                         "AND row.club_b_wins <= row.club_a_wins))")))
-        checks.append(Check("postseason_series_game_club_mismatch", "app_postseason_series", (
-            'SELECT count(*) FROM "app_postseason_series" AS row, '
-            "jsonb_array_elements(row.games) AS g "
-            "WHERE row.competition_code = %s AND row.season_code = %s "
-            "AND NOT ((g->>'localClubCode') IN (row.club_a_code, row.club_b_code) "
-            "AND (g->>'roadClubCode') IN (row.club_a_code, row.club_b_code))"
-        )))
     checks.extend(anomaly_checks(names))
     return checks
 
@@ -253,12 +166,6 @@ def checks_for_tables(names):
 def anomaly_checks(names):
     """Warnings that keep source gaps visible without blocking a publish."""
     checks = []
-    if "app_team_season_stats" in names:
-        # Runs with the aggregates, after they are rebuilt from the box scores.
-        checks.append(Check("team_stats_points_mismatch", "season_team_stats_traditional",
-                            team_stats_points_mismatch_query(), "WARN",
-                            requires=("season_team_stats_traditional",
-                                      "season_team_stats_opponents_traditional")))
     if "games" in names:
         checks.append(Check("attendance_not_recorded", "games", scoped_count(
             "games", "row.audience_note IS NOT NULL"), "WARN"))
@@ -280,9 +187,9 @@ def anomaly_checks(names):
             "game_stat_gaps", "row.stat_name = '*'"), "WARN"))
         checks.append(Check("unrecorded_stat_nulled", "game_stat_gaps", scoped_count(
             "game_stat_gaps", "row.stat_name <> '*'"), "WARN"))
-    if "standings_basicstandings" in names:
-        checks.append(Check("standings_played_not_won_plus_lost", "standings_basicstandings",
-                            scoped_count("standings_basicstandings",
+    if "standings_basic" in names:
+        checks.append(Check("standings_played_not_won_plus_lost", "standings_basic",
+                            scoped_count("standings_basic",
                                          "row.games_played <> row.games_won + row.games_lost"),
                             "WARN"))
     if "people" in names:
@@ -378,32 +285,6 @@ def validate_loaded(config_path, data_root, competition, season_codes, names):
                 print(f"  {issue.severity} {physical_name(issue.table)}: "
                       f"{issue.code} ({issue.count:,} row(s))", flush=True)
             connection.rollback()  # Fresh read-only snapshot for the next season.
-    finally:
-        connection.close()
-    return passed
-
-
-def validate_aggregates(config_path, competition, season_codes, names):
-    """Validate season-scoped derived tables (aggregates.py). Unlike
-    validate_loaded, there are no bronze source files to gate on: these
-    tables are computed from other already-loaded local tables."""
-    connection = connect(config_path)
-    passed = True
-    started = monotonic()
-    try:
-        connection.set_session(readonly=True, isolation_level="REPEATABLE READ")
-        for season_code in season_codes:
-            report = check_season(connection, competition, season_code, names)
-            passed &= report.passed
-            errors = sum(issue.severity == "ERROR" for issue in report.issues)
-            warnings = sum(issue.severity == "WARN" for issue in report.issues)
-            print(f"Quality {season_code}: {len(report.counts)} table(s), "
-                  f"{sum(report.counts.values()):,} rows, {errors} error(s), "
-                  f"{warnings} warning(s) | elapsed {elapsed(started)}", flush=True)
-            for issue in report.issues:
-                print(f"  {issue.severity} {physical_name(issue.table)}: "
-                      f"{issue.code} ({issue.count:,} row(s))", flush=True)
-            connection.rollback()
     finally:
         connection.close()
     return passed

@@ -1,6 +1,6 @@
 # EuroLeague Data ETL - Project Overview
 
-<!-- blueprint:source-hash ed4e191d89166fdfe39193d3d427435ddc4f18fe9b5af4ab4133bded2589cd57 -->
+<!-- blueprint:source-hash 3ebdaa6b42ef8653a07e386dcfd676be40769ee6edf62b0ee436422c639df545 -->
 
 > The data pipeline behind the JMP EuroLeague web app: EuroLeague API data into
 > exact bronze files, typed tables in local PostgreSQL, advanced statistics, and
@@ -34,7 +34,7 @@ what the app reads.
 
 ## Features
 
-Shipped: 1-14, 21, 22.
+Shipped: 1-14, 21-24, plus fixes (stale stats feeds kept out, docs).
 
 1. **Bronze fetch** - v2/v3 plus live play-by-play and shots into exact, gzipped, versioned files with a manifest.
 2. **Current-season refresh** - recent rounds' standings, stats and rosters re-fetched; season-level data re-checked daily.
@@ -55,15 +55,16 @@ Shipped: 1-14, 21, 22.
 
 Next, in build-plan order (IDs are stable, so order is not numeric):
 
-23. **Clean up unused tables** (headline next feature) - drop local `etl_flat_live_*` and `etl_source_payloads`; in Neon, drop the old `etl_flat_*` views and the 7 unused `app_standings_*` feed tables.
-16. **Schemas** - local `core` / `analytics` / `app`, clean names inside each; Neon `app` schema with a read-only role and `public.app_*` compatibility views.
-24. **API team stats** - v3 team `traditional`, `advanced`, `opponentsTraditional`, `opponentsAdvanced` into bronze and `core` as reference numbers.
-25. **Per-game advanced stats** - team and player per game: possessions, pace, ratings, four factors, rates, Game Score.
-26. **Per-round team advanced stats** - every round and scope: advanced stats, MOV, Pythagorean, SRS, SOS/SOV, adjusted/relative, home/away, rolling; checked against API team feeds.
-27. **Per-round player advanced stats** - every round and scope: USG%, AST%, rebound/steal/block %, per-100, PER, Win Shares, PIE; checked against API player feeds; local only.
-28. **Standings stats app table** - per-round team advanced stats in `app` and Neon for the standings page.
-19. **Play-by-play analytics** - actual possessions, clutch, runs, lead changes, time leading, second-chance/fast-break/points off turnovers, assisted FG%, shot zones, possession length (E2007+); local only.
-29. **Lineups and on/off** - lineups from substitutions: on/off, lineup and 2/3/5-man ratings, RAPM (E2007+); local only.
+23. **Clean up unused tables** (shipped) - dropped local `etl_flat_live_*` and `etl_source_payloads`, the old Neon `etl_flat_*` views and the 7 Neon `app_standings_*` feed tables.
+16. **Silver layer** (headline next feature) - `silver` schema with the 28 source tables rebuilt from bronze. 16a: clean table names, one standard column name per stat, API data only, gold code removed and Neon publishing paused until 30, `public` tables dropped. 16b: provenance (load log with bronze versions, load id and time per row).
+30. **Gold layer** - `gold` schema from silver: standings, records, coverage, postseason series, team season stats, derived `PS` stats, player and club identity tables; Neon publishing from gold.
+24. **API team stats** (shipped) - v3 team `traditional`, `advanced`, `opponentsTraditional`, `opponentsAdvanced` into bronze and local tables as reference numbers.
+25. **Per-game advanced stats** - team and player per game: possessions, pace, ratings, four factors, rates, Game Score; in `silver`.
+26. **Per-round team advanced stats** - every round and scope: advanced stats, MOV, Pythagorean, SRS, SOS/SOV, adjusted/relative, home/away, rolling; checked against API team feeds; in `gold`.
+27. **Per-round player advanced stats** - every round and scope: USG%, AST%, rebound/steal/block %, per-100, PER, Win Shares, PIE; checked against API player feeds; `gold`, local only.
+28. **Standings stats app table** - per-round team advanced stats in `gold` and Neon for the standings page.
+19. **Play-by-play analytics** - actual possessions, clutch, runs, lead changes, time leading, second-chance/fast-break/points off turnovers, assisted FG%, shot zones, possession length (E2007+); local only (per-game in `silver`, aggregates in `gold`).
+29. **Lineups and on/off** - lineups from substitutions: on/off, lineup and 2/3/5-man ratings, RAPM (E2007+); `gold`, local only.
 15. **Historical seasons in Neon** - when Neon storage allows (about 237 MB for all seasons).
 17. **Dependencies and CI** - `requirements.txt` and automatic tests.
 18. **EuroCup** - download, load and publish.
@@ -82,15 +83,15 @@ Every season table's primary key starts with `competition_code` (`E`, `U`) and
 
 ### Layers
 
-| Layer | Today | Target (feature 16) |
+| Layer | Today | Target |
 | --- | --- | --- |
-| Bronze | `data/bronze/<competition>/<scope>/<resource>/<fetched_at>_<sha16>.json.gz` + `manifest.jsonl` | unchanged |
-| Local source tables | `public.app_*` (32) + `etl_flat_game_stat_gaps`; unused `etl_flat_live_*` and `etl_source_payloads` (dropped in 23) | `core.<name>` |
-| Local derived | page-shaped `public.app_*` tables | `analytics.<name>` (local only) and `app.<name>` |
-| Neon | `public.app_*` (+ legacy `etl_flat_*` views, dropped in 23) | `app.<name>`, read-only role, `public.app_*` views until the app switches |
+| Bronze | `data/bronze/<competition>/<scope>/<resource>/<fetched_at>_<sha16>.json.gz` + `manifest.jsonl` | unchanged (files, not in the database) |
+| Silver (feature 16) | 28 source tables in `public` as `app_*` / `etl_flat_*`, API spellings | `silver.<name>`: clean names, one name per stat (`assists`, `fouls_committed`, `pir`), provenance columns, API data only; `public` tables dropped |
+| Gold (feature 30) | page and aggregate `public.app_*` tables, derived `PS` rows inside the silver stats tables | `gold.<name>` built from silver, incl. player and club identity tables |
+| Neon | `public.app_*` (25 tables) | a subset of gold, read-only role; web app updated afterwards (no compatibility views) |
 
-Rule: `app` tables may be built from `analytics`, never the reverse. Only `app`
-is published.
+Rule: gold may be built from silver, never the reverse. Between features 16 and
+30, gold building and Neon publishing are paused; Neon keeps its data.
 
 ### Bronze resource
 
@@ -147,9 +148,8 @@ is published.
 - Play-by-play (19) and lineups (29): counted possessions kept next to the box-score estimate, never replacing it silently
 - Per-round player stats stay local (Neon storage)
 
-> Locked: the published `app_*` names and columns stay readable in Neon
-> `public` (as views after feature 16) until the web app switches; changes
-> are coordinated with the app repo.
+> The web app (local only, in development) is updated after the silver and
+> gold renames; no compatibility views (owner decision 2026-09-27).
 
 ## Tech stack
 

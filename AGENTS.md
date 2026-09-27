@@ -15,10 +15,9 @@ for optional tool settings.
 
 The data pipeline behind the JMP EuroLeague web app (`jmpeuroleague.com`, repo
 `jmp-euroleague2`). It downloads EuroLeague API data into a bronze store of exact
-responses, loads it into typed tables in a local PostgreSQL database (`app_*` for
-the tables the app reads and the local standings feeds, `etl_flat_game_stat_gaps`
-for the stat gaps) with quality checks, and
-publishes the web-app tables to Neon. Python 3.13 +
+responses, loads it into 28 typed tables in the local PostgreSQL `silver`
+schema with quality checks. Neon publishing is paused until feature 30.
+Python 3.13 +
 PostgreSQL, no web framework. See `README.md` for the layout and
 `docs/DATA_DICTIONARY.md` for the tables.
 
@@ -300,27 +299,20 @@ checks do not make the Blueprint unusable.
 
 Run from the repository root (the owner uses the VS Code terminal). Local
 PostgreSQL settings come from `postgres_etl/config_connection.json` (not
-committed; copy the `.example`). Publishing uses `NEON_DATABASE_URL`; when it is
-not set, `pipeline.py` asks for it with hidden input right before publishing.
+committed; copy the `.example`). Publishing is paused until feature 30 and the
+pipeline does not ask for `NEON_DATABASE_URL`.
 
-- Refresh the current season (fetch, load, quality checks, publish): `python pipeline.py`
+- Refresh the current season (fetch, load, quality checks): `python pipeline.py`
   (VS Code task "Refresh current season"). Ends with a summary; each run is logged
   to `logs/refresh/refresh_<YYYYMMDD_HHMMSS>.log`.
-- Same without changing Neon: `python pipeline.py --dry-run-publish` (task
-  "Refresh current season (dry run)")
+- `python pipeline.py --dry-run-publish` remains accepted for the existing VS Code
+  task; publishing is paused for every run.
 - Fetch into bronze: `python api_requests/main.py -sc <seasons>` (for example `-sc 2000-2025`)
 - Load into local PostgreSQL: `python postgres_etl/main.py -sc <seasons>`
 - Load dry run (no database): `python postgres_etl/main.py -sc <seasons> --dry-run`
 - Quality report only: `python postgres_etl/main.py -sc <seasons> --quality-only`
-- Publish to Neon: `python neon_publish/main.py -sc <seasons>` (always `--dry-run` first).
-  Play-by-play and shots only for E2025 and E2026 (first run for E2025:
-  `python neon_publish/main.py -sc 2025 -tb play_by_play shots`)
-- Drop the old `etl_flat_*` view names in Neon once the web app reads the `app_*`
-  names: `python neon_publish/main.py --drop-old-names` (`--dry-run` first)
-- Drop retired tables (`--dry-run` first): local `etl_flat_live_*` and
-  `etl_source_payloads` with `python postgres_etl/main.py --drop-retired`; the
-  unpublished `app_standings_*` feed tables in Neon with
-  `python neon_publish/main.py --drop-retired` (after `--drop-old-names`)
+- Publish to Neon: paused until feature 30. `python neon_publish/main.py --dry-run`
+  reports the pause without connecting to Neon.
 - CSV export: `python tables_to_csv/main.py -sc <seasons>`
 - Test:
   - `cd api_requests && python -m unittest tests.test_scrapper`

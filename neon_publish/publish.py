@@ -18,16 +18,13 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from postgres_etl.flat_schema import (  # noqa: E402
-    PLAYER_TABLES, PUBLISHED_TABLES, RECORDS_TABLES, RENAMED_TABLES, TABLES, create_index_sql,
-    create_table_sql, legacy_name, physical_name, relation_kinds, rename_actions,
-    rename_legacy_tables,
+    PUBLISHED_TABLES, TABLES, create_index_sql, create_table_sql, physical_name,
 )
 from common.seasons import COMPETITION_CODES  # noqa: E402
 from common.dotenv import read_env_value  # noqa: E402
 
 
-# The tables the web app reads (clean app_* names). The standings feeds and
-# etl_flat_game_stat_gaps stay local.
+# Gold tables will be defined in feature 30.
 APP_TABLES = PUBLISHED_TABLES
 # Large tables replaced game by game: only games whose rows differ between local
 # PostgreSQL and Neon are deleted and copied, so a refresh uploads the new games
@@ -131,12 +128,6 @@ def changed_games(local_sums, remote_sums):
     return replace, remove
 
 
-def _relations(names):
-    """The new and, for renamed tables, the old names of ``names``."""
-    return [label for name in names
-            for label in (physical_name(name), legacy_name(name)) if label]
-
-
 def _existing_columns(cursor, name, relation=None):
     cursor.execute(
         "SELECT column_name FROM information_schema.columns "
@@ -207,22 +198,12 @@ def export_season(local, competition_code, season_code, names, remote_sums):
 
 
 def remote_counts(neon, competition_code, season_code, names):
-    """Neon rows per table, the renames a publish would make, and the per-game
-    checksums of GAME_DIFF_TABLES.
-
-    A table not yet renamed is counted under its old name, so the shrink guard
-    compares with the rows the web app reads now. A conflict raises before any
-    change. A missing table has no games; one still lacking a column gets its
-    games without checksums; either way every local game counts as changed and
-    games only Neon has are removed.
-    """
+    """Neon row counts and per-game checksums for selected gold tables."""
     counts, sums = {}, {}
     with neon.cursor() as cursor:
-        kinds = relation_kinds(cursor, _relations(names))
-        planned = rename_actions(kinds, names, keep_views=True)
         for name in names:
-            relation = next((label for label in (physical_name(name), legacy_name(name))
-                             if label and kinds.get(label) == "table"), None)
+            cursor.execute("SELECT to_regclass(%s)", (physical_name(name),))
+            relation = physical_name(name) if cursor.fetchone()[0] is not None else None
             counts[name] = (None if relation is None
                             else _count(cursor, name, competition_code, season_code, relation))
             if name in GAME_DIFF_TABLES and relation is None:
@@ -234,152 +215,12 @@ def remote_counts(neon, competition_code, season_code, names):
                               if complete
                               else game_rows(cursor, relation, competition_code, season_code))
     neon.rollback()
-    return counts, planned, sums
-
-
-def drop_old_name_actions(kinds, names=tuple(sorted(RENAMED_TABLES))):
-    """("drop", old) for each old name that is a view; ("keep", old) for one still a table."""
-    actions = []
-    for name in names:
-        old = legacy_name(name)
-        if old is not None and kinds.get(old) == "view":
-            actions.append(("drop", old))
-        elif old is not None and kinds.get(old) is not None:
-            actions.append(("keep", old))
-    return actions
-
-
-def drop_old_names(neon, dry_run=False, log=print):
-    """Drop the etl_flat_* views left by the rename, in one transaction; never a table."""
-    from psycopg2 import sql
-
-    with neon:
-        with neon.cursor() as cursor:
-            # Every renamed table, including the standings feeds that are no
-            # longer published but whose old views may still exist.
-            olds = [legacy_name(name) for name in sorted(RENAMED_TABLES)]
-            actions = drop_old_name_actions(relation_kinds(cursor, olds))
-            for action, old in actions:
-                if action == "keep":
-                    log(f"  {old}: still a table (not published since the rename); left alone")
-                elif dry_run:
-                    log(f"  {old}: view would be dropped")
-                else:
-                    cursor.execute(sql.SQL("DROP VIEW {}").format(sql.Identifier(old)))
-                    log(f"  {old}: view dropped")
-    if not any(action == "drop" for action, _ in actions):
-        log("No old-name views left in Neon.")
-    return actions
+    return counts, sums
 
 
 def _games_line(name, replace, remove, total, verb):
     line = f"  {physical_name(name)}: {len(replace)} of {total} game(s) {verb}"
     return line + (f", {len(remove)} removed" if remove else "")
-
-
-def _records_before(neon, names):
-    """{table: Neon row count, or None if the table does not exist yet}."""
-    before = {}
-    with neon.cursor() as cursor:
-        for name in names:
-            existing = _existing_columns(cursor, name)
-            before[name] = _count_all(cursor, name) if existing else None
-    neon.rollback()
-    return before
-
-
-def _export_records(local, names):
-    """One consistent local snapshot of the full contents of ``names``."""
-    from psycopg2 import sql
-
-    counts, spools = {}, {}
-    local.set_session(readonly=True, isolation_level="REPEATABLE READ")
-    try:
-        with local.cursor() as cursor:
-            for name in names:
-                counts[name] = _count_all(cursor, name)
-                order = sql.SQL(", ").join(sql.Identifier(column) for column in TABLES[name].key)
-                query = sql.SQL(
-                    "COPY (SELECT {} FROM {} ORDER BY {}) TO STDOUT WITH (FORMAT CSV)"
-                ).format(_columns(name), sql.Identifier(physical_name(name)), order)
-                spool = tempfile.SpooledTemporaryFile(max_size=SPOOL_BYTES, mode="w+b")
-                spools[name] = spool
-                cursor.copy_expert(query, spool)
-                spool.seek(0)
-    except BaseException:
-        for spool in spools.values():
-            spool.close()
-        raise
-    finally:
-        local.rollback()
-        local.set_session(readonly=False)
-    return counts, spools
-
-
-def _count_all(cursor, name, relation=None):
-    from psycopg2 import sql
-
-    cursor.execute(sql.SQL("SELECT count(*) FROM {}").format(
-        sql.Identifier(relation or physical_name(name))))
-    return cursor.fetchone()[0]
-
-
-def publish_records(local, neon, names, dry_run=False, allow_shrink=False, log=print):
-    """Whole-table replace of the cross-season records tables.
-
-    Unlike ``publish_season``, these tables are not scoped to one season: a
-    table's rows span every season already loaded locally, so every requested
-    table is fully replaced (TRUNCATE, then COPY) in one Neon transaction,
-    independent of ``--season-code``. Return {table: (before, after)}.
-    """
-    from psycopg2 import sql
-
-    before = _records_before(neon, names)
-    if dry_run:
-        local.set_session(readonly=True)
-        with local.cursor() as cursor:
-            local_counts = {name: _count_all(cursor, name) for name in names}
-        local.rollback()
-        local.set_session(readonly=False)
-    else:
-        local_counts, spools = _export_records(local, names)
-
-    try:
-        problems = shrink_problems(local_counts, before)
-        if problems and not allow_shrink:
-            raise ValueError(
-                "Refusing to publish records tables; it would remove existing Neon rows "
-                "(check the local load, or pass --allow-shrink if this is intended):\n  "
-                + "\n  ".join(problems)
-            )
-        if dry_run:
-            return {name: (before[name], local_counts[name]) for name in names}
-
-        with neon:  # One transaction: COMMIT on success, ROLLBACK on any error.
-            with neon.cursor() as cursor:
-                cursor.execute("SET LOCAL lock_timeout = '15s'")
-                for name in names:
-                    _ensure_table(cursor, name, log)
-                for name in names:
-                    table = sql.Identifier(physical_name(name))
-                    cursor.execute(sql.SQL("TRUNCATE TABLE {}").format(table))
-                    cursor.copy_expert(
-                        sql.SQL("COPY {} ({}) FROM STDIN WITH (FORMAT CSV)").format(
-                            table, _columns(name)
-                        ),
-                        spools[name],
-                    )
-                    published = _count_all(cursor, name)
-                    if published != local_counts[name]:
-                        raise RuntimeError(
-                            f"{physical_name(name)}: Neon has {published:,} rows after COPY "
-                            f"but local PostgreSQL has {local_counts[name]:,}; rolled back."
-                        )
-        return {name: (before[name], local_counts[name]) for name in names}
-    finally:
-        if not dry_run:
-            for spool in spools.values():
-                spool.close()
 
 
 def publish_season(local, neon, competition, season_code, names,
@@ -388,11 +229,8 @@ def publish_season(local, neon, competition, season_code, names,
     from psycopg2 import sql
 
     competition_code = COMPETITION_CODES[competition]
-    before, planned, remote_sums = remote_counts(neon, competition_code, season_code, names)
+    before, remote_sums = remote_counts(neon, competition_code, season_code, names)
     if dry_run:
-        for action, old, new in planned:
-            if action == "rename":
-                log(f"  {old}: would be renamed to {new} (old name kept as a view)")
         local.set_session(readonly=True)
         with local.cursor() as cursor:
             local_counts = {name: _count(cursor, name, competition_code, season_code)
@@ -422,9 +260,6 @@ def publish_season(local, neon, competition, season_code, names,
         with neon:  # One transaction: COMMIT on success, ROLLBACK on any error.
             with neon.cursor() as cursor:
                 cursor.execute("SET LOCAL lock_timeout = '15s'")
-                for action, old, new in rename_legacy_tables(cursor, names, keep_views=True):
-                    if action == "rename":
-                        log(f"  {old}: renamed to {new} (old name kept as a view)")
                 for name in names:
                     _ensure_table(cursor, name, log)
                 for name in names:

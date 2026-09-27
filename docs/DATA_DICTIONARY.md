@@ -1,308 +1,96 @@
 # EuroLeague data dictionary
 
-This describes the **column-first PostgreSQL tables** produced by
-`postgres_etl/main.py` and exported by `tables_to_csv/main.py`. The exact SQL
-columns, types, source-field paths, and primary keys are defined in
-[postgres_etl/flat_schema.py](postgres_etl/flat_schema.py). The table names
-below omit the prefix: the web-app tables and the v3 standings feeds are
-stored as `app_<name>` (see [Table names](#table-names)); `game_stat_gaps`
-is stored as `etl_flat_game_stat_gaps`.
+The current local database has 28 source-derived tables in the PostgreSQL
+`silver` schema. The loader and CSV exporter use `search_path = silver`, so
+a bare name such as `games` means `silver.games`. Exact SQL columns, types,
+source JSON paths, and keys are defined in
+[flat_schema.py](../postgres_etl/flat_schema.py). Bronze keeps the exact API
+responses. Silver contains cleaned source data; gold tables are paused until
+feature 30. Existing Neon tables are unchanged in the meantime.
 
-## Table names
+## Silver table names and keys
 
-The 25 tables the web app reads are published to Neon with clean `app_*`
-names, locally and in Neon: `app_standings`; the 14 v2/v3 tables, each named
-`app_<name>` (for example `app_games`, `app_game_player_stats`); play-by-play
-and shots (`app_play_by_play`, `app_shots`); and the eight newer tables from
-features 11-14 — `app_records_player_seasons`, `app_records_single_games`,
-`app_records_team_seasons`, `app_team_season_stats`, `app_coverage_seasons`,
-`app_coverage_games`, `app_postseason_series`, `app_players` — all `app_*`-named
-from the start. See [Web-app tables](#web-app-tables) for what each one is.
+Every primary key begins with `competition_code` and `season_code`.
+Filter on both: `E2025` means the 2025-26 EuroLeague season. Codes such as
+`person_code` are text to preserve leading zeroes. The extra key shown below
+completes the primary key.
 
-The 7 v3 standings feed tables keep their `app_standings_*` names locally but
-are no longer published (feature 23): the web app reads `app_standings`, which
-combines them. `game_stat_gaps` is the one table named `etl_flat_game_stat_gaps`.
-
-**Old `etl_flat_*` views:** the v2/v3 tables (including the standings feeds)
-and play-by-play/shots were called `etl_flat_<name>` before feature 22
-(2026-09), and Neon kept a view under each old name (`etl_flat_<name>` ->
-`app_<name>`) during the switchover. On 2026-09-27 (feature 23), with the web
-app reading only `app_*` names, `python neon_publish/main.py --drop-old-names`
-dropped those 21 views, and `python neon_publish/main.py --drop-retired` then
-dropped the 7 standings feed tables from Neon. Neon has no `etl_flat_*` names
-left. Both commands are safe to rerun; they report that nothing is left.
-
-## Conventions to apply to every query
-
-- All tables are shared by EuroLeague and EuroCup. Always filter on both
-  `competition_code` (`E` or `U`) and `season_code` (`E2025`, `U2025`, etc.).
-  `E2025` means the **2025–26** season, not calendar year 2025 alone.
-- Both scope columns are part of every primary key. The **extra key** shown
-  below completes that table's primary key. A `game_code` or `club_code` by
-  itself is not globally unique. Keep codes such as `person_code` as text so
-  leading zeroes are not lost.
-- `side` is `local` or `road`. In the live API feeds, fields ending in `A`
-  or `B` retain the source's labels; join to a game before assuming a team.
-- Live tables (`play_by_play`, `shots`) carry two player columns.
-  `player_code` is the id exactly as the live API sends it (padding trimmed): `P` + person code, such as `P014102` or `PKLT`, or a
-  team/coach marker such as `CO_A`. `person_code` is the standardized code
-  (`014102`, `KLT`) that equals `people.person_key` everywhere else. It is `NULL`
-  for markers, which are not people. **Join on `person_code`.**
-  `person_code_method` says how it was found: `live_id` (the id is "P" + the
-  code of a player in that game's v2 box score; nearly all rows), or a correction
-  for live ids that are wrong in the source (e.g. Kanter E2008: `P000936` vs v2
-  `000110`): `jersey_number` or `name` (same team in that game's box score),
-  `play_by_play` (shots: the id as corrected in the same game's play-by-play),
-  `season_roster` (the id is a person of that season who is not in the game's
-  box score), or `unmatched` (`person_code` is NULL).
-- SQL `NULL` means absent, not applicable, or not yet played. It is not zero.
-  Future fixtures remain in `games` with `played = false`, but result scores
-  and `match_winner_club_code` are `NULL`. Games without overtime have no
-  overtime rows. Optional profile, venue, or image fields may also be `NULL`.
-- Percentage strings from v3 are converted to numeric **percentage points**:
-  `45.5` means 45.5%, not 0.455. Timestamps marked `TIMESTAMPTZ` carry a time
-  zone; `TIMESTAMP` values are source-local/unspecified and need care when
-  compared across locations.
-- `champion_club_code` and the source `winner` object identify the **season
-  champion**, not the winner of each game. For a played match, use
-  `games.match_winner_club_code` (or compare the two scores).
-- Club crests and many player headshots are full URLs. An official's
-  `image_vertical_small` is an opaque upstream identifier, not a ready URL.
-- The same concept may appear in v2, v3, and live tables. These are separate
-  source views, **not additive records**. Pick a source and grain for each
-  calculation rather than summing overlapping tables together.
-
-## v2 catalogue, people, and games
-
-| Table                | Extra key                            | One row represents                                            | Essential use/filter                                                                                            |
-| -------------------- | ------------------------------------ | ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `seasons`            | none                                 | A competition season and its catalogue metadata.              | `champion_club_code` is the season champion, when known.                                                        |
-| `clubs`              | `club_code`                          | A club's season-specific metadata.                            | `crest_url` is a displayable image URL when present. Join on both scope columns and club code.                  |
-| `people`             | `person_key`                         | A deduplicated person in that season.                         | Join to registrations for club/role; `person_code` is text and may have leading zeroes.                         |
-| `registrations`      | `registration_key`                   | A person's club/role registration or interval.                | One person can have multiple rows. Use `role_code`, `club_code`, `active`, and dates as needed.                 |
-| `rounds`             | `round_key`                          | A phase/round definition.                                     | Use `phase_code` with `round_number`; do not treat a round number as season-wide without its phase.             |
-| `games`              | `game_code`                          | A fixture, played or scheduled, with teams and result fields. | Filter `played = true` for results. Use `match_winner_club_code`, not `champion_club_code`, for match outcomes. Use `status` (below) for scheduled/cancelled/completed. |
-| `game_officials`     | `game_code`, `official_number`       | One assigned official in a game.                              | `official_code` identifies the person; `image_vertical_small` is not a URL.                                     |
-| `game_period_scores` | `game_code`, `side`, `period_number` | One team's score in one period.                               | Periods 1–4 are regulation; 5+ are overtime. Absence of 5+ means no overtime.                                   |
-| `game_player_stats`  | `game_code`, `side`, `person_key`    | One player's v2 game box-score row.                           | Join to `games` and `people` using scope and keys. `headshot_url` may be missing.                               |
-| `game_team_stats`    | `game_code`, `side`, `stats_kind`    | One side's v2 `team` or `total` statistics object.            | Filter `stats_kind` to **one** of `team` or `total` before aggregating.                                         |
-| `game_stat_gaps`     | `game_code`, `stat_name`             | A box-score measure the source did not record for a game.     | `stat_name` is a column name (e.g. `plus_minus`), or `*` when the game has no player box score at all (forfeit). |
-
-### Game status and unrecorded statistics
-
-`games.status` is derived by the loader for the web app:
-
-| `status` | Meaning |
-| --- | --- |
-| `completed` | Played; results are filled. |
-| `scheduled` | Future fixture. |
-| `awaiting_result` | Current season: start time has passed but the source has no result yet (live, just finished, or postponed). Depends on the load time. |
-| `postponed` | The source says postponed. |
-| `cancelled` | Never played. `status_note` says whether the source said so (E2021: 28 games of the Russian clubs) or it is **inferred** because the season is over (E2019: 54 games after the COVID stop, which the source still calls "Confirmed"). |
-
-Unrecorded statistics are `NULL`, not 0. A box-score measure that is 0 for
-**every** player in a game (for example plus/minus, which was not recorded before
-E2012, or fouls received in a few E2000–E2002 games) is stored as `NULL` for that
-game in `game_player_stats` and `game_team_stats`, and listed in
-`game_stat_gaps`. A real 0 for one player stays 0. Games with no player box
-score (the forfeits E2001 game 264, 2–0, and E2003 game 200, 20–0) keep the
-official score in `games` but have `NULL` team statistics. Exclude them from
-records.
-
-`games.audience` is `NULL` when the source reports 0: for unplayed games, and
-for played games where the crowd was not recorded (most of E2004/E2005) or the
-game was behind closed doors. The source cannot tell these apart.
-`audience_note` explains every played game with `NULL` attendance: "likely
-behind closed doors (COVID period)" between March 2020 and June 2022, otherwise
-"attendance not recorded (or behind closed doors)".
-
-## Live game detail
-
-Play-by-play and shots come from the live API (from E2007). They
-supplement, and sometimes overlap, v2/v3. Older seasons may not have live-feed
-data. A missing live row should not automatically be interpreted as a
-zero-valued performance. They are stored as `app_play_by_play` and `app_shots`
-and published to Neon (see below).
-
-The other live API feeds (Boxscore, Evolution, Comparison, ShootingGraphic)
-are not loaded: v2 game data, play-by-play and shots cover their content. Their
-tables (`etl_flat_live_*`) were dropped in feature 23; `api_requests` can still
-archive the feeds in bronze when named with `-ds`.
-
-| Table                                | Extra key                                          | One row represents                                                  | Essential use/filter                                                                                           |
-| ------------------------------------ | -------------------------------------------------- | ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `play_by_play`                       | `game_code`, `period`, `event_ordinal`             | One source event in a game period.                                  | Order within a game by period in play order (not alphabetically), then event ordinal; `points_a`/`points_b` are often `NULL` on non-scoring events. |
-| `shots`                              | `game_code`, `shot_ordinal`                        | One shooting-chart attempt, including misses.                       | `points = 0` can mean a miss. Coordinates use the source's system; do not assume screen pixels.                |
-
-### Web-app contract: `app_play_by_play` and `app_shots`
-
-- **Seasons in Neon:** E2025 and E2026 only (all seasons would be about 1.5 GB).
-  Older seasons exist locally from E2007.
-- **Play-by-play:** key `game_code`, `period`, `event_ordinal`. Order a game by
-  the period in play order (`FirstQuarter`, `SecondQuarter`, `ThirdQuarter`,
-  `ForthQuarter` (source spelling), `ExtraTime` for all overtime), then
-  `event_ordinal`, which restarts at 0 in each period. `period` is text, so
-  sorting on it directly puts `ExtraTime` first and `ForthQuarter` before
-  `SecondQuarter`; map it to its position instead. `play_number` is unique
-  within a season and game (it links each shot to its event) but is not
-  chronological, so do not order by it.
-  `play_type` is the source event code, `marker_time` the game clock text,
-  `comment`/`play_info` free source text.
-- **Shots:** key `game_code`, `shot_ordinal`, one row per attempt including
-  misses (`points = 0`). `coord_x`/`coord_y` use the source's court system (not
-  screen pixels); `zone`, `fastbreak`, `second_chance`, `points_off_turnover`
-  come from the source; `shot_at` is a UTC timestamp.
-- **Scores:** `points_a`/`points_b` are the source's A/B sides and are often
-  `NULL` on non-scoring events; join to `app_games` (local/road) before
-  labelling them.
-- **Players:** `player_code` is the live feed's id; use `person_code` to join to
-  `app_people` and box scores. `person_code_method` says how it was matched.
-  Team and game events (for example a team rebound or a period start) have no
-  `person_code` and no method; an `unmatched` player has no `person_code`
-  either. Every shot has a play-by-play event with the same `play_number`.
-- **Freshness:** a refresh replaces only games whose rows changed, so a game
-  appears after the refresh that follows it and corrections replace the whole
-  game at once.
-
-## v3 season player statistics
-
-All four tables have extra key `phase_code`, `mode`, `entry_ordinal`. One row
-is **one player entry in one category/phase/mode feed**, not one unique person
-for the season. `entry_ordinal` is a feed position, not a stable player ID.
-Join people by `person_key` and filter a single `phase_code` (for example
-`RS`, `PO`, `PI`, `FF`, or `all`) and a single `mode` (`accumulated` or
-`perGame`). The populations in these feeds can differ. Do not sum per-game
-rates or add an `all` row to its individual phase rows.
-
-The API's `perGame` feeds list only players with more than half of the
-phase's games (for example 20 of 38 in `RS`, 3 of 5 in `PO`). The API's
-no-phase `all` + `perGame` feed can come back empty (E2026 since 2026-09-24);
-the quality report flags that as `season_stats_phase_mode_missing`.
-
-**Postseason (`phase_code = 'PS'`)** is derived here, because the API cannot
-combine phases. It covers played Play-In, Playoffs and Final Four games, only
-in `season_stats_traditional` and `season_stats_misc` (not advanced or
-scoring), and is built from the box scores (`app_game_player_stats` source):
-
-- A player is included once they have time on court in one of those games.
-  `perGame` rows need more than half of the player's own club's postseason
-  games (the club of their latest postseason game).
-- Totals are sums; `perGame` divides by games played and rounds to 1 decimal,
-  half to even, like the API. Minutes are not rounded.
-- Shooting percentages come from made/attempted totals (0-100, 1 decimal) and
-  are `NULL` with no attempts (the API writes 0 there).
-- A measure that was not recorded in any of the player's games (see
-  `game_stat_gaps`) is `NULL`, never a partial sum.
-- `wins`/`losses` count the player's games their club won/lost. A double- or
-  triple-double is 10+ in two or three of points, rebounds, assists, steals,
-  blocks. Like the API's misc feed, misc rows are identical in both modes and
-  their `minutes_played` is the per-game average.
-- Name and club come from the latest postseason box score; age, images and TV
-  codes from the player's and club's API rows in the same season (`NULL` when
-  there are none). `player_ranking` is `NULL`.
-
-| Table                      | Metric family                                                                                    |
-| -------------------------- | ------------------------------------------------------------------------------------------------ |
-| `season_stats_traditional` | Games, minutes, scoring, shooting, rebounds, assists, steals, turnovers, blocks, fouls, and PIR. |
-| `season_stats_advanced`    | Efficiency, usage-related ratios, shooting efficiency, rebound/assist ratios, and possessions.   |
-| `season_stats_scoring`     | Shot-attempt shares and the makeup of a player's points.                                         |
-| `season_stats_misc`        | Games, wins/losses, minutes, double-doubles, and triple-doubles.                                 |
-
-## v3 season team statistics
-
-Four local tables, one per API team feed (feature 24), stored as
-`etl_flat_season_team_stats_<feed>` and not published to Neon. They are the
-API's own team numbers, kept as a reference to check the numbers this
-pipeline calculates from box scores. Extra key `phase_code`, `mode`,
-`club_code`: one club in one feed, phase (`all` or a phase of that season;
-no derived `PS`) and mode (`accumulated` totals or `perGame` averages).
-
-| Table | Feed | Columns |
+| Table | Extra key | Source/grain |
 | --- | --- | --- |
-| `season_team_stats_traditional` | `teams/traditional` | Games, minutes, points, 2P/3P/FT made, attempted and %, offensive/defensive/total rebounds, assists, steals, turnovers, blocks and blocks against, fouls committed and drawn, PIR |
-| `season_team_stats_opponents_traditional` | `teams/opponentsTraditional` | The same columns for what the club's **opponents** did against it (points = points allowed) |
-| `season_team_stats_advanced` | `teams/advanced` | Games, eFG%, TS%, offensive/defensive/total rebound %, assist/turnover ratio, assist ratio, turnover ratio, 2P and 3P attempt rates, FT rate, share of points from 2P/3P/FT |
-| `season_team_stats_opponents_advanced` | `teams/opponentsAdvanced` | The same columns for the club's opponents |
+| `seasons` | none | One competition season from the v2 catalogue. |
+| `clubs` | `club_code` | One club in one season. |
+| `people` | `person_key` | One deduplicated person in one season. |
+| `registrations` | `registration_key` | One person's club and role registration. |
+| `rounds` | `round_key` | One phase and round definition. |
+| `games` | `game_code` | One played or scheduled fixture. |
+| `game_officials` | `game_code`, `official_number` | One official assigned to a game. |
+| `game_period_scores` | `game_code`, `side`, `period_number` | One quarter or overtime score. |
+| `game_player_stats` | `game_code`, `side`, `person_key` | One player's game box score. |
+| `game_team_stats` | `game_code`, `side`, `stats_kind` | One team's box score row or total. |
+| `game_stat_gaps` | `game_code`, `stat_name` | A missing or unrecorded game measure; `*` means no box score. |
+| `play_by_play` | `game_code`, `period`, `event_ordinal` | One live event. |
+| `shots` | `game_code`, `shot_ordinal` | One shot attempt. |
+| `season_player_stats_traditional` | `phase_code`, `mode`, `entry_ordinal` | One player entry in a v3 traditional feed. |
+| `season_player_stats_advanced` | same | One player entry in an advanced feed. |
+| `season_player_stats_scoring` | same | One player entry in a scoring feed. |
+| `season_player_stats_misc` | same | One player entry in a misc feed. |
+| `season_team_stats_traditional` | `phase_code`, `mode`, `club_code` | One club in a v3 traditional feed. |
+| `season_team_stats_advanced` | same | One club in an advanced feed. |
+| `season_team_stats_opponents_traditional` | same | One club's opponents in a traditional feed. |
+| `season_team_stats_opponents_advanced` | same | One club's opponents in an advanced feed. |
+| `standings_basic` | `phase_code`, `round_number`, `club_code` | One club snapshot after a round. |
+| `standings_calendar` | same | Calendar standings snapshot. |
+| `standings_streaks` | same | Streak summaries. |
+| `standings_ahead_behind` | same | Checkpoint ahead/behind summaries. |
+| `standings_margins` | same | Margin summaries. |
+| `standings_calendar_streaks` | `phase_code`, `round_number`, `club_code`, `streak_ordinal` | One calendar streak. |
+| `standings_basic_form` | `phase_code`, `round_number`, `club_code`, `result_ordinal` | One recent result. |
 
-- Every table also has `club_name`, `club_tv_codes`, `club_image_url` and
-  `team_ranking` (the club's position in the source feed).
-- Percentages are percentage points (`51.7` = 51.7%). A source `NaN%` is `NULL`.
-- There are no possessions, pace or offensive/defensive ratings in these feeds;
-  those are calculated in later features.
-- The quality check `team_stats_points_mismatch` (WARN) compares each club's
-  `accumulated` points per phase, own and opponents, with
-  `app_team_season_stats` (summed from box scores). It runs with the aggregate
-  tables. `season_stats_phase_mode_missing` flags an empty feed, which the API
-  sometimes returns for the current season (for example E2026 `RS` on
-  2026-09-27 while games were played).
-- Loaded 2026-09-27 for E2000-E2026: all 1,092 club/phase rows present in both
-  the API feeds and `app_team_season_stats` have equal own and opponents points.
-- **The opponents `accumulated` feeds miss clubs in two eras** (the own feeds are
-  complete and match the box scores); `season_stats_feed_partial` flags them:
-  - E2000 `PO`: 8 of the 16 clubs that played playoff games.
-  - E2008-E2015 `all`: only the 16 Top 16 clubs, not all 24.
-- `perGame` feeds, player and team, list only clubs and players with more than
-  half of the phase's games, so they legitimately miss clubs: for example
-  E2008-E2015 `all` (16 of 24: clubs out after the regular season), the
-  Play-In (clubs with one game) and E2000 `PO`.
+## Standard column names
 
-### Stale or partial statistics feeds
+The source JSON paths have not changed. Where these stats occur, the SQL
+columns use one name across v2 and v3:
 
-On game days the v3 statistics endpoints (players and teams) sometimes answer
-an older, shorter list or nothing, and a later request answers correctly
-(findings ledger F-01, a EuroLeague API problem). Two protections apply:
+| Former column | Silver column |
+| --- | --- |
+| `assistances` | `assists` |
+| `fouls_commited` | `fouls_committed` |
+| `fouls_received` | `fouls_drawn` |
+| `blocks_favour` | `blocks` |
+| `valuation` | `pir` |
+| `field_goals_made2`, `field_goals_attempted2` | `two_pointers_made`, `two_pointers_attempted` |
+| `field_goals_made3`, `field_goals_attempted3` | `three_pointers_made`, `three_pointers_attempted` |
+| `field_goals_made_total`, `field_goals_attempted_total` | `field_goals_made`, `field_goals_attempted` |
+| `points_scored` | `points` |
+| `time_played` | `seconds_played` |
+| `possesions` | `possessions` |
+| `quater1_*`, `quater3_*` | `quarter1_*`, `quarter3_*` |
+| `longest_wins_streak_*`, `longest_loses_streak_*` | `longest_win_streak_*`, `longest_loss_streak_*` |
+| `point_difference1to5`, `6to10`, `11to15`, `_more_than15` | `point_difference_1_to_5`, `_6_to_10`, `_11_to_15`, `_more_than_15` |
+| `dorsal`, `dorsal_raw` | `jersey_number`, `jersey_number_raw` |
 
-- **At download** (`api_requests`), when a feed already stored is fetched again,
-  a worse answer is not stored as the newest version and the stored one stays
-  in use. For an `accumulated` feed, worse means fewer clubs or fewer total
-  games played. For a `perGame` feed it means an empty answer (a per-game feed
-  can shrink legitimately). The run prints `[kept]` with both sizes, the
-  summary counts "Stats feeds kept from an earlier fetch", and the rejected
-  answer is recorded in `manifest.jsonl` (`stored_as: null`, `rejected`).
-  Every other feed updates normally.
-- **At load**, `season_stats_phase_mode_missing` (WARN) flags an empty feed and
-  `season_stats_feed_partial` (WARN) flags an `accumulated` feed that lists
-  fewer clubs than played in that phase (`all`: any phase; derived `PS` rows
-  excluded). Over E2000-E2025 it flags only the opponents gaps above.
+`game_stat_gaps.stat_name` uses these silver names, or `*` for no box score.
+Source zeros that mean a stat was not recorded become SQL `NULL` and are
+listed there. Future fixtures remain in `games` with `played = false` and
+NULL result scores. Quarter and overtime scores have separate child rows.
+The source's `winner` object is the season champion;
+`match_winner_club_code` is the winner of a played game. V3 percentage strings
+such as `45.5%` become numeric `45.5` (percentage points).
 
-State on 2026-09-27: 11 E2026 feeds stored before this protection existed are
-still stale or empty (for example `teams_advanced_RS_accumulated` with 0 clubs,
-several player `RS` feeds with 12 of 20). They are replaced automatically by
-the first complete answer on a later refresh, and the load warnings list them
-until then.
-
-  A missing row is absent, not zero. The points cross-check compares only clubs
-  present on both sides.
-
-## v3 standings snapshots
-
-The five feed tables below share extra key `phase_code`, `round_number`,
-`club_code`: one club's **snapshot after a particular round in a phase**.
-They are not season totals to sum across rounds. Filter the desired phase and
-round, or choose its latest available round. Not every phase has a standings
-feed; E2025 currently has 38 regular-season rounds in the basic feed.
-
-These seven tables are local only (named `app_standings_*`). The web app reads
-[`app_standings`](#app_standings), which combines them into one row per club
-and round.
-
-| Table                         | Feed-specific information                                                          |
-| ----------------------------- | ---------------------------------------------------------------------------------- |
-| `standings_basicstandings`    | Position, win percentage, points for/against, and record summaries.                |
-| `standings_calendarstandings` | Calendar standings snapshot; expanded streak entries are in the child table below. |
-| `standings_streaks`           | Home/away and recent-form record or streak summaries.                              |
-| `standings_aheadbehind`       | Ahead/behind/tied summaries at game checkpoints.                                   |
-| `standings_margins`           | Margin bands and other distribution summaries.                                     |
-| `standings_calendar_streaks`  | One calendar streak per club/round; extra key also has `streak_ordinal`.           |
-| `standings_basic_form`        | One recent-form result per club/round; extra key also has `result_ordinal`.        |
+Player and team season stats contain only API rows; the derived `PS` rows were
+removed. A player stats row is one entry in a category, phase, and mode feed,
+not a unique person for the season. `accumulated` and `perGame` feeds may have
+different populations. The API can return stale or partial feeds; the downloader
+keeps the stronger stored response and the load quality report flags missing or
+partial phase/mode feeds. Live `player_code` is the upstream ID while
+`person_code` is the matched person key; join on `person_code`.
 
 ## Web-app tables
 
-Page-shaped tables built for the web app, with clean table and column names
-(no source misspellings). Published to Neon with the other `app_*` tables.
-This section is the up-to-date contract for the `jmp-euroleague2` repo: for
-each table, what it replaces (if anything) in the current Express API, its
-exact columns, and what's still that repo's own work to switch over.
+**Paused until feature 30.** This section preserves the former gold table
+contract as a reference. These tables are no longer built locally, and the
+commands in this section are historical. Existing Neon tables remain in place
+for the web app, but receive no updates during the pause.
 
 ### `app_standings`
 
@@ -334,8 +122,9 @@ queries):
   are strings like `2025-09-01T00:00:00.000Z`.
 - NUMERIC columns (`basic_win_percentage`, `ahead_behind_wins_percentage`)
   arrive as strings from node-postgres, as today.
-- The web app reads only `app_standings`. The 7 standings feed tables
-  (`app_standings_*`) are no longer published (feature 23) and stay local.
+- The web app reads the existing Neon `app_standings`. The seven former
+  `app_standings_*` feed tables were retired from Neon in feature 23; their
+  source snapshots now live under `silver.standings_*` locally.
 
 ### `app_records_player_seasons`, `app_records_single_games`, `app_records_team_seasons`
 
@@ -365,11 +154,8 @@ metrics, source filters and tie-break order, so rows are self-contained
   = TRUE` (a forfeit has no box-score rows to rank in the first place);
   `app_records_player_seasons` reads a season-level source aggregate, so no
   separate forfeit filter applies there.
-- A rebuild (`python postgres_etl/main.py -tb app_records_player_seasons
-  app_records_single_games app_records_team_seasons`) always recomputes every
-  row from current local data and replaces prior contents; it ignores
-  `-sc`/`--season-code`. Neon publish is likewise a whole-table replace, not
-  the usual per-season delete.
+- The former builder recomputed these cross-season rows from local data.
+  Feature 30 will define the replacement gold build and publish path.
 - The jmp-euroleague2 Express API still computes these records itself for
   now (`SUPPORTED_SEASONS`, currently `E2025`-`E2026` only); switching it to
   read these tables is a separate, coordinated change in that repo.
@@ -517,26 +303,22 @@ PostgreSQL, was dropped in feature 23.
 
 ## Common query patterns
 
-```sql
--- Completed games; the season champion is a different field.
-SELECT game_code, scheduled_at, local_club_code, road_club_code,
-       local_score, road_score, match_winner_club_code
-FROM public.app_games
-WHERE competition_code = 'E' AND season_code = 'E2025' AND played IS TRUE
-ORDER BY game_code;
+The local connection searches `silver` by default. Explicit schema names also work:
 
--- One comparable player-statistics population.
-SELECT person_key, player_name, club_code, games_played, points_scored
-FROM public.app_season_stats_traditional
+```sql
+SELECT game_code, scheduled_at, local_score, road_score
+FROM silver.games
+WHERE competition_code = 'E' AND season_code = 'E2025' AND played IS TRUE;
+
+SELECT person_key, player_name, club_code, games_played, points
+FROM silver.season_player_stats_traditional
 WHERE competition_code = 'E' AND season_code = 'E2025'
   AND phase_code = 'RS' AND mode = 'accumulated';
 
--- A standings snapshot, not a sum of all round rows.
-SELECT club_code, club_name, basic_position, basic_games_played
-FROM public.app_standings
+SELECT club_code, club_name, position, games_played
+FROM silver.standings_basic
 WHERE competition_code = 'E' AND season_code = 'E2025'
-  AND phase_code = 'RS' AND round_number = 38
-ORDER BY group_name, basic_position;
+  AND phase_code = 'RS' AND round_number = 38;
 ```
 
 ## Post-load checks

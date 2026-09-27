@@ -39,9 +39,9 @@ class FakeCursor:
             return (self.mismatches,)
         if "row.played IS TRUE AND (row.local_score IS NULL" in self.query:
             return (self.bad_scores,)
-        if 'FROM "app_games" AS row' in self.query and "AND (" not in self.query:
+        if 'FROM "games" AS row' in self.query and "AND (" not in self.query:
             return (2,)
-        if 'FROM "app_clubs" AS row' in self.query and "AND (" not in self.query:
+        if 'FROM "clubs" AS row' in self.query and "AND (" not in self.query:
             return (1,)
         return (0,)
 
@@ -56,18 +56,18 @@ class FakeConnection:
 
 class QualityRulesTests(unittest.TestCase):
     def test_partial_stats_feeds_are_warned_for_player_and_team_tables(self):
-        for name in ("season_stats_traditional", "season_team_stats_opponents_traditional"):
+        for name in ("season_player_stats_traditional", "season_team_stats_opponents_traditional"):
             checks = [check for check in checks_for_tables(["games", name])
                       if check.code == "season_stats_feed_partial"]
             self.assertEqual([(check.table, check.severity) for check in checks],
                              [(name, "WARN")])
             query = checks[0].query
-            self.assertIn("row.phase_code <> 'PS' AND row.mode = 'accumulated'", query)
+            self.assertIn("row.mode = 'accumulated'", query)
             self.assertIn("SELECT 'all', count(DISTINCT club_code) FROM played", query)
             self.assertIn("feeds.clubs < expected.clubs", query)
             self.assertEqual(query.count("%s"), 2)
         self.assertNotIn("season_stats_feed_partial",
-                         {check.code for check in checks_for_tables(["season_stats_misc"])})
+                         {check.code for check in checks_for_tables(["season_player_stats_misc"])})
 
     def test_missing_team_stats_feeds_are_warned_when_games_are_checked(self):
         checks = [(check.code, check.table, check.severity) for check in
@@ -75,39 +75,15 @@ class QualityRulesTests(unittest.TestCase):
         self.assertIn(("season_stats_phase_mode_missing", "season_team_stats_opponents_advanced",
                        "WARN"), checks)
 
-    def test_team_points_are_cross_checked_with_the_aggregates(self):
-        checks = [check for check in checks_for_tables(["app_team_season_stats"])
-                  if check.code == "team_stats_points_mismatch"]
-        self.assertEqual(len(checks), 1)
-        check = checks[0]
-        self.assertEqual((check.table, check.severity), ("season_team_stats_traditional", "WARN"))
-        self.assertEqual(check.requires, ("season_team_stats_traditional",
-                                          "season_team_stats_opponents_traditional"))
-        self.assertIn('"etl_flat_season_team_stats_opponents_traditional"', check.query)
-        self.assertIn("mode = 'accumulated'", check.query)
-        self.assertEqual(check.query.count("%s"), 2)
-
-    def test_points_mismatch_is_a_warning_and_skipped_without_the_team_tables(self):
-        report = check_season(FakeConnection(mismatches=3), "euroleague", "E2025",
-                              ["app_team_season_stats"])
-        self.assertIn(("WARN", "team_stats_points_mismatch", 3),
-                      {(i.severity, i.code, i.count) for i in report.issues})
-        self.assertTrue(report.passed)
-        connection = FakeConnection(mismatches=3,
-                                    missing={"etl_flat_season_team_stats_opponents_traditional"})
-        report = check_season(connection, "euroleague", "E2025", ["app_team_season_stats"])
-        self.assertNotIn("team_stats_points_mismatch", {i.code for i in report.issues})
-        self.assertFalse([q for q in connection.fake_cursor.queries if "agg.own_points" in q])
-
-    def test_missing_season_stats_feeds_are_warned_when_games_are_checked(self):
-        checks = [check for check in checks_for_tables(["games", "season_stats_misc"])
+    def test_missing_season_player_stats_feeds_are_warned_when_games_are_checked(self):
+        checks = [check for check in checks_for_tables(["games", "season_player_stats_misc"])
                   if check.code == "season_stats_phase_mode_missing"]
         self.assertEqual([(check.table, check.severity) for check in checks],
-                         [("season_stats_misc", "WARN")])
+                         [("season_player_stats_misc", "WARN")])
         self.assertIn("'all' AS phase_code", checks[0].query)
         self.assertIn("('accumulated'), ('perGame')", checks[0].query)
         self.assertEqual(checks[0].query.count("%s"), 2)  # run with the usual season scope
-        alone = {check.code for check in checks_for_tables(["season_stats_misc"])}
+        alone = {check.code for check in checks_for_tables(["season_player_stats_misc"])}
         self.assertNotIn("season_stats_phase_mode_missing", alone)
 
     def test_partial_load_only_checks_its_own_tables(self):
@@ -135,13 +111,6 @@ class QualityRulesTests(unittest.TestCase):
         self.assertIn(("unmatched_live_player", "shots"), warnings)
         self.assertIn(("fallback_person_key", "game_player_stats"), warnings)
 
-    def test_app_standings_key_parity_is_an_error_when_both_tables_load(self):
-        both = {(c.code, c.severity) for c in
-                checks_for_tables(["app_standings", "standings_basicstandings"])}
-        self.assertIn(("app_standings_key_mismatch", "ERROR"), both)
-        alone = {c.code for c in checks_for_tables(["app_standings"])}
-        self.assertNotIn("app_standings_key_mismatch", alone)
-
     def test_bad_played_score_is_an_error(self):
         report = check_season(FakeConnection(bad_scores=1), "euroleague", "E2025",
                               ["games", "clubs"])
@@ -151,7 +120,7 @@ class QualityRulesTests(unittest.TestCase):
                       {(i.severity, i.code, i.count) for i in report.issues})
 
     def test_missing_table_is_reported_without_querying_it(self):
-        report = check_season(FakeConnection(missing={"app_clubs"}),
+        report = check_season(FakeConnection(missing={"clubs"}),
                               "euroleague", "E2025", ["clubs"])
         self.assertFalse(report.passed)
         self.assertEqual(report.counts, {})

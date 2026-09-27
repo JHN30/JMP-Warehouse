@@ -168,6 +168,17 @@ class RefreshCommandTests(unittest.TestCase):
                          "etl_flat_games: 380 -> 380", "app_standings: missing -> 0", "Log:      logs/refresh/x.log"):
             self.assertIn(expected, text)
 
+    def test_summary_lists_stats_feeds_kept_from_an_earlier_fetch(self):
+        self.facts.changed, self.facts.failed_requests = 2, 0
+        self.facts.kept = ["E2026/v3/season_stats/teams_traditional_RS_accumulated"]
+        text = "\n".join(pipeline.build_summary("E2026", "OK", self.facts, 5, "x.log"))
+        self.assertIn("1 stats feed(s) kept from an earlier fetch "
+                      "(the API answered worse; refresh again later):", text)
+        self.assertIn("E2026/v3/season_stats/teams_traditional_RS_accumulated", text)
+        self.facts.kept = []
+        self.assertNotIn("kept from an earlier fetch",
+                         "\n".join(pipeline.build_summary("E2026", "OK", self.facts, 5, "x.log")))
+
     def test_summary_shows_not_run_never_zero(self):
         text = "\n".join(pipeline.build_summary("E2026", "NOTHING TO DO", pipeline.StageFacts(), 3, "x.log"))
         for stage in ("Fetch:    not run", "Load:     not run", "Publish:  not run"):

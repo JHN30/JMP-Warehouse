@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+import hashlib
 import json
 from pathlib import Path
 import sys
@@ -82,6 +83,7 @@ class EuroScrapas:
         self.now_utc = datetime.now(timezone.utc)
         self.hot = self.empty_hot_scope()
         self.changed_resources = []
+        self.kept_resources = []
         self.season_started_at = monotonic()
         self.run_started_at = self.season_started_at
         self.client = RateLimitedJsonClient(
@@ -423,6 +425,7 @@ class EuroScrapas:
                         params=params,
                         resource=f"v3/season_stats/{name}_{phase_code}_{statistic_mode}",
                         force=phase_force,
+                        keep_if_worse=True,
                     )
 
     def extract_game_stats(self, season_code, played_games):
@@ -465,8 +468,49 @@ class EuroScrapas:
                 )
                 self.report_empty_live_payload(dataset, season_code, game_code, payload)
 
-    def fetch_to_cache(self, source, url, resource, params=None, force=False):
-        """Return the latest bronze payload when permitted, otherwise fetch and store it."""
+    @staticmethod
+    def stats_feed_size(payload, accumulated):
+        """(distinct clubs, total games played or None) of a v3 statistics list."""
+        rows = (payload or {}).get("players") or (payload or {}).get("teams") or []
+        clubs = {
+            ((row.get("player") or {}).get("team") or {}).get("code")
+            if "player" in row else (row.get("team") or {}).get("code")
+            for row in rows
+        }
+        clubs.discard(None)
+        games = sum(row.get("gamesPlayed") or 0 for row in rows) if accumulated else None
+        return len(clubs), games
+
+    @classmethod
+    def worse_stats_answer(cls, stored, answer, resource):
+        """Why ``answer`` is worse than the ``stored`` version, or None.
+
+        Within a season a totals feed can only gain clubs and games played;
+        less of either means the API answered stale. A per-game feed lists only
+        clubs and players with more than half of the phase's games, so it can
+        legitimately shrink: only an empty answer is refused there.
+        """
+        accumulated = resource.endswith("_accumulated")
+        old_clubs, old_games = cls.stats_feed_size(stored, accumulated)
+        new_clubs, new_games = cls.stats_feed_size(answer, accumulated)
+        if accumulated:
+            worse = new_clubs < old_clubs or new_games < old_games
+        else:
+            worse = new_clubs == 0 < old_clubs
+        if worse:
+            games = (f" / {new_games:g} games, stored version has {old_clubs} / {old_games:g}"
+                     if accumulated else f", stored version has {old_clubs}")
+            return f"API answered {new_clubs} clubs{games}"
+        return None
+
+    def fetch_to_cache(self, source, url, resource, params=None, force=False,
+                       keep_if_worse=False):
+        """Return the latest bronze payload when permitted, otherwise fetch and store it.
+
+        With ``keep_if_worse`` (v3 season statistics), an answer smaller than the
+        stored version is only logged in the manifest and the stored version is
+        kept, because the API sometimes answers stale lists on game days.
+        """
         if not force and self.store.exists(resource):
             print(
                 f"[cached]  {source} -> {resource}"
@@ -490,6 +534,24 @@ class EuroScrapas:
             })
             self.record_failure(source, url, params, error)
             return None
+
+        if keep_if_worse and self.store.exists(resource):
+            stored = self.store.read_json(resource)
+            problem = self.worse_stats_answer(stored, payload, resource)
+            if problem:
+                self.store.log({
+                    "resource": resource, "url": final_url, "params": params,
+                    "status_code": status_code,
+                    "fetched_at_utc": datetime.now(timezone.utc).isoformat(),
+                    "sha256": hashlib.sha256(content).hexdigest(), "bytes": len(content),
+                    "stored_as": None, "rejected": problem,
+                })
+                self.kept_resources.append(f"{self.active_season_code}/{resource}")
+                print(
+                    f"[kept]    {resource}: {problem}; kept the stored version, "
+                    f"refresh again later  ---  {self.get_time_counter()}"
+                )
+                return stored
 
         changed = self.store.write(
             resource, content, url=final_url, params=params, status_code=status_code,

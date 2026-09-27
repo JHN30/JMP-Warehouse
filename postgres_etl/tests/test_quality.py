@@ -55,6 +55,20 @@ class FakeConnection:
 
 
 class QualityRulesTests(unittest.TestCase):
+    def test_partial_stats_feeds_are_warned_for_player_and_team_tables(self):
+        for name in ("season_stats_traditional", "season_team_stats_opponents_traditional"):
+            checks = [check for check in checks_for_tables(["games", name])
+                      if check.code == "season_stats_feed_partial"]
+            self.assertEqual([(check.table, check.severity) for check in checks],
+                             [(name, "WARN")])
+            query = checks[0].query
+            self.assertIn("row.phase_code <> 'PS' AND row.mode = 'accumulated'", query)
+            self.assertIn("SELECT 'all', count(DISTINCT club_code) FROM played", query)
+            self.assertIn("feeds.clubs < expected.clubs", query)
+            self.assertEqual(query.count("%s"), 2)
+        self.assertNotIn("season_stats_feed_partial",
+                         {check.code for check in checks_for_tables(["season_stats_misc"])})
+
     def test_missing_team_stats_feeds_are_warned_when_games_are_checked(self):
         checks = [(check.code, check.table, check.severity) for check in
                   checks_for_tables(["games", "season_team_stats_opponents_advanced"])]

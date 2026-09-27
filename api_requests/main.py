@@ -61,6 +61,7 @@ def main():
     print(
         f"\nChanged resources: {len(euro_scrapas.changed_resources)}"
         f"  ---  Failed requests: {euro_scrapas.failed_extractions}"
+        f"  ---  Stats feeds kept from an earlier fetch: {len(euro_scrapas.kept_resources)}"
     )
     if config_parser.summary_file:
         with open(config_parser.summary_file, "w", encoding="utf-8") as summary:
@@ -69,6 +70,7 @@ def main():
                 "season_codes": season_codes,
                 "changed_resources": euro_scrapas.changed_resources,
                 "failed_requests": euro_scrapas.failed_extractions,
+                "kept_resources": euro_scrapas.kept_resources,
             }, summary, indent=1)
 
     return 0

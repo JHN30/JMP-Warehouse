@@ -237,15 +237,39 @@ no derived `PS`) and mode (`accumulated` totals or `perGame` averages).
   2026-09-27 while games were played).
 - Loaded 2026-09-27 for E2000-E2026: all 1,092 club/phase rows present in both
   the API feeds and `app_team_season_stats` have equal own and opponents points.
-- **The opponents feeds miss clubs in some phases** (the own feeds are complete
-  and match the box scores):
-  - E2000 `PO` `accumulated`: 8 of the 16 clubs that played playoff games.
-  - E2008-E2015 `all` `accumulated`: only the 16 Top 16 clubs, not all 24 (the
-    `perGame` feed has all 24).
-  - E2026 `RS` on 2026-09-27: `opponents_traditional` 14 of 20 clubs, with the
-    own `accumulated` feeds empty. A current-season feed can be stale or
-    partial on game days (findings ledger F-01); a partial feed is not flagged
-    by the quality checks yet.
+- **The opponents `accumulated` feeds miss clubs in two eras** (the own feeds are
+  complete and match the box scores); `season_stats_feed_partial` flags them:
+  - E2000 `PO`: 8 of the 16 clubs that played playoff games.
+  - E2008-E2015 `all`: only the 16 Top 16 clubs, not all 24.
+- `perGame` feeds, player and team, list only clubs and players with more than
+  half of the phase's games, so they legitimately miss clubs: for example
+  E2008-E2015 `all` (16 of 24: clubs out after the regular season), the
+  Play-In (clubs with one game) and E2000 `PO`.
+
+### Stale or partial statistics feeds
+
+On game days the v3 statistics endpoints (players and teams) sometimes answer
+an older, shorter list or nothing, and a later request answers correctly
+(findings ledger F-01, a EuroLeague API problem). Two protections apply:
+
+- **At download** (`api_requests`), when a feed already stored is fetched again,
+  a worse answer is not stored as the newest version and the stored one stays
+  in use. For an `accumulated` feed, worse means fewer clubs or fewer total
+  games played. For a `perGame` feed it means an empty answer (a per-game feed
+  can shrink legitimately). The run prints `[kept]` with both sizes, the
+  summary counts "Stats feeds kept from an earlier fetch", and the rejected
+  answer is recorded in `manifest.jsonl` (`stored_as: null`, `rejected`).
+  Every other feed updates normally.
+- **At load**, `season_stats_phase_mode_missing` (WARN) flags an empty feed and
+  `season_stats_feed_partial` (WARN) flags an `accumulated` feed that lists
+  fewer clubs than played in that phase (`all`: any phase; derived `PS` rows
+  excluded). Over E2000-E2025 it flags only the opponents gaps above.
+
+State on 2026-09-27: 11 E2026 feeds stored before this protection existed are
+still stale or empty (for example `teams_advanced_RS_accumulated` with 0 clubs,
+several player `RS` feeds with 12 of 20). They are replaced automatically by
+the first complete answer on a later refresh, and the load warnings list them
+until then.
 
   A missing row is absent, not zero. The points cross-check compares only clubs
   present on both sides.

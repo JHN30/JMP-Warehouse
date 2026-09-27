@@ -177,6 +177,24 @@ pre-season), so for the current season they are re-checked at least every 20
 hours even when no game is hot. The last check is recorded in
 `refresh_state.json`.
 
+On game days the v3 statistics endpoints sometimes answer an older, shorter list
+or nothing. When a season-statistics feed that is already stored is fetched
+again, a worse answer is not stored and the stored version stays in use. For a
+totals (`accumulated`) feed, worse means fewer clubs or fewer total games
+played; for a `perGame` feed, an empty answer (per-game feeds list only clubs
+with more than half of the phase's games, so they may shrink). The run prints,
+for example:
+
+```text
+[kept]    v3/season_stats/teams_traditional_all_accumulated: API answered 0 clubs / 0 games, stored version has 20 / 20; kept the stored version, refresh again later
+```
+
+The summary line counts them ("Stats feeds kept from an earlier fetch"), the
+`--summary-file` lists them under `kept_resources`, and the rejected answer is
+recorded in `manifest.jsonl` with `stored_as: null` and a `rejected` reason.
+Every other feed in the run updates normally. A later refresh stores the
+complete answer as soon as the API returns it.
+
 Use --refresh-current to force a re-fetch of all mutable current-season resources,
 including every standings round.
 

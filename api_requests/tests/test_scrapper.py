@@ -1,5 +1,6 @@
 from argparse import Namespace
 from datetime import datetime, timezone
+import io
 import json
 from pathlib import Path
 import sys
@@ -396,6 +397,139 @@ class EuroScrapasTests(unittest.TestCase):
             self.assertTrue(all(params["Statistic"] for _, params in player_calls))
             self.assertTrue(scrapper.store.exists(
                 "v3/season_stats/teams_opponents_advanced_RS_accumulated"))
+
+    def stats_scrapper(self, root, answers):
+        """A scrapper whose client returns the next queued answer per resource URL."""
+        scrapper = self.make_scrapper(root, {"season_stats"})
+        scrapper.activate_scope("E2026")
+
+        class QueueClient:
+            def get_json(self, url, params=None):
+                return reply(answers.pop(0), url)
+
+        scrapper.client = QueueClient()
+        return scrapper
+
+    @staticmethod
+    def teams(*clubs, games=1):
+        return {"teams": [{"team": {"code": club}, "gamesPlayed": games} for club in clubs]}
+
+    def fetch_stats(self, scrapper, resource):
+        return scrapper.fetch_to_cache(source="v3.test", url="https://example.test/stats",
+                                       resource=resource, force=True, keep_if_worse=True)
+
+    def test_a_stats_answer_with_fewer_clubs_keeps_the_stored_version(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            answers = [self.teams("MAD", "BAR", "OLY"), self.teams("MAD", "BAR")]
+            scrapper = self.stats_scrapper(Path(temporary_directory), answers)
+            resource = "v3/season_stats/teams_traditional_RS_accumulated"
+            self.fetch_stats(scrapper, resource)
+            with patch("sys.stdout", io.StringIO()) as out:
+                returned = self.fetch_stats(scrapper, resource)
+            self.assertEqual(len(returned["teams"]), 3)
+            self.assertEqual(len(scrapper.store.read_json(resource)["teams"]), 3)
+            self.assertEqual(scrapper.kept_resources, [f"E2026/{resource}"])
+            self.assertIn("[kept]", out.getvalue())
+            self.assertIn("API answered 2 clubs / 2 games, stored version has 3 / 3",
+                          out.getvalue())
+            manifest = [json.loads(line) for line in
+                        (scrapper.store.directory / "manifest.jsonl").read_text().splitlines()]
+            self.assertEqual(manifest[-1]["stored_as"], None)
+            self.assertIn("API answered 2 clubs", manifest[-1]["rejected"])
+
+    def test_fewer_total_games_in_a_totals_feed_keep_the_stored_version(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            answers = [self.teams("MAD", "BAR", games=2), self.teams("MAD", "BAR", games=1)]
+            scrapper = self.stats_scrapper(Path(temporary_directory), answers)
+            resource = "v3/season_stats/teams_traditional_all_accumulated"
+            self.fetch_stats(scrapper, resource)
+            with patch("sys.stdout", io.StringIO()):
+                self.fetch_stats(scrapper, resource)
+            self.assertEqual(scrapper.store.read_json(resource)["teams"][0]["gamesPlayed"], 2)
+            self.assertEqual(len(scrapper.kept_resources), 1)
+
+    def test_a_bigger_or_equal_stats_answer_is_stored(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            answers = [self.teams("MAD", games=1), self.teams("MAD", "BAR", games=2),
+                       {"players": [{"player": {"team": {"code": "MAD"}}, "gamesPlayed": 2},
+                                    {"player": {"team": {"code": "BAR"}}, "gamesPlayed": 2},
+                                    {"player": {"team": None}, "gamesPlayed": 1}]}]
+            scrapper = self.stats_scrapper(Path(temporary_directory), answers)
+            resource = "v3/season_stats/teams_traditional_all_accumulated"
+            self.fetch_stats(scrapper, resource)
+            self.fetch_stats(scrapper, resource)
+            self.assertEqual(len(scrapper.store.read_json(resource)["teams"]), 2)
+            player_resource = "v3/season_stats/players_traditional_RS_perGame"
+            self.fetch_stats(scrapper, player_resource)
+            self.assertEqual(scrapper.kept_resources, [])
+
+    def test_a_per_game_feed_may_shrink_but_not_empty(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            answers = [self.teams("MAD", "BAR", "OLY"), self.teams("MAD", "BAR"), {"teams": []}]
+            scrapper = self.stats_scrapper(Path(temporary_directory), answers)
+            resource = "v3/season_stats/teams_traditional_all_perGame"
+            self.fetch_stats(scrapper, resource)
+            self.fetch_stats(scrapper, resource)  # fewer qualifying clubs: stored
+            self.assertEqual(len(scrapper.store.read_json(resource)["teams"]), 2)
+            with patch("sys.stdout", io.StringIO()) as out:
+                self.fetch_stats(scrapper, resource)  # empty: kept
+            self.assertEqual(len(scrapper.store.read_json(resource)["teams"]), 2)
+            self.assertEqual(scrapper.kept_resources, [f"E2026/{resource}"])
+            self.assertIn("API answered 0 clubs, stored version has 2", out.getvalue())
+
+    def test_an_empty_first_stats_answer_is_stored(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            scrapper = self.stats_scrapper(Path(temporary_directory), [{"teams": []}])
+            resource = "v3/season_stats/teams_advanced_RS_perGame"
+            self.fetch_stats(scrapper, resource)
+            self.assertEqual(scrapper.store.read_json(resource), {"teams": []})
+            self.assertEqual(scrapper.kept_resources, [])
+
+    def test_other_resources_are_stored_even_when_smaller(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            answers = [self.teams("MAD", "BAR"), self.teams("MAD")]
+            scrapper = self.stats_scrapper(Path(temporary_directory), answers)
+            for _ in range(2):
+                scrapper.fetch_to_cache(source="v2.test", url="https://example.test/clubs",
+                                        resource="v2/clubs", force=True)
+            self.assertEqual(len(scrapper.store.read_json("v2/clubs")["teams"]), 1)
+            self.assertEqual(scrapper.kept_resources, [])
+
+    def test_in_one_run_a_worse_feed_is_kept_while_a_good_feed_updates(self):
+        games = [self.rs_game(1, True, utc_date="2026-11-30T18:00:00Z")]
+
+        class StatsClient(FakeClient):
+            def __init__(self, games, clubs):
+                super().__init__(games)
+                self.clubs = clubs
+
+            def get_json(self, url, params=None):
+                if "/statistics/teams/traditional" in url:
+                    self.calls.append((url, params))
+                    return reply(EuroScrapasTests.teams(*self.clubs), url)
+                if "/statistics/" in url:
+                    self.calls.append((url, params))
+                    return reply(EuroScrapasTests.teams("MAD", "BAR", "OLY"), url)
+                return super().get_json(url, params)
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            scrapper = self.make_scrapper(Path(temporary_directory), {"game_lists", "season_stats"})
+            scrapper.now_utc = datetime(2026, 12, 1, tzinfo=timezone.utc)
+            scrapper.client = StatsClient(games, ["MAD", "BAR", "OLY"])
+            with patch("sys.stdout", io.StringIO()):
+                scrapper.extract_season("E2026")
+            # Second run within the hot window: traditional answers stale, the rest fine.
+            scrapper.client = StatsClient(games, ["MAD"])
+            with patch("sys.stdout", io.StringIO()):
+                scrapper.extract_season("E2026")
+            kept = {resource.rsplit("/", 1)[1] for resource in scrapper.kept_resources}
+            self.assertEqual(kept, {f"teams_traditional_{phase}_accumulated"
+                                    for phase in ("all", "RS")})
+            self.assertEqual(len(scrapper.store.read_json(
+                "v3/season_stats/teams_traditional_RS_accumulated")["teams"]), 3)
+            # A smaller per-game answer is stored; other feeds update normally.
+            self.assertEqual(len(scrapper.store.read_json(
+                "v3/season_stats/teams_traditional_RS_perGame")["teams"]), 1)
 
     def test_old_unchanged_rounds_are_not_refetched_and_report_no_changes(self):
         games = [self.rs_game(1, True)]

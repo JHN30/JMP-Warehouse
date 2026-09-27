@@ -78,6 +78,32 @@ def season_stats_missing_query(table):
     )
 
 
+def season_stats_partial_query(table):
+    """Count accumulated feeds with rows that list fewer clubs than played in
+    that phase ('all': in any phase). The API sometimes answers a stale or
+    partial list on game days. Per-game feeds are skipped: they list only clubs
+    with more than half of the phase's games. Derived PS rows are not API feeds."""
+    return (
+        "WITH scope AS (SELECT %s::text AS competition_code, %s::text AS season_code), "
+        "played AS (SELECT g.phase_code, side.club_code "
+        f'FROM "{physical_name("games")}" AS g JOIN scope '
+        "ON g.competition_code = scope.competition_code AND g.season_code = scope.season_code "
+        "CROSS JOIN LATERAL (VALUES (g.local_club_code), (g.road_club_code)) AS side(club_code) "
+        "WHERE g.played IS TRUE AND side.club_code IS NOT NULL), "
+        "expected AS (SELECT phase_code, count(DISTINCT club_code) AS clubs FROM played "
+        "GROUP BY phase_code UNION ALL "
+        "SELECT 'all', count(DISTINCT club_code) FROM played), "
+        "feeds AS (SELECT row.phase_code, row.mode, count(DISTINCT row.club_code) AS clubs "
+        f'FROM "{physical_name(table)}" AS row JOIN scope '
+        "ON row.competition_code = scope.competition_code "
+        "AND row.season_code = scope.season_code "
+        "WHERE row.phase_code <> 'PS' AND row.mode = 'accumulated' "
+        "GROUP BY row.phase_code, row.mode) "
+        "SELECT count(*) FROM feeds JOIN expected ON expected.phase_code = feeds.phase_code "
+        "WHERE feeds.clubs < expected.clubs"
+    )
+
+
 def team_stats_points_mismatch_query():
     """Count clubs whose API accumulated points (own or opponents) differ from
     the totals summed from box scores in app_team_season_stats, per phase."""
@@ -270,6 +296,8 @@ def anomaly_checks(names):
         if {"games", name} <= names:
             checks.append(Check("season_stats_phase_mode_missing", name,
                                 season_stats_missing_query(name), "WARN"))
+            checks.append(Check("season_stats_feed_partial", name,
+                                season_stats_partial_query(name), "WARN"))
     if "people" in names:
         for name in ("play_by_play", "shots"):
             if name in names:

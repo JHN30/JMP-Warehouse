@@ -110,6 +110,7 @@ class StageFacts:
     """What the summary reports; None means the stage did not run."""
     changed: int | None = None
     failed_requests: int | None = None
+    kept: list = field(default_factory=list)
     load_lines: list = field(default_factory=list)
     publish_lines: list = field(default_factory=list)
 
@@ -153,6 +154,10 @@ def build_summary(season_code, result, facts, seconds, log_path, next_step=None)
     else:
         lines.append(f"Fetch:    {facts.changed} changed resource(s), "
                      f"{facts.failed_requests} failed request(s)")
+        if facts.kept:
+            lines.append(f"            {len(facts.kept)} stats feed(s) kept from an earlier fetch "
+                         "(the API answered worse; refresh again later):")
+            lines.extend(f"              {resource}" for resource in facts.kept)
     if not facts.load_lines:
         lines.append("Load:     not run")
     else:
@@ -307,8 +312,10 @@ def refresh(args, season_code, log, state_file, facts, stage_runner=run_stage,
         changed = [resource for resource in summary["changed_resources"]
                    if not resource.startswith("_catalog/")]
         facts.changed, facts.failed_requests = len(changed), summary["failed_requests"]
+        facts.kept = summary.get("kept_resources", [])
         log.line(f"Fetch: {len(changed)} changed resource(s), "
-                 f"{summary['failed_requests']} failed request(s).")
+                 f"{summary['failed_requests']} failed request(s), "
+                 f"{len(facts.kept)} stats feed(s) kept from an earlier fetch.")
         if changed:
             write_state(state_file, publish_pending=True, last_change_count=len(changed))
 

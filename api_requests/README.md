@@ -2,7 +2,7 @@
 
 This tool stores the exact API responses from the EuroLeague and EuroCup APIs in
 the **bronze** layer (`data/bronze/`, see [common/bronze.py](../common/bronze.py)). It uses v2
-and v3 as the primary sources, then adds the only data the legacy live API has
+and v3 as the primary sources, then adds the only data the live API has
 that v2/v3 lack: play-by-play and shot coordinates.
 
 ## Source policy
@@ -13,8 +13,8 @@ that v2/v3 lack: play-by-play and shot coordinates.
 | Per-game player/team statistics                                           | v2              | Fetch only after a game is played                                    |
 | Season people                                                             | v2              | Fetch every offset page, including coaches, officials and staff      |
 | Season player statistics and round standings                              | v3              | Fetch for played phases; standings are limited to group-phase rounds |
-| Play-by-play and shot coordinates                                         | legacy live API | Fetch only after a game is played and only from season 2007 onward   |
-| Boxscore, Evolution, Comparison, ShootingGraphic (optional)               | legacy live API | Not fetched by default: covered by v2, play-by-play or shots         |
+| Play-by-play and shot coordinates                                         | live API        | Fetch only after a game is played and only from season 2007 onward   |
+| Boxscore, Evolution, Comparison, ShootingGraphic (optional)               | live API        | Not fetched by default: covered by v2, play-by-play or shots         |
 
 v2/v3 cover every season from E2000 (checked on E2000, E2007 and E2015). The live
 API has no data before E2007. Comparing all 402 E2025 games showed that Boxscore
@@ -23,7 +23,7 @@ list), ShootingGraphic can be summed from shots, Evolution from play-by-play, an
 Comparison from v2 box scores and play-by-play. They can still be requested by
 name with `-ds`.
 
-The v2 game list replaces the legacy Header endpoint for bulk extraction. A
+The v2 game list replaces the live API's Header endpoint for bulk extraction. A
 future scheduled game is retained in v2/games.json, but its per-game stats and
 live detail are intentionally not requested until it is marked played.
 
@@ -58,10 +58,59 @@ live_comparison, live_scoring. They are archived in bronze only; the loader
 does not read them, since v2 game data, play-by-play and shots cover their
 content.
 
-The legacy names have precise meanings:
+The live dataset names map to live API endpoints:
 
 - shooting_charts uses Points, which provides shot attempts and coordinates.
 - live_scoring uses ShootingGraphic, which contains scoring-context summaries.
+
+## Endpoint reference
+
+Every endpoint the extractor downloads. `{c}` is the competition code (`E`
+EuroLeague, `U` EuroCup), `{s}` the season code (`E2025` = 2025-26), `{g}` a
+game code. v2/v3 are served by `https://api-live.euroleague.net`, the live API
+by `https://live.euroleague.net/api`. Bronze paths are relative to
+`data/bronze/<competition>/<season>/` (`_catalog/` for the season list).
+"Hot" is defined under [Refreshing](#refreshing). Loaded tables are the local
+PostgreSQL names (see [docs/DATA_DICTIONARY.md](../docs/DATA_DICTIONARY.md)).
+
+| `-ds` | Endpoint | Bronze resource | Contents | Seasons | Fetched | Loaded into |
+| --- | --- | --- | --- | --- | --- | --- |
+| seasons | `GET /v2/competitions/{c}/seasons` | `_catalog/v2/seasons` | Every season: name, dates, champion | all | Once; again with `--refresh-current` | `app_seasons` |
+| game_lists | `GET /v2/competitions/{c}/seasons/{s}/games` | `v2/games` | Every fixture, played or scheduled: phase, round, date, clubs, score, quarter scores, venue (with capacity and address), attendance, referees | E2000+ | Current season every run; completed seasons once | `app_games`, `app_game_officials`, `app_game_period_scores` |
+| clubs | `GET /v2/competitions/{c}/seasons/{s}/clubs` | `v2/clubs` | The season's clubs: names, TV code, crest, country, address, city, website, venue | E2000+ | Current season while hot and at least every 20 h; completed once | `app_clubs` |
+| season_people | `GET /v2/competitions/{c}/seasons/{s}/people?offset=&limit=1000` | `v2/season_people_pages/offset_NNNNNN` | Every person registered that season (players, coaches, staff, officials): profile (height, weight, birth date and country) and club/role registration | E2000+ | Like clubs; all pages each time | `app_people`, `app_registrations` |
+| rosters | `GET /v2/competitions/{c}/seasons/{s}/clubs/{club}/people` (per club) | `v2/rosters/{club}` | One club's registrations: dorsal, position, start and end dates | E2000+ | Like clubs | `app_people`, `app_registrations` |
+| rounds | `GET /v2/competitions/{c}/seasons/{s}/rounds` | `v2/rounds` | Rounds: phase, number, name, first and last game date | E2000+ | Like clubs | `app_rounds` |
+| standings | `GET /v3/competitions/{c}/seasons/{s}/rounds/{r}/{feed}`, feed = `basicstandings`, `calendarstandings`, `streaks`, `aheadbehind`, `margins` (per played group-phase round) | `v3/standings/{phase}_{round}_{feed}` | Standings after that round: position, record, points for/against, form, streaks, home/away, ahead/behind at checkpoints, margin bands | E2000+, group phases only | Once per round; hot rounds again; all with `--refresh-current` | 7 `app_standings_*` feed tables (local), `app_standings` |
+| season_stats | `GET /v3/competitions/{c}/statistics/players/{type}`, type = `traditional`, `advanced`, `scoring`, `misc`; params `SeasonMode=Single`, `SeasonCode`, `StatisticMode` (`accumulated`, `perGame`), `Statistic` (sort), `Limit=1000`, optional `PhaseTypeCode` | `v3/season_stats/players_{type}_{phase}_{mode}` | Player season statistics for `all` phases and each played phase, totals and per game | E2000+ | Once; `all` and hot phases again while a game is hot; all with `--refresh-current` | `app_season_stats_*` (plus derived `PS` rows) |
+| season_stats | `GET /v3/competitions/{c}/statistics/teams/{type}`, type = `traditional`, `advanced`, `opponentsTraditional`, `opponentsAdvanced`; same params without `Statistic` (the team endpoints reject it) | `v3/season_stats/teams_{feed}_{phase}_{mode}` (`opponentsTraditional` is stored as `opponents_traditional`) | Team season statistics, and what each team's opponents did against it, for `all` and each played phase, totals and per game | E2000+ | Like the player feeds | `etl_flat_season_team_stats_*` (local reference) |
+| game_stats | `GET /v2/competitions/{c}/seasons/{s}/games/{g}/stats` (per played game) | `v2/game_stats/{g}` | Box score: every player's line, the team row and totals, coach, starters, plus/minus | E2000+ | Once per played game | `app_game_player_stats`, `app_game_team_stats`, `etl_flat_game_stat_gaps` |
+| play_by_play | `GET /api/PlayByPlay?gamecode={g}&seasoncode={s}` (live API) | `live/{g}/play_by_play` | Every event by quarter: type, clock, player, club, running score | E2007+ | Once per played game | `app_play_by_play` |
+| shooting_charts | `GET /api/Points?gamecode={g}&seasoncode={s}` (live API) | `live/{g}/shooting_charts` | Every shot attempt, made or missed: coordinates, zone, fast-break, second-chance and points-off-turnover flags | E2007+ | Once per played game | `app_shots` |
+| live_boxscores, live_evolution, live_comparison, live_scoring (optional) | `GET /api/{Boxscore,Evolution,Comparison,ShootingGraphic}?gamecode={g}&seasoncode={s}` (live API) | `live/{g}/{dataset}` | Live box score, minute-by-minute score, starters/bench comparison, fast-break/second-chance/turnover points | E2007+ | Only when named with `-ds` | Not loaded (bronze only) |
+
+## Checked, not downloaded
+
+Surveyed on 2026-09-27. The API's Swagger pages list no paths, so these were
+found by probing. Each one repeats downloaded data or can be calculated from it:
+
+| Endpoint | Why it is not downloaded |
+| --- | --- |
+| v3 `statistics/players/leaders`, `statistics/teams/leaders` | Rankings of the player and team season statistics |
+| v2 and v3 `seasons/{s}/clubs/{club}/stats` | One club's season totals and averages: sums of the v2 game box scores, and in the team statistics feeds |
+| v2 `seasons/{s}/people/{p}/stats` | One player's game log: the same rows as the v2 game box scores |
+| v2 `seasons/{s}/games/{g}/teamsComparison` | Pre-game offense and defense ranks, calculated from box scores up to that game |
+| v3 `seasons/{s}/games/{g}/stats` | The same fields as v2 `games/{g}/stats` |
+| v2 single items: `seasons/{s}`, `games/{g}`, `rounds/{r}`, `clubs/{club}`, `people/{p}` | One row of a downloaded list, same fields |
+| v2 `venues`, `venues/{code}`, `seasons/{s}/venues` | Venue name, capacity, address and image, already inside every v2 game |
+| v2 `clubs`, `clubs/{club}` (catalogue) | The season clubs hold the same details; only fax and some social links are extra |
+| v2 `people/{p}` (catalogue) | Identical to the `person` object in the season people pages |
+| v2 `seasons/{s}/phases` | Phase start and end dates and order, calculated from rounds and games |
+| v2 `competitions`, `competitions/{c}` | Competition names only |
+| live API `Header` | Game header (stadium, coaches, fouls, timeouts, referees): in v2 games, box scores and play-by-play; empty before E2007 |
+| v1 `results`, `schedules`, `standings`, `teams`, `players`, `games` | The same data in the old XML format |
+
+`teams/scoring` and `teams/misc` do not exist (404).
 
 ## Running it
 
@@ -96,7 +145,7 @@ Request only selected data:
 python main.py -sc 2025 -ds game_lists game_stats play_by_play shooting_charts
 ```
 
-Use -api only to restrict the legacy supplemental requests:
+Use -api only to restrict the live API requests:
 
 ```powershell
 python main.py -sc 2025 -ds game_lists live_boxscores play_by_play -api Boxscore PlayByPlay
@@ -135,7 +184,7 @@ including every standings round.
 python main.py -sc 2026 --refresh-current
 ```
 
-Game-level v2 stats and legacy live responses are immutable cache entries: once
+Game-level v2 stats and live API responses are immutable cache entries: once
 saved for a played game, they are not requested again. That protects the shared
 upstream rate limit and preserves the source response originally received.
 
@@ -160,7 +209,7 @@ changed.
 
 ## Rate limiting and failures
 
-All requests across v2, v3 and the legacy host share one client. The default
+All requests across v2, v3 and the live host share one client. The default
 interval is 2.5 seconds. HTTP 429
 responses honor the server's Retry-After value; transient network and 5xx
 errors are retried twice.

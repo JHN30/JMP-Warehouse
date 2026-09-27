@@ -41,7 +41,7 @@ left. Both commands are safe to rerun; they report that nothing is left.
   below completes that table's primary key. A `game_code` or `club_code` by
   itself is not globally unique. Keep codes such as `person_code` as text so
   leading zeroes are not lost.
-- `side` is `local` or `road`. In the legacy live feed, fields ending in `A`
+- `side` is `local` or `road`. In the live API feeds, fields ending in `A`
   or `B` retain the source's labels; join to a game before assuming a team.
 - Live tables (`play_by_play`, `shots`) carry two player columns.
   `player_code` is the id exactly as the live API sends it (padding trimmed): `P` + person code, such as `P014102` or `PKLT`, or a
@@ -118,13 +118,13 @@ behind closed doors (COVID period)" between March 2020 and June 2022, otherwise
 
 ## Live game detail
 
-Play-by-play and shots come from the legacy live API (from E2007). They
+Play-by-play and shots come from the live API (from E2007). They
 supplement, and sometimes overlap, v2/v3. Older seasons may not have live-feed
 data. A missing live row should not automatically be interpreted as a
 zero-valued performance. They are stored as `app_play_by_play` and `app_shots`
 and published to Neon (see below).
 
-The other legacy live feeds (Boxscore, Evolution, Comparison, ShootingGraphic)
+The other live API feeds (Boxscore, Evolution, Comparison, ShootingGraphic)
 are not loaded: v2 game data, play-by-play and shots cover their content. Their
 tables (`etl_flat_live_*`) were dropped in feature 23; `api_requests` can still
 archive the feeds in bronze when named with `-ds`.
@@ -207,6 +207,48 @@ scoring), and is built from the box scores (`app_game_player_stats` source):
 | `season_stats_advanced`    | Efficiency, usage-related ratios, shooting efficiency, rebound/assist ratios, and possessions.   |
 | `season_stats_scoring`     | Shot-attempt shares and the makeup of a player's points.                                         |
 | `season_stats_misc`        | Games, wins/losses, minutes, double-doubles, and triple-doubles.                                 |
+
+## v3 season team statistics
+
+Four local tables, one per API team feed (feature 24), stored as
+`etl_flat_season_team_stats_<feed>` and not published to Neon. They are the
+API's own team numbers, kept as a reference to check the numbers this
+pipeline calculates from box scores. Extra key `phase_code`, `mode`,
+`club_code`: one club in one feed, phase (`all` or a phase of that season;
+no derived `PS`) and mode (`accumulated` totals or `perGame` averages).
+
+| Table | Feed | Columns |
+| --- | --- | --- |
+| `season_team_stats_traditional` | `teams/traditional` | Games, minutes, points, 2P/3P/FT made, attempted and %, offensive/defensive/total rebounds, assists, steals, turnovers, blocks and blocks against, fouls committed and drawn, PIR |
+| `season_team_stats_opponents_traditional` | `teams/opponentsTraditional` | The same columns for what the club's **opponents** did against it (points = points allowed) |
+| `season_team_stats_advanced` | `teams/advanced` | Games, eFG%, TS%, offensive/defensive/total rebound %, assist/turnover ratio, assist ratio, turnover ratio, 2P and 3P attempt rates, FT rate, share of points from 2P/3P/FT |
+| `season_team_stats_opponents_advanced` | `teams/opponentsAdvanced` | The same columns for the club's opponents |
+
+- Every table also has `club_name`, `club_tv_codes`, `club_image_url` and
+  `team_ranking` (the club's position in the source feed).
+- Percentages are percentage points (`51.7` = 51.7%). A source `NaN%` is `NULL`.
+- There are no possessions, pace or offensive/defensive ratings in these feeds;
+  those are calculated in later features.
+- The quality check `team_stats_points_mismatch` (WARN) compares each club's
+  `accumulated` points per phase, own and opponents, with
+  `app_team_season_stats` (summed from box scores). It runs with the aggregate
+  tables. `season_stats_phase_mode_missing` flags an empty feed, which the API
+  sometimes returns for the current season (for example E2026 `RS` on
+  2026-09-27 while games were played).
+- Loaded 2026-09-27 for E2000-E2026: all 1,092 club/phase rows present in both
+  the API feeds and `app_team_season_stats` have equal own and opponents points.
+- **The opponents feeds miss clubs in some phases** (the own feeds are complete
+  and match the box scores):
+  - E2000 `PO` `accumulated`: 8 of the 16 clubs that played playoff games.
+  - E2008-E2015 `all` `accumulated`: only the 16 Top 16 clubs, not all 24 (the
+    `perGame` feed has all 24).
+  - E2026 `RS` on 2026-09-27: `opponents_traditional` 14 of 20 clubs, with the
+    own `accumulated` feeds empty. A current-season feed can be stale or
+    partial on game days (findings ledger F-01); a partial feed is not flagged
+    by the quality checks yet.
+
+  A missing row is absent, not zero. The points cross-check compares only clubs
+  present on both sides.
 
 ## v3 standings snapshots
 

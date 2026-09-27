@@ -95,6 +95,10 @@ class FlatSeason:
             if row["category"] == name.removeprefix("season_stats_"):
                 yield row
             return
+        if name.startswith("season_team_stats_"):
+            if row["feed"] == name.removeprefix("season_team_stats_"):
+                yield row
+            return
         if name.startswith("standings_") and name not in (
             "standings_calendar_streaks", "standings_basic_form"
         ):

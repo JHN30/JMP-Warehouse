@@ -209,6 +209,42 @@ class RawEtlTests(unittest.TestCase):
         self.assertEqual([(row["category"], row["phase_code"], row["mode"]) for row in rows],
                          [("misc", "TS", "perGame")])
 
+    def test_team_stats_feeds_load_into_their_own_tables(self):
+        team = {"code": "MAD", "tvCodes": "RMB", "name": "Real Madrid", "imageUrl": "crest.png"}
+        self.write("v3/season_stats/teams_traditional_RS_accumulated.json", {"total": 1, "teams": [
+            {"teamRanking": 1, "team": team, "gamesPlayed": 38.0, "pointsScored": 3100.0,
+             "twoPointersPercentage": "55.1%", "freeThrowsPercentage": "NaN%"}]})
+        self.write("v3/season_stats/teams_opponents_traditional_RS_accumulated.json", {"teams": [
+            {"teamRanking": 3, "team": team, "pointsScored": 2900.0}]})
+        self.write("v3/season_stats/teams_opponents_advanced_all_perGame.json", {"teams": [
+            {"teamRanking": 2, "team": team, "trueShootingPercentage": "59.3%"}]})
+        self.write("v3/season_stats/players_traditional_RS_accumulated.json", {"players": [
+            {"player": {"code": "000123", "team": {"code": "MAD"}}, "pointsScored": 100}]})
+        season = FlatSeason(self.root, "euroleague", "E2025")
+
+        own = list(season.rows("season_team_stats_traditional"))
+        self.assertEqual(len(own), 1)
+        self.assertEqual((own[0]["phase_code"], own[0]["mode"], own[0]["club_code"],
+                          own[0]["club_tv_codes"], own[0]["team_ranking"]),
+                         ("RS", "accumulated", "MAD", "RMB", 1))
+        self.assertEqual(own[0]["points_scored"], Decimal("3100.0"))
+        self.assertEqual(own[0]["two_pointers_percentage"], Decimal("55.1"))
+        self.assertIsNone(own[0]["free_throws_percentage"])  # "NaN%": undefined
+        opponents = list(season.rows("season_team_stats_opponents_traditional"))
+        self.assertEqual([row["points_scored"] for row in opponents], [Decimal("2900.0")])
+        advanced = list(season.rows("season_team_stats_opponents_advanced"))
+        self.assertEqual([(row["phase_code"], row["mode"], row["true_shooting_percentage"])
+                          for row in advanced], [("all", "perGame", Decimal("59.3"))])
+        self.assertEqual(list(season.rows("season_team_stats_advanced")), [])
+        # The player feeds ignore the team files next to them.
+        self.assertEqual([row["person_key"] for row in season.rows("season_stats_traditional")],
+                         ["000123"])
+
+    def test_unexpected_team_stats_filename_is_refused(self):
+        self.write("v3/season_stats/teams_scoring_RS_perGame.json", {"teams": []})
+        with self.assertRaisesRegex(ValueError, "Unexpected team stats filename"):
+            list(self.season().rows("season_team_stats"))
+
     def test_postseason_rows_are_derived_from_box_scores(self):
         games = self.store.read_json("v2/games")
         games["data"].append({"gameCode": 3, "played": True, "utcDate": "2026-05-01T18:00:00Z",

@@ -74,10 +74,11 @@ the default. `--data-root` and `--config` override the default paths.
 | v2 seasons, clubs, people/rosters, rounds | `seasons`, `clubs`, `people`, `registrations`, `rounds` |
 | v2 fixtures and game details | `games`, `game_officials`, `game_period_scores`, `game_player_stats`, `game_team_stats` |
 | v3 season statistics | `season_stats_traditional`, `season_stats_advanced`, `season_stats_scoring`, `season_stats_misc` |
+| v3 team season statistics (local reference) | `season_team_stats_traditional`, `season_team_stats_advanced`, `season_team_stats_opponents_traditional`, `season_team_stats_opponents_advanced` |
 | v3 standings | `standings_basicstandings`, `standings_calendarstandings`, `standings_streaks`, `standings_aheadbehind`, `standings_margins`, `standings_calendar_streaks`, `standings_basic_form` |
 | Live play and shooting feeds | `play_by_play`, `shots` |
 
-The other legacy live feeds (Boxscore, Evolution, Comparison,
+The other live API feeds (Boxscore, Evolution, Comparison,
 ShootingGraphic) are not loaded; v2 game data, play-by-play and shots cover
 their content.
 

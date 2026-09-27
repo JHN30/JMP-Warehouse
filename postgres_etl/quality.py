@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from time import monotonic
 
 from aggregates import COVERAGE_ITEM_KEYS, MEASURE_COLUMNS
-from flat_schema import TABLES, physical_name
+from flat_schema import TABLES, TEAM_STATS_TABLES, physical_name
 from flat_transform import FlatSeason
 from shared import COMPETITION_CODES, connect, elapsed
 
@@ -15,6 +15,9 @@ class Check:
     table: str
     query: str
     severity: str = "ERROR"
+    # Other registered tables the query reads; the check is skipped when one
+    # of them does not exist yet.
+    requires: tuple[str, ...] = ()
 
 
 SEASON_STATS_TABLES = ("season_stats_traditional", "season_stats_advanced",
@@ -72,6 +75,25 @@ def season_stats_missing_query(table):
         "WHERE row.competition_code = expected.competition_code "
         "AND row.season_code = expected.season_code "
         "AND row.phase_code = expected.phase_code AND row.mode = expected.mode)"
+    )
+
+
+def team_stats_points_mismatch_query():
+    """Count clubs whose API accumulated points (own or opponents) differ from
+    the totals summed from box scores in app_team_season_stats, per phase."""
+    def feed_join(alias, name):
+        return (f'JOIN "{physical_name(name)}" AS {alias} '
+                f"ON {alias}.competition_code = agg.competition_code "
+                f"AND {alias}.season_code = agg.season_code "
+                f"AND {alias}.phase_code = agg.phase_code "
+                f"AND {alias}.club_code = agg.club_code AND {alias}.mode = 'accumulated' ")
+    return (
+        f'SELECT count(*) FROM "{physical_name("app_team_season_stats")}" AS agg '
+        + feed_join("own", "season_team_stats_traditional")
+        + feed_join("opp", "season_team_stats_opponents_traditional")
+        + "WHERE agg.competition_code = %s AND agg.season_code = %s "
+        "AND (own.points_scored IS DISTINCT FROM agg.own_points "
+        "OR opp.points_scored IS DISTINCT FROM agg.opp_points)"
     )
 
 
@@ -205,6 +227,12 @@ def checks_for_tables(names):
 def anomaly_checks(names):
     """Warnings that keep source gaps visible without blocking a publish."""
     checks = []
+    if "app_team_season_stats" in names:
+        # Runs with the aggregates, after they are rebuilt from the box scores.
+        checks.append(Check("team_stats_points_mismatch", "season_team_stats_traditional",
+                            team_stats_points_mismatch_query(), "WARN",
+                            requires=("season_team_stats_traditional",
+                                      "season_team_stats_opponents_traditional")))
     if "games" in names:
         checks.append(Check("attendance_not_recorded", "games", scoped_count(
             "games", "row.audience_note IS NOT NULL"), "WARN"))
@@ -238,7 +266,7 @@ def anomaly_checks(names):
         if name in names:
             checks.append(Check("fallback_person_key", name, scoped_count(
                 name, "row.person_key LIKE 'unknown-%%'"), "WARN"))
-    for name in SEASON_STATS_TABLES:
+    for name in (*SEASON_STATS_TABLES, *TEAM_STATS_TABLES):
         if {"games", name} <= names:
             checks.append(Check("season_stats_phase_mode_missing", name,
                                 season_stats_missing_query(name), "WARN"))
@@ -263,6 +291,11 @@ def anomaly_checks(names):
     return checks
 
 
+def _exists(cursor, name):
+    cursor.execute("SELECT to_regclass(%s)", (physical_name(name),))
+    return cursor.fetchone()[0] is not None
+
+
 def check_season(connection, competition, season_code, names):
     """Return counts and actionable issues without modifying PostgreSQL."""
     unknown = set(names) - set(TABLES)
@@ -274,8 +307,7 @@ def check_season(connection, competition, season_code, names):
     issues = []
     with connection.cursor() as cursor:
         for name in names:
-            cursor.execute("SELECT to_regclass(%s)", (physical_name(name),))
-            if cursor.fetchone()[0] is None:
+            if not _exists(cursor, name):
                 issues.append(Issue("ERROR", "missing_table", name, 1))
                 continue
             cursor.execute(scoped_count(name), scope)
@@ -284,6 +316,8 @@ def check_season(connection, competition, season_code, names):
             if count == 0 and name not in EMPTY_IS_NORMAL:
                 issues.append(Issue("WARN", "empty_table", name, 0))
         for check in checks_for_tables(counts):
+            if any(not _exists(cursor, name) for name in check.requires):
+                continue
             cursor.execute(check.query, scope)
             count = cursor.fetchone()[0]
             if count:

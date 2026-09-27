@@ -411,7 +411,8 @@ class RawSeason:
             "game_player_stats": "v2/game_stats/*",
             "game_team_stats": "v2/game_stats/*",
             "game_stat_gaps": "v2/game_stats/*",
-            "season_player_stats": "v3/season_stats/*",
+            "season_player_stats": "v3/season_stats/players_*",
+            "season_team_stats": "v3/season_stats/teams_*",
             "standings": "v3/standings/*",
             "standings_page": "v3/standings/*",
         }
@@ -596,6 +597,20 @@ class RawSeason:
                                person_key=person_key or f"unknown-{ordinal}",
                                club_code=team.get("code"), payload=item)
             yield from self._postseason_rows(identities, clubs)
+            return
+
+        if table == "season_team_stats":
+            pattern = re.compile(
+                r"teams_((?:opponents_)?(?:traditional|advanced))_([A-Za-z0-9]+)_(perGame|accumulated)\.json$"
+            )
+            for path in files:
+                match = pattern.fullmatch(path.name)
+                if not match:
+                    raise ValueError(f"Unexpected team stats filename: {path}")
+                feed, phase, mode = match.groups()
+                for item in read_json(path).get("teams") or []:
+                    yield dict(scope, feed=feed, phase_code=phase, mode=mode,
+                               club_code=code(nested(item, "team", "code")), payload=item)
             return
 
         if table == "standings_page":

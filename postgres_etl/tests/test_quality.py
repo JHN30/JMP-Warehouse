@@ -13,11 +13,13 @@ import main as etl_main
 
 
 class FakeCursor:
-    def __init__(self, missing=(), bad_scores=0):
+    def __init__(self, missing=(), bad_scores=0, mismatches=0):
         self.missing = set(missing)
         self.bad_scores = bad_scores
+        self.mismatches = mismatches
         self.query = ""
         self.params = ()
+        self.queries = []
 
     def __enter__(self):
         return self
@@ -28,10 +30,13 @@ class FakeCursor:
     def execute(self, query, params):
         self.query = query
         self.params = params
+        self.queries.append(query)
 
     def fetchone(self):
         if self.query == "SELECT to_regclass(%s)":
             return (None if self.params[0] in self.missing else self.params[0],)
+        if "agg.own_points" in self.query:
+            return (self.mismatches,)
         if "row.played IS TRUE AND (row.local_score IS NULL" in self.query:
             return (self.bad_scores,)
         if 'FROM "app_games" AS row' in self.query and "AND (" not in self.query:
@@ -50,6 +55,36 @@ class FakeConnection:
 
 
 class QualityRulesTests(unittest.TestCase):
+    def test_missing_team_stats_feeds_are_warned_when_games_are_checked(self):
+        checks = [(check.code, check.table, check.severity) for check in
+                  checks_for_tables(["games", "season_team_stats_opponents_advanced"])]
+        self.assertIn(("season_stats_phase_mode_missing", "season_team_stats_opponents_advanced",
+                       "WARN"), checks)
+
+    def test_team_points_are_cross_checked_with_the_aggregates(self):
+        checks = [check for check in checks_for_tables(["app_team_season_stats"])
+                  if check.code == "team_stats_points_mismatch"]
+        self.assertEqual(len(checks), 1)
+        check = checks[0]
+        self.assertEqual((check.table, check.severity), ("season_team_stats_traditional", "WARN"))
+        self.assertEqual(check.requires, ("season_team_stats_traditional",
+                                          "season_team_stats_opponents_traditional"))
+        self.assertIn('"etl_flat_season_team_stats_opponents_traditional"', check.query)
+        self.assertIn("mode = 'accumulated'", check.query)
+        self.assertEqual(check.query.count("%s"), 2)
+
+    def test_points_mismatch_is_a_warning_and_skipped_without_the_team_tables(self):
+        report = check_season(FakeConnection(mismatches=3), "euroleague", "E2025",
+                              ["app_team_season_stats"])
+        self.assertIn(("WARN", "team_stats_points_mismatch", 3),
+                      {(i.severity, i.code, i.count) for i in report.issues})
+        self.assertTrue(report.passed)
+        connection = FakeConnection(mismatches=3,
+                                    missing={"etl_flat_season_team_stats_opponents_traditional"})
+        report = check_season(connection, "euroleague", "E2025", ["app_team_season_stats"])
+        self.assertNotIn("team_stats_points_mismatch", {i.code for i in report.issues})
+        self.assertFalse([q for q in connection.fake_cursor.queries if "agg.own_points" in q])
+
     def test_missing_season_stats_feeds_are_warned_when_games_are_checked(self):
         checks = [check for check in checks_for_tables(["games", "season_stats_misc"])
                   if check.code == "season_stats_phase_mode_missing"]

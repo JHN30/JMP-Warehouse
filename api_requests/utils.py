@@ -44,7 +44,7 @@ class ConfigParser(ArgumentParser):
         "play_by_play",
         "shooting_charts",
     ]
-    # Legacy live endpoints whose content is covered by v2 game data, play-by-play
+    # Live API endpoints whose content is covered by v2 game data, play-by-play
     # or shots (verified on every E2025 game). Requested only when named with -ds.
     OPTIONAL_DATASETS = [
         "live_boxscores",
@@ -117,7 +117,7 @@ class ConfigParser(ArgumentParser):
             choices=self.valid_datasets,
             help=(
                 "Datasets to cache. The default 'all' includes v2/v3 primary "
-                "data plus live play-by-play and shots. The redundant legacy "
+                "data plus live play-by-play and shots. The redundant live API "
                 "live_boxscores, live_evolution, live_comparison and "
                 "live_scoring are fetched only when named explicitly and are "
                 "archived in bronze only (not loaded into PostgreSQL)."
@@ -257,7 +257,7 @@ class ConfigParser(ArgumentParser):
 
     @property
     def live_endpoints(self):
-        """Legacy live endpoints that will really be called: dataset selected and API allowed."""
+        """Live API endpoints that will really be called: dataset selected and API allowed."""
         return [
             api for dataset, api in self.LIVE_DATASET_TO_API.items()
             if dataset in self.datasets and api in self.euroleague_apis

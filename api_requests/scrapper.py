@@ -25,11 +25,17 @@ class EuroScrapas:
     # Just under a day, so a nightly run always re-checks season-level data.
     SEASON_LEVEL_REFRESH_HOURS = 20
 
+    # name: (entity, statistic type, sort statistic). The team endpoints reject
+    # the player sort statistics (400) and have no scoring or misc feed (404).
     V3_STATISTIC_SPECS = {
         "players_traditional": ("players", "traditional", "timePlayed"),
         "players_advanced": ("players", "advanced", "timePlayed"),
         "players_scoring": ("players", "scoring", "gamesPlayed"),
         "players_misc": ("players", "misc", "gamesPlayed"),
+        "teams_traditional": ("teams", "traditional", None),
+        "teams_advanced": ("teams", "advanced", None),
+        "teams_opponents_traditional": ("teams", "opponentsTraditional", None),
+        "teams_opponents_advanced": ("teams", "opponentsAdvanced", None),
     }
     V3_STATISTIC_MODES = ("perGame", "accumulated")
     STANDING_TYPES = (
@@ -398,6 +404,9 @@ class EuroScrapas:
                         "StatisticMode": statistic_mode,
                         "StatisticSortMode": statistic_mode,
                     }
+                    if sort_statistic is None:
+                        for sort_param in ("Statistic", "SortDirection", "StatisticSortMode"):
+                            del params[sort_param]
                     if phase_code != "all":
                         params["PhaseTypeCode"] = phase_code
                     phase_force = mutable_force or (

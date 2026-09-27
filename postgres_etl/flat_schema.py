@@ -343,6 +343,40 @@ for category, metrics in PLAYER_METRICS.items():
         indexes=(("person_key",), ("club_code",)),
     )
 
+# v3 team season statistics: one row per club in each feed, phase and mode. The
+# opponents feeds hold what a club's opponents did against it. Reference
+# numbers, local only.
+TEAM_STATS_IDENTITY = (
+    f("phase_code", "TEXT NOT NULL", "@phase_code"),
+    f("mode", "TEXT NOT NULL", "@mode"),
+    f("club_code", "TEXT NOT NULL", "@club_code"),
+    f("club_name", "TEXT", "team.name"),
+    f("club_tv_codes", "TEXT", "team.tvCodes"),
+    f("club_image_url", "TEXT", "team.imageUrl"),
+    f("team_ranking", "INTEGER", "teamRanking"),
+)
+TEAM_METRICS = {
+    "traditional": "gamesPlayed minutesPlayed pointsScored twoPointersMade "
+                   "twoPointersAttempted twoPointersPercentage threePointersMade "
+                   "threePointersAttempted threePointersPercentage freeThrowsMade "
+                   "freeThrowsAttempted freeThrowsPercentage offensiveRebounds "
+                   "defensiveRebounds totalRebounds assists steals turnovers blocks "
+                   "blocksAgainst foulsCommited foulsDrawn pir",
+    "advanced": "gamesPlayed effectiveFieldGoalPercentage trueShootingPercentage "
+                "offensiveReboundsPercentage defensiveReboundsPercentage "
+                "reboundsPercentage assistsToTurnoversRatio assistsRatio turnoversRatio "
+                "twoPointRate threePointRate freeThrowsRate "
+                "pointsFromTwoPointersPercentage pointsFromThreePointersPercentage "
+                "pointsFromFreeThrowsPercentage",
+}
+TEAM_STATS_TABLES = tuple(f"season_team_stats_{prefix}{category}"
+                          for prefix in ("", "opponents_") for category in TEAM_METRICS)
+for name in TEAM_STATS_TABLES:
+    TABLES[name] = table(
+        "season_team_stats", ("phase_code", "mode", "club_code"),
+        TEAM_STATS_IDENTITY, keys(TEAM_METRICS[name.rsplit("_", 1)[1]], "NUMERIC"),
+    )
+
 STANDINGS_METRICS = {
     "basicstandings": (
         keys("winPercentage", "NUMERIC"),

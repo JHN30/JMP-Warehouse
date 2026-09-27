@@ -369,6 +369,34 @@ class EuroScrapasTests(unittest.TestCase):
             self.assertTrue(stat_calls)
             self.assertIn("E2026/v2/games", scrapper.changed_resources)
 
+    def test_team_stats_are_fetched_per_phase_and_mode_without_a_sort_statistic(self):
+        games = [self.rs_game(1, True)]
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            scrapper = self.make_scrapper(
+                Path(temporary_directory),
+                {"game_lists", "season_stats"},
+            )
+            scrapper.now_utc = datetime(2026, 12, 1, tzinfo=timezone.utc)
+            fake_client = FakeClient(games)
+            scrapper.client = fake_client
+            scrapper.extract_season("E2026")
+
+            team_calls = [call for call in fake_client.calls if "/statistics/teams/" in call[0]]
+            player_calls = [call for call in fake_client.calls if "/statistics/players/" in call[0]]
+            # 4 feeds x 2 modes x (all, RS)
+            self.assertEqual(len(team_calls), 16)
+            self.assertEqual(
+                {url.rsplit("/", 1)[1] for url, _ in team_calls},
+                {"traditional", "advanced", "opponentsTraditional", "opponentsAdvanced"},
+            )
+            self.assertTrue(all("Statistic" not in params and "StatisticSortMode" not in params
+                                for _, params in team_calls))
+            self.assertEqual({params.get("PhaseTypeCode") for _, params in team_calls}, {None, "RS"})
+            self.assertTrue(all(params["Statistic"] for _, params in player_calls))
+            self.assertTrue(scrapper.store.exists(
+                "v3/season_stats/teams_opponents_advanced_RS_accumulated"))
+
     def test_old_unchanged_rounds_are_not_refetched_and_report_no_changes(self):
         games = [self.rs_game(1, True)]
 

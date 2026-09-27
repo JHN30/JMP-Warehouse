@@ -55,7 +55,7 @@ Or without typing: **Terminal > Run Task... > "Refresh current season"** (or
 | [neon_publish/](neon_publish/README.md) | **Publish.** Replaces seasons of the 25 `app_*` web-app tables in Neon (play-by-play and shots game by game), one transaction per season. |
 | [tables_to_csv/](tables_to_csv/README.md) | **Export.** Local PostgreSQL tables → one CSV per season and table (e.g. for MSSQL analysis). |
 | `common/` | Code shared by all stages: the bronze store, database connection, season-code helpers. |
-| [docs/](docs/) | [Data dictionary](docs/DATA_DICTIONARY.md), [pipeline plan and status](docs/PIPELINE-ANALYSIS.md), and the original [handoff](docs/PIPELINE-HANDOFF.md) from the web-app repo. |
+| [docs/](docs/) | [Data dictionary](docs/DATA_DICTIONARY.md): every table, its key, columns and rules. |
 | `data/` | Local data, not code (see below). |
 | `logs/` | One folder per tool with a log file per run. |
 | [old/](old/README.md) | Code, logs and data retired in the 2026-09-24 cleanup, kept until you decide what to keep. Nothing reads it. |

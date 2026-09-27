@@ -376,8 +376,8 @@ metrics, source filters and tie-break order, so rows are self-contained
 
 ### `app_team_season_stats`
 
-Team-season totals, own and opponent, mirroring the Express
-`/teams/:clubCode/team-stats?phase=` route. Unlike the records tables above,
+Team-season totals, own and opponent, served by the Express
+`/teams/:clubCode/team-stats?phase=` route, which reads this table. Unlike the records tables above,
 **this table IS season-scoped** (one row set per season, like every other
 table) and fits the normal per-season load and Neon publish path.
 
@@ -400,8 +400,8 @@ table) and fits the normal per-season load and Neon publish path.
 
 ### `app_coverage_seasons` and `app_coverage_games`
 
-Data-coverage counts, mirroring the Express `/coverage` route (with and
-without `?gameCode=`). Both **are season-scoped**. `app_coverage_seasons` has
+Data-coverage counts, served by the Express `/coverage` route (with and
+without `?gameCode=`), which reads these tables. Both **are season-scoped**. `app_coverage_seasons` has
 one row per season; `app_coverage_games` has one row per game (played or
 not).
 
@@ -438,10 +438,8 @@ Express quirk, replicated as-is, not a design choice made here.
   `app_coverage_seasons` row. This mismatched scoping is Express's existing
   behavior, replicated exactly.
 - **Approved change from Express:** `shotLocations` and `playByPlay` are
-  computed from this pipeline's own `app_shots`/`app_play_by_play` data.
-  Express currently hardcodes both as `unavailable` always (stale — it
-  hasn't been updated since feature 21 added that data). Fixing that on the
-  Express side is separate, coordinated, later work.
+  computed from this pipeline's own `app_shots`/`app_play_by_play` data. Before
+  Express read these tables, it hardcoded both as `unavailable`.
 
 ### `app_postseason_series`
 

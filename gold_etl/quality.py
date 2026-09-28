@@ -3,9 +3,10 @@
 from gold_etl.schema import TABLES, columns, count_sql, scope_predicate
 from gold_etl.postseason import TABLES as PS_TABLES, _dict_rows, read_rows as read_postseason_rows
 from gold_etl.standings import KEY as STANDINGS_KEY, read_rows as read_standings_rows
-from gold_etl.schema import AGGREGATE_NAMES, GOLD_TABLES, RECORDS_TABLES
+from gold_etl.schema import AGGREGATE_NAMES, GOLD_TABLES, IDENTITY_TABLES, RECORDS_TABLES
 from gold_etl.loader import read_aggregate_rows
 from gold_etl.records import read_rows as read_record_rows
+from gold_etl.identity import read_rows as read_identity_rows
 from gold_etl.series import read_rows as read_series_rows
 
 
@@ -135,6 +136,28 @@ def check_records_scope(cursor, name, competition_code):
                 f"({len(actual)} Gold, {len(expected)} expected)"]
     if by_key(actual) != by_key(expected):
         return [f"gold.{name}: record values differ from Silver"]
+    return []
+
+
+def check_identity_scope(cursor, name, competition_code):
+    """Compare every identity key and value with complete Silver history."""
+    if name not in IDENTITY_TABLES:
+        raise ValueError(f"Unknown Gold identity table: {name}")
+    cursor.execute("SELECT to_regclass(%s)", (f"gold.{name}",))
+    if cursor.fetchone()[0] is None:
+        return [f"gold.{name} is missing"]
+    expected = read_identity_rows(cursor, name, competition_code)
+    fields = ", ".join(f'"{field}"' for field in columns(name))
+    cursor.execute(f'SELECT {fields} FROM gold."{name}" WHERE competition_code = %s',
+                   (competition_code,))
+    actual = _dict_rows(cursor)
+    key = GOLD_TABLES[name].key
+    by_key = lambda rows: {tuple(row[field] for field in key): row for row in rows}
+    if len(actual) != len(expected) or by_key(actual).keys() != by_key(expected).keys():
+        return [f"gold.{name}: keys differ from Silver derivation "
+                f"({len(actual)} Gold, {len(expected)} expected)"]
+    if by_key(actual) != by_key(expected):
+        return [f"gold.{name}: identity values differ from Silver"]
     return []
 
 

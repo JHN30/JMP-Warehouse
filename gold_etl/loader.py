@@ -1,12 +1,13 @@
 """Replace one Gold table/season slice using registered Silver source columns."""
 
-from gold_etl.schema import (AGGREGATE_NAMES, RECORDS_TABLES, TABLES, columns,
+from gold_etl.schema import (AGGREGATE_NAMES, IDENTITY_TABLES, RECORDS_TABLES, TABLES, columns,
                              create_table_sql, scope_predicate)
 from gold_etl.postseason import TABLES as PS_TABLES, read_rows as read_postseason_rows
 from gold_etl.standings import read_rows as read_standings_rows
 from gold_etl.team_season import read_rows as read_team_rows
 from gold_etl.coverage import read_rows as read_coverage_rows
 from gold_etl.records import read_rows as read_record_rows
+from gold_etl.identity import read_rows as read_identity_rows
 from gold_etl.series import read_rows as read_series_rows
 
 
@@ -135,6 +136,29 @@ def replace_records_scope(connection, name, competition_code):
                 fields = columns(name)
                 names = ", ".join(f'"{field}"' for field in fields)
                 values = [tuple(row[field] for field in fields) for row in rows]
+                execute_values(cursor, f'INSERT INTO gold."{name}" ({names}) VALUES %s',
+                               values, page_size=1000)
+            return len(rows)
+
+
+def replace_identity_scope(connection, name, competition_code):
+    """Replace one competition's full-history identities atomically."""
+    if name not in IDENTITY_TABLES:
+        raise ValueError(f"Unknown Gold identity table: {name}")
+    from psycopg2.extras import Json, execute_values
+
+    with connection:
+        with connection.cursor() as cursor:
+            rows = read_identity_rows(cursor, name, competition_code)
+            cursor.execute("CREATE SCHEMA IF NOT EXISTS gold")
+            cursor.execute(create_table_sql(name))
+            cursor.execute(f'DELETE FROM gold."{name}" WHERE competition_code = %s',
+                           (competition_code,))
+            if rows:
+                fields = columns(name)
+                names = ", ".join(f'"{field}"' for field in fields)
+                values = [tuple(Json(row[field]) if field == "clubs" else row[field]
+                                for field in fields) for row in rows]
                 execute_values(cursor, f'INSERT INTO gold."{name}" ({names}) VALUES %s',
                                values, page_size=1000)
             return len(rows)

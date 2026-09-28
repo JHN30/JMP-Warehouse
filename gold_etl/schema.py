@@ -140,15 +140,47 @@ SERIES_TABLE = Table("postseason_series",
         Field("games", "JSONB NOT NULL", "games"),
     ),
 )
+IDENTITY_TABLES = {
+    "app_players": Table("players", ("competition_code", "person_code"), (
+        Field("competition_code", "TEXT NOT NULL", "silver"),
+        Field("person_code", "TEXT NOT NULL", "people"),
+        Field("name", "TEXT", "people"),
+        Field("country_code", "TEXT", "people"),
+        Field("country_name", "TEXT", "people"),
+        Field("height_cm", "INTEGER", "people"),
+        Field("weight_kg", "INTEGER", "people"),
+        Field("birth_at", "TIMESTAMP", "people"),
+        Field("birth_country_code", "TEXT", "people"),
+        Field("birth_country_name", "TEXT", "people"),
+        Field("position", "INTEGER", "registrations"),
+        Field("position_name", "TEXT", "registrations"),
+        Field("first_season_code", "TEXT NOT NULL", "registrations"),
+        Field("last_season_code", "TEXT NOT NULL", "registrations"),
+        Field("seasons_played", "INTEGER NOT NULL", "registrations"),
+        Field("clubs", "JSONB NOT NULL", "registrations"),
+    )),
+    "app_club_identities": Table("club_identities", ("competition_code", "club_code"), (
+        Field("competition_code", "TEXT NOT NULL", "silver"),
+        Field("club_code", "TEXT NOT NULL", "clubs"),
+        Field("name", "TEXT", "clubs"),
+        Field("crest_url", "TEXT", "clubs"),
+        Field("country_code", "TEXT", "clubs"),
+        Field("country_name", "TEXT", "clubs"),
+        Field("first_season_code", "TEXT NOT NULL", "clubs"),
+        Field("last_season_code", "TEXT NOT NULL", "clubs"),
+        Field("seasons_played", "INTEGER NOT NULL", "clubs"),
+    )),
+}
 AGGREGATE_NAMES = ("app_team_season_stats", "app_coverage_seasons",
                    "app_coverage_games")
 DERIVED_NAMES = ("app_standings", *AGGREGATE_NAMES,
-                 *RECORDS_TABLES, "app_postseason_series")
+                 *RECORDS_TABLES, "app_postseason_series", *IDENTITY_TABLES)
 GOLD_TABLES = {**TABLES, "app_standings": STANDINGS_TABLE,
                "app_team_season_stats": TEAM_SEASON_TABLE,
                "app_coverage_seasons": COVERAGE_SEASON_TABLE,
                "app_coverage_games": COVERAGE_GAME_TABLE,
-               **RECORDS_TABLES, "app_postseason_series": SERIES_TABLE}
+               **RECORDS_TABLES, "app_postseason_series": SERIES_TABLE,
+               **IDENTITY_TABLES}
 
 
 def columns(name):

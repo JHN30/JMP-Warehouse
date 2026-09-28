@@ -157,8 +157,9 @@ means no `PS` rows. The local `gold.app_standings` table below is also active.
 Feature 30c builds local `gold.app_team_season_stats`,
 `gold.app_coverage_seasons` and `gold.app_coverage_games` from Silver. The
 record and postseason series tables in this section are built locally in 30d.
-The identity table remains a historical reference for 30e. Existing Neon tables remain in place for the
-web app and receive no updates during the pause.
+Feature 30e builds the player and club identity tables locally from Silver.
+Existing Neon tables remain in place for the web app and receive no updates
+during the pause.
 
 ### `app_standings`
 
@@ -350,6 +351,11 @@ that the source data doesn't carry.
 
 ### `app_players`
 
+Built locally as `gold.app_players` from player registrations and people in
+every loaded Silver season. The Gold CLI's `-sc` selection does not limit this
+cross-season table. It is rebuilt for the selected competition in one
+transaction. Neon publishing remains paused.
+
 One row per player (`person_code`), like the records tables above (not
 season-scoped: a player's row spans every season they appeared in). No
 existing Express contract exists for this table. The build-plan line named
@@ -364,7 +370,7 @@ cross-season query.
 
 | Key | One row represents |
 | --- | --- |
-| `person_code` | One player who has at least one `role_code = 'J'` row in `app_registrations` (excludes coaches, staff, and referee-only people). |
+| `(competition_code, person_code)` | One player who has at least one `role_code = 'J'` row in `silver.registrations` (excludes coaches, staff, and referee-only people). |
 
 - `name`, `country_code`, `country_name`, `height_cm`, `weight_kg`,
   `birth_at`, `birth_country_code`, `birth_country_name`, `position`,
@@ -379,6 +385,18 @@ cross-season query.
   registered to as a player — the compact archive summary; full per-season
   detail (dorsal, position that season, exact dates) stays in
   `app_registrations`.
+
+### `app_club_identities`
+
+Built locally as `gold.app_club_identities` from every loaded `silver.clubs`
+season. One row per `(competition_code, club_code)`; a name change does not
+create another identity. `name`, `crest_url`, `country_code`, and `country_name`
+come from the latest loaded season for that club code. Missing source values
+stay NULL. `first_season_code`, `last_season_code`, and `seasons_played INTEGER
+NOT NULL` describe the club's distinct loaded seasons. The table does not store
+a season-by-season profile history. The Gold CLI rebuilds the selected
+competition in one transaction even when `-sc` names one season. Neon
+publishing remains paused.
 
 ## Source responses
 

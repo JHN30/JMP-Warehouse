@@ -43,7 +43,7 @@ Items 1-8 were already shipped when the Blueprint was adopted (2026-09-24).
   - [x] 30b. **Gold PS stats and standings** - derive postseason `PS` season-player stats and the page-shaped standings table from silver
   - [x] 30c. **Gold team season stats and coverage** - rebuild team-season totals and season/game coverage tables from silver
   - [x] 30d. **Gold records and postseason series** - rebuild all-time records and play-in, playoff and Final Four series from silver
-  - [ ] 30e. **Gold player and club identity** - build cross-season identity tables from silver registrations, people and clubs
+  - [x] 30e. **Gold player and club identity** - build cross-season identity tables from silver registrations, people and clubs
   - [ ] 30f. **Publish Gold to Neon** - publish the app-facing Gold tables with guarded season transactions and resume the refresh pipeline
 - [x] 24. **API team stats** - fetch the v3 team `traditional`, `advanced`, `opponentsTraditional` and `opponentsAdvanced` feeds (per phase, both modes, all seasons) into bronze and `core` as reference numbers
 - [ ] 25. **Per-game advanced stats** - per game, team and player (with opponent): possessions, pace, ratings, four factors, player rates and Game Score, in `silver` (enrichment per record)

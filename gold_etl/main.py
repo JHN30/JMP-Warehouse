@@ -12,15 +12,17 @@ from gold_etl.loader import replace_scope  # noqa: E402
 from gold_etl.loader import replace_postseason_scope  # noqa: E402
 from gold_etl.loader import replace_standings_scope  # noqa: E402
 from gold_etl.loader import read_aggregate_rows, replace_aggregate_scope  # noqa: E402
-from gold_etl.loader import replace_records_scope, replace_series_scope  # noqa: E402
+from gold_etl.loader import replace_records_scope, replace_series_scope, replace_identity_scope  # noqa: E402
 from gold_etl.records import read_rows as read_record_rows  # noqa: E402
+from gold_etl.identity import read_rows as read_identity_rows  # noqa: E402
 from gold_etl.series import read_rows as read_series_rows  # noqa: E402
 from gold_etl.postseason import TABLES as PS_TABLES, read_rows as read_postseason_rows  # noqa: E402
 from gold_etl.standings import read_rows as read_standings_rows  # noqa: E402
 from gold_etl.quality import (check_scope, check_postseason_scope,
                               check_standings_scope, check_aggregate_scope,
-                              check_records_scope, check_series_scope)  # noqa: E402
-from gold_etl.schema import (AGGREGATE_NAMES, DERIVED_NAMES, RECORDS_TABLES,
+                              check_records_scope, check_series_scope,
+                              check_identity_scope)  # noqa: E402
+from gold_etl.schema import (AGGREGATE_NAMES, DERIVED_NAMES, IDENTITY_TABLES, RECORDS_TABLES,
                              SOURCE_NAMES, count_sql)  # noqa: E402
 
 
@@ -79,6 +81,8 @@ def main(argv=None):
         print(f"Tables: {', '.join(tables)}")
         if any(name in RECORDS_TABLES for name in tables):
             print("Records scope: all locally loaded EuroLeague seasons", flush=True)
+        if any(name in IDENTITY_TABLES for name in tables):
+            print("Identity scope: all locally loaded Silver seasons", flush=True)
         print("Mode: " + ("read-only dry run" if args.dry_run else
                           "read-only quality check" if args.quality_only else "Gold load"),
               flush=True)
@@ -86,7 +90,7 @@ def main(argv=None):
         for season in seasons:
             for name in tables:
                 scope = (COMPETITION_CODES[args.competition], season)
-                if name in RECORDS_TABLES:
+                if name in RECORDS_TABLES or name in IDENTITY_TABLES:
                     continue
                 if name == "app_postseason_series":
                     if args.dry_run:
@@ -172,6 +176,23 @@ def main(argv=None):
                 passed &= not issues
             else:
                 count = replace_records_scope(connection, name, competition_code)
+                print(f"gold.{name} all seasons: {count} rows", flush=True)
+        for name in tables:
+            if name not in IDENTITY_TABLES:
+                continue
+            competition_code = COMPETITION_CODES[args.competition]
+            if args.dry_run:
+                with connection.cursor() as cursor:
+                    count = len(read_identity_rows(cursor, name, competition_code))
+                print(f"gold.{name} all seasons: {count} derived rows", flush=True)
+            elif args.quality_only:
+                with connection.cursor() as cursor:
+                    issues = check_identity_scope(cursor, name, competition_code)
+                for issue in issues:
+                    print(issue, file=sys.stderr, flush=True)
+                passed &= not issues
+            else:
+                count = replace_identity_scope(connection, name, competition_code)
                 print(f"gold.{name} all seasons: {count} rows", flush=True)
         if args.quality_only:
             print("Gold quality: passed" if passed else "Gold quality: failed", flush=True)

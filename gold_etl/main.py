@@ -9,7 +9,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from common.db import DEFAULT_CONFIG, connect  # noqa: E402
 from common.seasons import COMPETITION_CODES, select_seasons  # noqa: E402
 from gold_etl.loader import replace_scope  # noqa: E402
-from gold_etl.quality import check_scope  # noqa: E402
+from gold_etl.loader import replace_postseason_scope  # noqa: E402
+from gold_etl.loader import replace_standings_scope  # noqa: E402
+from gold_etl.postseason import TABLES as PS_TABLES, read_rows as read_postseason_rows  # noqa: E402
+from gold_etl.standings import read_rows as read_standings_rows  # noqa: E402
+from gold_etl.quality import (check_scope, check_postseason_scope,
+                              check_standings_scope)  # noqa: E402
 from gold_etl.schema import SOURCE_NAMES, count_sql  # noqa: E402
 
 
@@ -41,16 +46,16 @@ def main(argv=None):
     parser = build_parser()
     args = parser.parse_args(argv)
     if args.list_tables:
-        print("\n".join(SOURCE_NAMES))
+        print("\n".join((*SOURCE_NAMES, "app_standings")))
         return 0
     if args.dry_run and args.quality_only:
         parser.error("--dry-run and --quality-only cannot be combined")
-    unknown = set(args.table) - {"all", *SOURCE_NAMES}
+    unknown = set(args.table) - {"all", *SOURCE_NAMES, "app_standings"}
     if unknown:
         parser.error("Unknown table(s): " + ", ".join(sorted(unknown)))
     if "all" in args.table and len(args.table) != 1:
         parser.error("'all' must be used alone with --table")
-    tables = SOURCE_NAMES if args.table == ["all"] else tuple(dict.fromkeys(args.table))
+    tables = (*SOURCE_NAMES, "app_standings") if args.table == ["all"] else tuple(dict.fromkeys(args.table))
     connection = None
     try:
         connection = connect(args.config)
@@ -71,20 +76,44 @@ def main(argv=None):
         for season in seasons:
             for name in tables:
                 scope = (COMPETITION_CODES[args.competition], season)
+                if name == "app_standings":
+                    if args.dry_run:
+                        with connection.cursor() as cursor:
+                            count = len(read_standings_rows(cursor, *scope))
+                        print(f"gold.app_standings {season}: {count} derived rows", flush=True)
+                    elif args.quality_only:
+                        with connection.cursor() as cursor:
+                            issues = check_standings_scope(cursor, *scope)
+                        for issue in issues:
+                            print(issue, file=sys.stderr, flush=True)
+                        passed &= not issues
+                    else:
+                        count = replace_standings_scope(connection, *scope)
+                        print(f"gold.app_standings {season}: {count} rows", flush=True)
+                    continue
                 if args.dry_run:
                     with connection.cursor() as cursor:
                         cursor.execute(count_sql(name, "silver"), scope)
                         count = cursor.fetchone()[0]
                     print(f"silver.{name} {season}: {count} source rows", flush=True)
+                    if name in PS_TABLES:
+                        with connection.cursor() as cursor:
+                            derived = len(read_postseason_rows(cursor, *scope)[name])
+                        print(f"gold.{name} PS {season}: {derived} derived rows", flush=True)
                 elif args.quality_only:
                     with connection.cursor() as cursor:
                         issues = check_scope(cursor, name, *scope)
+                        if name in PS_TABLES:
+                            issues += check_postseason_scope(cursor, name, *scope)
                     for issue in issues:
                         print(issue, file=sys.stderr, flush=True)
                     passed &= not issues
                 else:
                     count = replace_scope(connection, name, *scope)
                     print(f"gold.{name} {season}: {count} rows", flush=True)
+                    if name in PS_TABLES:
+                        derived = replace_postseason_scope(connection, name, *scope)
+                        print(f"gold.{name} PS {season}: {derived} derived rows", flush=True)
         if args.quality_only:
             print("Gold quality: passed" if passed else "Gold quality: failed", flush=True)
             return 0 if passed else 1

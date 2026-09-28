@@ -40,7 +40,7 @@ Items 1-8 were already shipped when the Blueprint was adopted (2026-09-24).
   - [x] 16b. **Silver provenance** - a load log per table and season with the bronze file versions used, and load id and load time on every silver row
 - [ ] 30. **Gold layer** - `gold` schema rebuilt from silver: page and aggregate tables (standings, records, coverage, postseason series, team season stats, derived `PS` stats), cross-season player and club identity tables, and Neon publishing from gold
   - [x] 30a. **Gold schema and source projections** - build the 16 app-facing source tables in local `gold` from silver, with clean names and source values; keep publishing paused
-  - [ ] 30b. **Gold PS stats and standings** - derive postseason `PS` season-player stats and the page-shaped standings table from silver
+  - [x] 30b. **Gold PS stats and standings** - derive postseason `PS` season-player stats and the page-shaped standings table from silver
   - [ ] 30c. **Gold team season stats and coverage** - rebuild team-season totals and season/game coverage tables from silver
   - [ ] 30d. **Gold records and postseason series** - rebuild all-time records and play-in, playoff and Final Four series from silver
   - [ ] 30e. **Gold player and club identity** - build cross-season identity tables from silver registrations, people and clubs

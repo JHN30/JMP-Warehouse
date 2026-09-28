@@ -6,7 +6,8 @@ a bare name such as `games` means `silver.games`. Exact SQL columns, types,
 source JSON paths, and keys are defined in
 [flat_schema.py](../postgres_etl/flat_schema.py). Bronze keeps the exact API
 responses. Silver contains cleaned source data. The local `gold` schema holds
-16 source projections from Silver; derived Gold tables and Neon publishing are
+16 source projections from Silver, derived postseason player stats, and the
+page-shaped standings table. Other derived Gold tables and Neon publishing are
 still paused. Existing Neon tables are unchanged in the meantime.
 
 ## Silver provenance
@@ -132,8 +133,9 @@ names, source columns, types, and natural primary keys as their Silver sources:
 `season_player_stats_scoring`, `season_player_stats_misc`, `play_by_play`, and
 `shots`. Gold omits Silver's `load_id` and `loaded_at` metadata. It copies
 source values and NULLs unchanged. The four player-season tables copy only
-non-`PS` API rows; future derived `PS` rows belong to feature 30b and survive
-a rerun of this source copy. The other 12 Silver tables and `silver.load_log`
+non-`PS` API rows; feature 30b owns derived `PS` rows in traditional and misc
+Gold tables, and a source rerun leaves those rows in place. Advanced and scoring
+have no derived `PS` rows. The other 12 Silver tables and `silver.load_log`
 are not copied by 30a.
 
 `python gold_etl/main.py -sc all` builds all locally loaded Silver seasons.
@@ -143,15 +145,22 @@ Silver. Both read the local database only. Gold is not published to Neon yet.
 Use explicit `gold.games` or `silver.games` names because local connections
 still search `silver` by default.
 
-## Historical web-app tables
+## Local Gold derivations and historical web-app tables
 
-**Paused until features 30b-30f.** This section preserves the former derived
-web-app table contract as a reference. The 30a source tables above are built
-locally, but these derived tables are not yet rebuilt or published. Existing
-Neon tables remain in place for the web app and receive no updates during the
-pause.
+Feature 30b builds `PS` traditional and misc player-season rows from Silver
+played PI/PO/FF games and box scores. One player has an accumulated row and,
+when they appeared in more than half of their latest club's postseason games,
+a per-game row. Missing box-score measures propagate as NULL; percentages and
+per-game counting values round half-even to one decimal. No played postseason
+means no `PS` rows. The local `gold.app_standings` table below is also active.
+The remaining derived tables in this section preserve the historical web-app
+contract for features 30c-30f. Existing Neon tables remain in place for the
+web app and receive no updates during the pause.
 
 ### `app_standings`
+
+Built locally as `gold.app_standings` from the seven `silver.standings_*` feeds
+and `silver.clubs`. Neon still serves its existing copy until feature 30f.
 
 | Extra key | One row represents | Essential use |
 | --- | --- | --- |

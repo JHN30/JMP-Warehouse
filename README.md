@@ -3,9 +3,10 @@
 Python 3.13 and PostgreSQL pipeline for EuroLeague and EuroCup data. The fetcher
 stores exact versioned API responses in bronze. The loader builds 28 typed
 tables in the local `silver` schema and runs quality checks. The local Gold
-stage copies 16 source tables from Silver into `gold`; derived Gold tables and
-Neon publishing are still paused. The web app continues reading its existing
-Neon data during the pause.
+stage copies 16 source tables from Silver into `gold` and derives postseason
+player stats and a page-shaped standings table. Other derived Gold tables and
+Neon publishing remain paused. The web app continues reading its existing Neon
+data during the pause.
 
 Each silver row has a `load_id` and UTC `loaded_at`. The append-only
 `silver.load_log` records each table and season replacement, its row count,
@@ -24,7 +25,7 @@ The first command fetches and loads the current season. `--skip-fetch` loads
 cached bronze responses. Each run ends with a summary and writes a log under
 `logs/refresh/`. The publish stage remains paused; the existing
 `--dry-run-publish` option and VS Code task do not connect to Neon. Local Gold
-source tables are built separately with the command below.
+tables are built separately with the command below.
 
 The loader needs `postgres_etl/config_connection.json` (copy the example,
 then set your local PostgreSQL credentials). A dry run needs no database:
@@ -36,7 +37,7 @@ python postgres_etl/main.py -sc 2025
 python postgres_etl/main.py -sc all
 ```
 
-Build or inspect the local Gold source tables from already loaded Silver rows:
+Build or inspect local Gold from already loaded Silver rows:
 
 ```powershell
 python gold_etl/main.py --list-tables
@@ -46,9 +47,11 @@ python gold_etl/main.py -sc all --quality-only
 ```
 
 The dry run and quality check read the local database without changing Gold.
-The load replaces each selected table and season in one transaction. It does
-not fetch data or publish to Neon. Use `-cp` for the competition and `-tb` for
-selected table names.
+The load replaces each source or derived table slice in one transaction. Selecting
+traditional or misc player season stats also rebuilds their derived `PS` rows;
+`-tb app_standings` builds only the standings page table. It does not fetch
+data or publish to Neon. Use `-cp` for the competition and `-tb` for selected
+table names.
 
 ## Layout
 
@@ -56,7 +59,7 @@ selected table names.
 | --- | --- |
 | [api_requests/](api_requests/README.md) | Fetch API responses into versioned bronze files. |
 | [postgres_etl/](postgres_etl/README.md) | Load and check the local silver tables. |
-| [gold_etl/](gold_etl/README.md) | Build and check 16 local Gold source tables from Silver. |
+| [gold_etl/](gold_etl/README.md) | Build and check local Gold source tables, postseason stats, and standings. |
 | [neon_publish/](neon_publish/README.md) | Paused publisher; season transaction engine retained for feature 30. |
 | [tables_to_csv/](tables_to_csv/README.md) | Export silver tables to CSV. |
 | [docs/DATA_DICTIONARY.md](docs/DATA_DICTIONARY.md) | Silver and Gold source contracts and the historical web-app Gold reference. |

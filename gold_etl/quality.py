@@ -1,6 +1,8 @@
 """Read-only, scope-specific equality checks for Gold source projections."""
 
 from gold_etl.schema import TABLES, columns, count_sql, scope_predicate
+from gold_etl.postseason import TABLES as PS_TABLES, _dict_rows, read_rows as read_postseason_rows
+from gold_etl.standings import KEY as STANDINGS_KEY, read_rows as read_standings_rows
 
 
 def check_scope(cursor, name, competition_code, season_code):
@@ -29,3 +31,54 @@ def check_scope(cursor, name, competition_code, season_code):
     if cursor.fetchone()[0]:
         issues.append(f"gold.{name} {season_code}: source-column values differ from silver")
     return issues
+
+
+def check_postseason_scope(cursor, name, competition_code, season_code):
+    """Compare the complete derived PS slice with fresh Silver calculations."""
+    if name not in PS_TABLES:
+        raise ValueError(f"No postseason derivation for {name}")
+    cursor.execute("SELECT to_regclass(%s)", (f"gold.{name}",))
+    if cursor.fetchone()[0] is None:
+        return [f"gold.{name} is missing"]
+    expected = read_postseason_rows(cursor, competition_code, season_code)[name]
+    field_list = ", ".join(f'"{field}"' for field in columns(name))
+    cursor.execute(
+        f'SELECT {field_list} FROM gold."{name}" '
+        "WHERE competition_code = %s AND season_code = %s AND phase_code = 'PS'",
+        (competition_code, season_code),
+    )
+    actual = _dict_rows(cursor)
+    for row in expected:
+        row["competition_code"] = competition_code
+        row["season_code"] = season_code
+    if len(actual) != len(expected):
+        return [f"gold.{name} PS {season_code}: {len(actual)} rows; "
+                f"Silver derivation expects {len(expected)}"]
+    by_key = lambda rows: {(row["mode"], row["entry_ordinal"]): row for row in rows}
+    if by_key(actual) != by_key(expected):
+        return [f"gold.{name} PS {season_code}: derived keys or values differ from Silver"]
+    return []
+
+
+def check_standings_scope(cursor, competition_code, season_code):
+    """Compare every page key and field/list value with Silver derivation."""
+    name = "app_standings"
+    cursor.execute("SELECT to_regclass(%s)", ("gold.app_standings",))
+    if cursor.fetchone()[0] is None:
+        return ["gold.app_standings is missing"]
+    expected = read_standings_rows(cursor, competition_code, season_code)
+    fields = ", ".join(f'"{field}"' for field in columns(name))
+    cursor.execute(
+        f'SELECT {fields} FROM gold."{name}" '
+        'WHERE competition_code = %s AND season_code = %s',
+        (competition_code, season_code),
+    )
+    actual = _dict_rows(cursor)
+    by_key = lambda rows: {tuple(row[column] for column in STANDINGS_KEY): row
+                           for row in rows}
+    if by_key(actual).keys() != by_key(expected).keys():
+        return [f"gold.app_standings {season_code}: keys differ from silver.standings_basic "
+                f"({len(actual)} Gold, {len(expected)} Silver)"]
+    if by_key(actual) != by_key(expected):
+        return [f"gold.app_standings {season_code}: feed fields or lists differ from Silver"]
+    return []

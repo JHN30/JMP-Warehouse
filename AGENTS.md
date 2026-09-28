@@ -16,9 +16,10 @@ for optional tool settings.
 The data pipeline behind the JMP EuroLeague web app (`jmpeuroleague.com`, repo
 `jmp-euroleague2`). It downloads EuroLeague API data into a bronze store of exact
 responses, loads it into 28 typed tables in the local PostgreSQL `silver`
-schema with quality checks. Feature 30a builds 16 local Gold source tables
-from Silver. Derived Gold tables and Neon publishing remain paused until later
-parts of feature 30. Python 3.13 + PostgreSQL, no web framework.
+schema with quality checks. Gold builds 16 local source tables from Silver,
+postseason player statistics, and a page-shaped standings table. Other derived
+Gold tables and Neon publishing remain paused until later parts of feature 30.
+Python 3.13 + PostgreSQL, no web framework.
 See `README.md` for the layout and
 `docs/DATA_DICTIONARY.md` for the tables.
 
@@ -300,7 +301,7 @@ checks do not make the Blueprint unusable.
 
 Run from the repository root (the owner uses the VS Code terminal). Local
 PostgreSQL settings come from `postgres_etl/config_connection.json` (not
-committed; copy the `.example`). Publishing is paused until feature 30 and the
+committed; copy the `.example`). Publishing is paused until feature 30f and the
 pipeline does not ask for `NEON_DATABASE_URL`.
 
 - Refresh the current season (fetch, load, quality checks): `python pipeline.py`
@@ -312,9 +313,11 @@ pipeline does not ask for `NEON_DATABASE_URL`.
 - Load into local PostgreSQL: `python postgres_etl/main.py -sc <seasons>`
 - Load dry run (no database): `python postgres_etl/main.py -sc <seasons> --dry-run`
 - Quality report only: `python postgres_etl/main.py -sc <seasons> --quality-only`
-- Build local Gold source tables from Silver: `python gold_etl/main.py -sc <seasons>`
+- Build local Gold from Silver: `python gold_etl/main.py -sc <seasons>`
   (`-sc all` uses every locally loaded Silver season).
-- Gold read-only source counts: `python gold_etl/main.py -sc <seasons> --dry-run`
+- Build only local standings: `python gold_etl/main.py -sc <seasons> -tb app_standings`
+- Traditional or misc table selections also rebuild their derived `PS` rows.
+- Gold read-only source and derived counts: `python gold_etl/main.py -sc <seasons> --dry-run`
 - Gold read-only equality checks: `python gold_etl/main.py -sc <seasons> --quality-only`
 - Publish to Neon: paused until feature 30f. `python neon_publish/main.py --dry-run`
   reports the pause without connecting to Neon.

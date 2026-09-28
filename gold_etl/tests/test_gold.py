@@ -186,7 +186,7 @@ class CliTests(unittest.TestCase):
                 contextlib.redirect_stdout(io.StringIO()) as output:
             self.assertEqual(main.main(["--list-tables"]), 0)
         connect.assert_not_called()
-        self.assertEqual(output.getvalue().splitlines(), list(SOURCE_NAMES))
+        self.assertEqual(output.getvalue().splitlines(), [*SOURCE_NAMES, "app_standings"])
 
     def test_dry_run_is_read_only_and_reports_counts(self):
         code, out, _, db = self.run_cli(["-sc", "2025", "-tb", "games", "--dry-run"])
@@ -228,6 +228,58 @@ class CliTests(unittest.TestCase):
         self.assertIn("silver has 2", err)
         self.assertFalse(any(query.startswith(("CREATE", "DELETE", "INSERT"))
                              for query, _ in db.statements))
+
+    def test_player_table_selection_includes_ps_dry_run_and_load(self):
+        name = "season_player_stats_traditional"
+        with patch.object(main, "read_postseason_rows", return_value={name: [{}, {}]}):
+            code, out, _, db = self.run_cli(["-sc", "2025", "-tb", name,
+                                             "--dry-run"])
+        self.assertEqual(code, 0)
+        self.assertTrue(db.readonly)
+        self.assertIn(f"gold.{name} PS E2025: 2 derived rows", out)
+        with patch.object(main, "replace_postseason_scope", return_value=2) as replace_ps:
+            code, out, _, db = self.run_cli(["-sc", "2025", "-tb", name])
+        self.assertEqual(code, 0)
+        self.assertIn(f"gold.{name} PS E2025: 2 derived rows", out)
+        replace_ps.assert_called_once_with(db, name, "E", "E2025")
+
+    def test_missing_player_season_never_replaces_its_ps_slice(self):
+        name = "season_player_stats_misc"
+        with patch.object(main, "replace_postseason_scope", return_value=0) as replace_ps:
+            code, out, _, db = self.run_cli(["-sc", "2024", "2025", "-tb", name])
+        self.assertEqual(code, 0)
+        self.assertIn("Not loaded in Silver; skipping: E2024", out)
+        replace_ps.assert_called_once_with(db, name, "E", "E2025")
+
+    def test_player_quality_checks_ps_slice_read_only(self):
+        name = "season_player_stats_misc"
+        with patch.object(main, "check_postseason_scope", return_value=["bad PS"]):
+            code, _, err, db = self.run_cli(["-sc", "2025", "-tb", name,
+                                             "--quality-only"])
+        self.assertEqual(code, 1)
+        self.assertTrue(db.readonly)
+        self.assertIn("bad PS", err)
+
+    def test_standings_selection_and_read_only_modes(self):
+        with patch.object(main, "read_standings_rows", return_value=[{}, {}]):
+            code, out, _, db = self.run_cli(["-sc", "2025", "-tb", "app_standings",
+                                             "--dry-run"])
+        self.assertEqual(code, 0)
+        self.assertTrue(db.readonly)
+        self.assertIn("gold.app_standings E2025: 2 derived rows", out)
+        self.assertFalse(any(q.startswith(("CREATE", "DELETE", "INSERT"))
+                             for q, _ in db.statements))
+        with patch.object(main, "check_standings_scope", return_value=["bad standings"]):
+            code, _, err, db = self.run_cli(["-sc", "2025", "-tb", "app_standings",
+                                             "--quality-only"])
+        self.assertEqual(code, 1)
+        self.assertTrue(db.readonly)
+        self.assertIn("bad standings", err)
+        with patch.object(main, "replace_standings_scope", return_value=2) as replace:
+            code, out, _, db = self.run_cli(["-sc", "2025", "-tb", "app_standings"])
+        self.assertEqual(code, 0)
+        self.assertIn("gold.app_standings E2025: 2 rows", out)
+        replace.assert_called_once_with(db, "E", "E2025")
 
 
 if __name__ == "__main__":

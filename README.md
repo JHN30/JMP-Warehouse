@@ -6,6 +6,10 @@ tables in the local `silver` schema and runs quality checks. Neon publishing is
 paused until feature 30 builds the gold layer. The web app continues reading
 its existing Neon data during the pause.
 
+Each silver row has a `load_id` and UTC `loaded_at`. The append-only
+`silver.load_log` records each table and season replacement, its row count,
+and the exact bronze file versions read for that load.
+
 ## Refresh
 
 Run from the repository root:

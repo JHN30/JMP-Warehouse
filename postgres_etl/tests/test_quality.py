@@ -13,10 +13,14 @@ import main as etl_main
 
 
 class FakeCursor:
-    def __init__(self, missing=(), bad_scores=0, mismatches=0):
+    def __init__(self, missing=(), bad_scores=0, mismatches=0,
+                 missing_provenance=0, missing_log=0, load_count_mismatch=0):
         self.missing = set(missing)
         self.bad_scores = bad_scores
         self.mismatches = mismatches
+        self.missing_provenance = missing_provenance
+        self.missing_log = missing_log
+        self.load_count_mismatch = load_count_mismatch
         self.query = ""
         self.params = ()
         self.queries = []
@@ -37,6 +41,12 @@ class FakeCursor:
             return (None if self.params[0] in self.missing else self.params[0],)
         if "agg.own_points" in self.query:
             return (self.mismatches,)
+        if "row.load_id IS NULL OR row.loaded_at IS NULL" in self.query:
+            return (self.missing_provenance,)
+        if "log.load_id IS NULL OR log.loaded_at <> active.loaded_at" in self.query:
+            return (self.missing_log,)
+        if "log.row_count <> active.row_count" in self.query:
+            return (self.load_count_mismatch,)
         if "row.played IS TRUE AND (row.local_score IS NULL" in self.query:
             return (self.bad_scores,)
         if 'FROM "games" AS row' in self.query and "AND (" not in self.query:
@@ -91,11 +101,38 @@ class QualityRulesTests(unittest.TestCase):
         self.assertEqual({check.code for check in games_only if check.severity == "ERROR"}, {
             "played_missing_score", "played_missing_winner",
             "played_missing_identity", "unplayed_has_result",
+            "missing_provenance", "missing_load_log", "load_count_mismatch",
         })
         self.assertEqual({(check.code, check.severity) for check in games_only
                           if check.severity != "ERROR"},
                          {("attendance_not_recorded", "WARN"), ("cancelled_inferred", "WARN")})
-        self.assertEqual(checks_for_tables(["clubs"]), [])
+        self.assertEqual({check.code for check in checks_for_tables(["clubs"])},
+                         {"missing_provenance", "missing_load_log", "load_count_mismatch"})
+
+    def test_provenance_errors_are_scoped_to_current_rows(self):
+        checks = [check for check in checks_for_tables(["games"])
+                  if check.code in {"missing_provenance", "missing_load_log",
+                                    "load_count_mismatch"}]
+        self.assertEqual(len(checks), 3)
+        self.assertEqual([check.query.count("%s") for check in checks], [2, 2, 2])
+        self.assertIn("row.load_id, row.loaded_at)", checks[1].query)
+        self.assertIn("log.table_name = 'games'", checks[1].query)
+        self.assertIn("log.row_count <> active.row_count", checks[2].query)
+        report = check_season(FakeConnection(missing_provenance=1, missing_log=2,
+                                             load_count_mismatch=3),
+                              "euroleague", "E2025", ["games"])
+        self.assertFalse(report.passed)
+        self.assertTrue({("missing_provenance", 1), ("missing_load_log", 2),
+                         ("load_count_mismatch", 3)} <=
+                        {(issue.code, issue.count) for issue in report.issues})
+
+    def test_missing_load_log_is_an_error_without_querying_it(self):
+        connection = FakeConnection(missing={"load_log"})
+        report = check_season(connection, "euroleague", "E2025", ["games"])
+        self.assertIn(("missing_table", "load_log"),
+                      {(issue.code, issue.table) for issue in report.issues})
+        self.assertFalse(any('JOIN "load_log"' in query
+                             for query in connection.fake_cursor.queries))
 
     def test_game_children_and_people_are_checked_when_both_sides_are_loaded(self):
         checks = checks_for_tables([

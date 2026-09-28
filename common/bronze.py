@@ -29,9 +29,10 @@ def utc_stamp(moment=None):
 
 
 class BronzeStore:
-    def __init__(self, bronze_root, competition, scope):
+    def __init__(self, bronze_root, competition, scope, on_read=None):
         self.directory = Path(bronze_root) / competition / scope
         self.scope = scope
+        self.on_read = on_read
 
     # --- reading -----------------------------------------------------------
     def versions(self, resource):
@@ -51,7 +52,10 @@ class BronzeStore:
         path = self.latest_path(resource)
         if path is None:
             raise FileNotFoundError(f"No bronze version of {self.scope}/{resource}")
-        return gzip.decompress(path.read_bytes())
+        content = gzip.decompress(path.read_bytes())
+        if self.on_read is not None:
+            self.on_read(path)
+        return content
 
     def read_json(self, resource, default=None):
         if not self.exists(resource):

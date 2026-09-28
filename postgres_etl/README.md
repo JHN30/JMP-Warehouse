@@ -24,6 +24,15 @@ one transaction. Missing source files skip that table. `-cp eurocup` selects
 EuroCup; `-sc` accepts a year, full code, range, `current`, `latest`, or
 `all`; `-tb` selects names from `--list-tables`.
 
+Every inserted row receives the load's UUID `load_id` and UTC `loaded_at`.
+The loader appends one `silver.load_log` record per table, competition, and
+season replacement in the same transaction, including replacements that insert
+zero rows. It records the inserted `row_count` and a sorted JSON array of
+bronze version paths relative to `data/bronze/`. Reruns keep earlier log
+entries while current rows point to the new load. A failed replacement rolls
+back both the rows and log entry. Quality checks report missing row metadata,
+missing matching log entries, and mismatched current row counts.
+
 | Source | Silver tables |
 | --- | --- |
 | v2 catalogue and people | `seasons`, `clubs`, `people`, `registrations`, `rounds` |
@@ -42,6 +51,15 @@ has the complete names and source mapping.
 SELECT game_code, person_key, points, two_pointers_made, assists
 FROM silver.game_player_stats
 WHERE competition_code = 'E' AND season_code = 'E2025'
+LIMIT 20;
+
+SELECT row.game_code, row.load_id, log.loaded_at, log.bronze_versions
+FROM silver.games AS row
+JOIN silver.load_log AS log
+  ON log.competition_code = row.competition_code
+ AND log.season_code = row.season_code
+ AND log.table_name = 'games' AND log.load_id = row.load_id
+WHERE row.competition_code = 'E' AND row.season_code = 'E2025'
 LIMIT 20;
 ```
 

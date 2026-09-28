@@ -1,8 +1,11 @@
 """Transactional writer and validator for the column-first analytical tables."""
 
 import time
+from datetime import datetime, timezone
+from uuid import uuid4
 
-from flat_schema import TABLES, add_column_sql, create_index_sql, create_table_sql, physical_name
+from flat_schema import (TABLES, add_column_sql, create_index_sql, create_load_log_sql,
+                         create_table_sql, physical_name)
 from flat_transform import FlatSeason
 from shared import connect, elapsed
 
@@ -26,10 +29,12 @@ class FlatDatabaseLoader:
                 with connection:
                     with connection.cursor() as cursor:
                         cursor.execute('CREATE SCHEMA IF NOT EXISTS silver')
+                        cursor.execute(create_load_log_sql())
             for season_code in self.season_codes:
                 season = FlatSeason(self.data_root, self.competition, season_code)
                 print(f"\nSeason {season_code} | elapsed {elapsed(started)}", flush=True)
                 for name in self.tables:
+                    season.begin_table()
                     files = season.files(name)
                     physical = physical_name(name)
                     if not files:
@@ -79,10 +84,12 @@ class FlatDatabaseLoader:
 
         spec = TABLES[name]
         physical = physical_name(name)
-        columns = [field.name for field in spec.fields]
+        columns = [field.name for field in spec.fields] + ["load_id", "loaded_at"]
         json_columns = {field.name for field in spec.fields if field.kind.startswith("JSONB")}
         column_sql = ", ".join(f'"{column}"' for column in columns)
         insert_sql = f'INSERT INTO "{physical}" ({column_sql}) VALUES %s'
+        load_id = str(uuid4())
+        loaded_at = datetime.now(timezone.utc)
         batch_size = 1000
         batch = []
         count = 0
@@ -99,8 +106,9 @@ class FlatDatabaseLoader:
                     (season.scope["competition_code"], season.season_code),
                 )
                 for row in season.rows(name, files):
-                    batch.append(tuple(Json(row[column]) if column in json_columns else row[column]
-                                       for column in columns))
+                    batch.append(tuple(Json(row[field.name]) if field.name in json_columns
+                                       else row[field.name] for field in spec.fields)
+                                 + (load_id, loaded_at))
                     count += 1
                     if len(batch) == batch_size:
                         execute_values(cursor, insert_sql, batch, page_size=batch_size)
@@ -109,4 +117,11 @@ class FlatDatabaseLoader:
                         print(f"    {count:,} rows inserted | {elapsed(started)}", flush=True)
                 if batch:
                     execute_values(cursor, insert_sql, batch, page_size=batch_size)
+                cursor.execute(
+                    'INSERT INTO "load_log" ("competition_code", "season_code", '
+                    '"table_name", "load_id", "loaded_at", "row_count", '
+                    '"bronze_versions") VALUES (%s, %s, %s, %s, %s, %s, %s)',
+                    (season.scope["competition_code"], season.season_code, name,
+                     load_id, loaded_at, count, Json(season.bronze_versions())),
+                )
         return count

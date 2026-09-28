@@ -3,6 +3,7 @@ import sys
 import tempfile
 import types
 import unittest
+from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path
 from unittest.mock import patch
@@ -71,6 +72,41 @@ class RawEtlTests(unittest.TestCase):
                          ["E2025"])
         self.assertEqual(requested_seasons(["E2025"], "euroleague", ["E2025"], parser),
                          ["E2025"])
+
+    def test_bronze_versions_name_only_files_actually_read(self):
+        old = self.store.latest_path("v2/games")
+        self.store.write("v2/games", b'{"data":[]}',
+                         fetched_at=datetime(2099, 1, 1, tzinfo=timezone.utc))
+        latest = self.store.latest_path("v2/games")
+        self.store.write("v2/rounds", b'{"data":[]}')
+        season = self.season()
+        season.begin_table()
+        list(season.rows("games", season.files("games")))
+        self.assertNotEqual(old, latest)
+        self.assertEqual(season.bronze_versions(),
+                         [latest.relative_to(self.root / "bronze").as_posix()])
+
+    def test_catalog_and_auxiliary_reads_are_recorded_per_table(self):
+        self.store.write("v2/game_stats/1", json.dumps({"local": {"players": [{
+            "player": {"person": {"code": "000123"}, "club": {"code": "MAD"},
+                       "dorsal": "1"}
+        }]}}).encode("utf-8"))
+        season = self.season()
+        season.begin_table()
+        list(season.rows("seasons", season.files("seasons")))
+        self.assertEqual(len(season.bronze_versions()), 1)
+        self.assertIn("/_catalog/", season.bronze_versions()[0])
+
+        season.begin_table()
+        list(season.rows("shots", season.files("shots")))
+        shot_versions = season.bronze_versions()
+        self.assertTrue(any("/live/1/shooting_charts/" in path for path in shot_versions))
+        self.assertTrue(any("/v2/game_stats/1/" in path for path in shot_versions))
+        self.assertFalse(any("/_catalog/" in path for path in shot_versions))
+
+        season.begin_table()
+        list(season.rows("shots", season.files("shots")))
+        self.assertEqual(season.bronze_versions(), shot_versions)
 
     def test_champion_is_not_match_winner_and_future_game_survives(self):
         rows = list(self.season().rows("games"))

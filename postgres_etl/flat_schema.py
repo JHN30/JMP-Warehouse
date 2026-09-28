@@ -464,6 +464,19 @@ STANDINGS_FEED_TABLES = (
 
 PUBLISHED_TABLES = ()
 
+PROVENANCE_COLUMNS = (("load_id", "UUID"), ("loaded_at", "TIMESTAMPTZ"))
+
+
+def create_load_log_sql():
+    return (
+        'CREATE TABLE IF NOT EXISTS "load_log" ('
+        '"competition_code" TEXT NOT NULL, "season_code" TEXT NOT NULL, '
+        '"table_name" TEXT NOT NULL, "load_id" UUID NOT NULL, '
+        '"loaded_at" TIMESTAMPTZ NOT NULL, "row_count" BIGINT NOT NULL, '
+        '"bronze_versions" JSONB NOT NULL, '
+        'PRIMARY KEY ("competition_code", "season_code", "table_name", "load_id"))'
+    )
+
 
 def physical_name(name):
     return name
@@ -471,7 +484,10 @@ def physical_name(name):
 
 def create_table_sql(name):
     spec = TABLES[name]
-    columns = ", ".join(f'"{field.name}" {field.kind}' for field in spec.fields)
+    columns = ", ".join(
+        [*(f'"{field.name}" {field.kind}' for field in spec.fields),
+         *(f'"{column}" {kind} NOT NULL' for column, kind in PROVENANCE_COLUMNS)]
+    )
     key = ", ".join(f'"{column}"' for column in spec.key)
     return f'CREATE TABLE IF NOT EXISTS "{physical_name(name)}" ({columns}, PRIMARY KEY ({key}))'
 
@@ -481,6 +497,10 @@ def add_column_sql(name):
     for field in TABLES[name].fields:
         yield (f'ALTER TABLE "{physical_name(name)}" '
                f'ADD COLUMN IF NOT EXISTS "{field.name}" {field.kind}')
+    for column, kind in PROVENANCE_COLUMNS:
+        # Existing rows receive real values from the full bronze backfill.
+        yield (f'ALTER TABLE "{physical_name(name)}" '
+               f'ADD COLUMN IF NOT EXISTS "{column}" {kind}')
 
 
 def create_index_sql(name):

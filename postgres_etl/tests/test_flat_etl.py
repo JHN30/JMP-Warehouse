@@ -10,7 +10,8 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from flat_schema import COLUMN_NAMES, TABLES, create_table_sql, physical_name
+from flat_schema import (COLUMN_NAMES, TABLES, add_column_sql, create_load_log_sql,
+                         create_table_sql, physical_name)
 from flat_transform import FlatSeason
 from main import main
 from shared import BronzeStore
@@ -116,6 +117,24 @@ class CleanTableNameTests(unittest.TestCase):
             connection.cursor.return_value.__enter__.return_value.execute.assert_called_once_with(
                 'SET search_path TO silver')
             connection.commit.assert_called_once()
+
+    def test_provenance_schema_is_additive_for_existing_tables(self):
+        self.assertEqual(len(TABLES), 28)
+        for name in TABLES:
+            created = create_table_sql(name)
+            altered = list(add_column_sql(name))
+            self.assertIn('"load_id" UUID NOT NULL', created)
+            self.assertIn('"loaded_at" TIMESTAMPTZ NOT NULL', created)
+            self.assertIn(f'ALTER TABLE "{name}" ADD COLUMN IF NOT EXISTS "load_id" UUID',
+                          altered)
+            self.assertIn(f'ALTER TABLE "{name}" ADD COLUMN IF NOT EXISTS "loaded_at" TIMESTAMPTZ',
+                          altered)
+            self.assertFalse(any("DROP " in statement for statement in altered))
+        log_sql = create_load_log_sql()
+        self.assertIn('"row_count" BIGINT NOT NULL', log_sql)
+        self.assertIn('"bronze_versions" JSONB NOT NULL', log_sql)
+        self.assertIn('PRIMARY KEY ("competition_code", "season_code", "table_name", "load_id")',
+                      log_sql)
 
 if __name__ == "__main__":
     unittest.main()

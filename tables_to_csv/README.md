@@ -66,6 +66,8 @@ removed automatically.
 
 Each file contains all database columns, a header row, and only rows matching
 its competition and season. Rows are ordered by the table's primary key. A
+silver source table's CSV therefore includes `load_id` and `loaded_at`; the
+append-only `load_log` metadata table is not part of the default export. A
 selected table with zero rows for that season produces a header-only CSV.
 Rerunning a table replaces only its corresponding CSV, leaving other season
 files untouched. A temporary file is used so a failed export does not replace

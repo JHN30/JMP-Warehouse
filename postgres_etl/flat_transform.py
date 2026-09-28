@@ -71,6 +71,12 @@ class FlatSeason:
     def files(self, name):
         return self.raw.files(TABLES[name].source)
 
+    def begin_table(self):
+        self.raw.begin_table()
+
+    def bronze_versions(self):
+        return self.raw.bronze_versions()
+
     def rows(self, name, files=None):
         spec = TABLES[name]
         files = self.files(name) if files is None else files

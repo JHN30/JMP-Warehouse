@@ -200,11 +200,26 @@ class RawSeason:
         self.season_code = season_code
         self.scope = {"competition_code": {"euroleague": "E", "eurocup": "U"}[competition],
                       "season_code": season_code}
-        bronze_root = Path(data_root) / "bronze"
-        self.store = BronzeStore(bronze_root, competition, season_code)
-        self.catalog_store = BronzeStore(bronze_root, competition, "_catalog")
+        self.bronze_root = Path(data_root) / "bronze"
+        self._used_versions = set()
+        self.store = BronzeStore(self.bronze_root, competition, season_code,
+                                 on_read=self._record_version)
+        self.catalog_store = BronzeStore(self.bronze_root, competition, "_catalog",
+                                         on_read=self._record_version)
         self.raw = self.store.directory
         self.catalog = self.catalog_store.directory / "v2" / "seasons.json"
+
+    def _record_version(self, path):
+        self._used_versions.add(path.relative_to(self.bronze_root).as_posix())
+
+    def begin_table(self):
+        """Start a fresh dependency set, including data held in lookup caches."""
+        self._used_versions.clear()
+        for name in ("_box_people_cache", "_season_person_codes_cache", "_pbp_people_cache"):
+            self.__dict__.pop(name, None)
+
+    def bronze_versions(self):
+        return sorted(self._used_versions)
 
     # Logical path <-> bronze resource -------------------------------------
     def _locate(self, path):

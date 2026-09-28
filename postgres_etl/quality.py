@@ -117,10 +117,44 @@ def orphan_query(child, parent, key, condition=""):
     )
 
 
+def provenance_log_query(table, predicate):
+    """Check the log for load IDs still referenced by current season rows."""
+    physical = physical_name(table)
+    return (
+        'WITH current_loads AS ('
+        'SELECT row.competition_code, row.season_code, row.load_id, '
+        'row.loaded_at, count(*) AS row_count '
+        f'FROM "{physical}" AS row '
+        'WHERE row.competition_code = %s AND row.season_code = %s '
+        'AND row.load_id IS NOT NULL '
+        'GROUP BY row.competition_code, row.season_code, '
+        'row.load_id, row.loaded_at) '
+        'SELECT count(*) FROM current_loads AS active '
+        'LEFT JOIN "load_log" AS log '
+        'ON log.competition_code = active.competition_code '
+        'AND log.season_code = active.season_code '
+        f"AND log.table_name = '{physical}' "
+        'AND log.load_id = active.load_id '
+        f'WHERE {predicate}'
+    )
+
+
 def checks_for_tables(names):
     """Only compare tables participating in this load, so partial loads are valid."""
     names = set(names)
     checks = []
+    for name in TABLES:
+        if name in names:
+            checks.extend((
+                Check("missing_provenance", name, scoped_count(
+                    name, "row.load_id IS NULL OR row.loaded_at IS NULL")),
+                Check("missing_load_log", name, provenance_log_query(
+                    name, "log.load_id IS NULL OR log.loaded_at <> active.loaded_at"),
+                    requires=("load_log",)),
+                Check("load_count_mismatch", name, provenance_log_query(
+                    name, "log.load_id IS NOT NULL AND log.row_count <> active.row_count"),
+                    requires=("load_log",)),
+            ))
     if "games" in names:
         checks.extend((
             Check("played_missing_score", "games", scoped_count(
@@ -241,6 +275,8 @@ def check_season(connection, competition, season_code, names):
     counts = {}
     issues = []
     with connection.cursor() as cursor:
+        if names and not _exists(cursor, "load_log"):
+            issues.append(Issue("ERROR", "missing_table", "load_log", 1))
         for name in names:
             if not _exists(cursor, name):
                 issues.append(Issue("ERROR", "missing_table", name, 1))

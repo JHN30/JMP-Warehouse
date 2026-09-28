@@ -8,6 +8,42 @@ source JSON paths, and keys are defined in
 responses. Silver contains cleaned source data; gold tables are paused until
 feature 30. Existing Neon tables are unchanged in the meantime.
 
+## Silver provenance
+
+Each of the 28 source tables has `load_id UUID NOT NULL` and
+`loaded_at TIMESTAMPTZ NOT NULL`. A table, competition, and season replacement
+gives every inserted row the same load ID and UTC time. These columns are
+metadata and do not change source table keys or grains.
+
+`silver.load_log` is a separate metadata table with one append-only record per
+successful table/competition/season replacement, including zero-row loads.
+Its key is (`competition_code`, `season_code`, `table_name`, `load_id`). It also
+contains `loaded_at TIMESTAMPTZ NOT NULL`, `row_count BIGINT NOT NULL`, and
+`bronze_versions JSONB NOT NULL`. `row_count` is the number of rows inserted
+by that replacement. `bronze_versions` is a sorted, deduplicated JSON array of
+the exact files read, using POSIX paths relative to `data/bronze/`, for example
+`euroleague/E2025/v2/games/<fetched_at>_<sha16>.json.gz`. The list can include
+catalog and auxiliary resources used during transformation. A rerun retains
+the old log entry, but its current rows point to the new load ID.
+
+```sql
+SELECT g.game_code, g.loaded_at, l.bronze_versions
+FROM silver.games AS g
+JOIN silver.load_log AS l
+  ON l.competition_code = g.competition_code
+ AND l.season_code = g.season_code
+ AND l.table_name = 'games' AND l.load_id = g.load_id
+WHERE g.competition_code = 'E' AND g.season_code = 'E2025'
+LIMIT 20;
+```
+
+The feature 16b historical backfill reloaded all 27 cached EuroLeague seasons
+(E2000-E2026). All 727 existing table/season scopes retained their row counts:
+3,987,204 source rows in total. The initial load wrote 742 log entries,
+including zero-row replacements; a controlled E2025 `games` rerun added one
+more. Every current row matches its log entry, and both provenance columns
+are non-null in all 28 source tables.
+
 ## Silver table names and keys
 
 Every primary key begins with `competition_code` and `season_code`.

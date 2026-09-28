@@ -35,9 +35,9 @@ Items 1-8 were already shipped when the Blueprint was adopted (2026-09-24).
 - [x] 13. **Postseason series** - play-in, playoff and Final Four matchups derived from games
 - [x] 14. **Player careers** - cross-season player dimension on `person_code` for careers, archives and head-to-head
 - [x] 23. **Clean up unused tables** - drop the local `etl_flat_live_*` tables (E2025 only, not fetched by default) with their loader code and `etl_source_payloads` (bronze stays the raw archive); in Neon, drop the old `etl_flat_*` views and the 7 unused `app_standings_*` feed tables
-- [ ] 16. **Silver layer** - `silver` schema in local PostgreSQL with the 28 source tables rebuilt from bronze
+- [x] 16. **Silver layer** - `silver` schema in local PostgreSQL with the 28 source tables rebuilt from bronze
   - [x] 16a. **Silver schema and clean names** - the 28 tables in `silver` with clean table names and one standard column name per stat (for example `assists`, `fouls_committed`, `pir`, `seconds_played`); API data only (derived `PS` rows out); today's gold code removed and Neon publishing paused until feature 30; one-time drop/rename commands removed; all local `public` tables dropped and every season rebuilt
-  - [ ] 16b. **Silver provenance** - a load log per table and season with the bronze file versions used, and load id and load time on every silver row
+  - [x] 16b. **Silver provenance** - a load log per table and season with the bronze file versions used, and load id and load time on every silver row
 - [ ] 30. **Gold layer** - `gold` schema rebuilt from silver: page and aggregate tables (standings, records, coverage, postseason series, team season stats, derived `PS` stats), cross-season player and club identity tables, and Neon publishing from gold
 - [x] 24. **API team stats** - fetch the v3 team `traditional`, `advanced`, `opponentsTraditional` and `opponentsAdvanced` feeds (per phase, both modes, all seasons) into bronze and `core` as reference numbers
 - [ ] 25. **Per-game advanced stats** - per game, team and player (with opponent): possessions, pace, ratings, four factors, player rates and Game Score, in `silver` (enrichment per record)

@@ -20,10 +20,13 @@ from gold_etl.postseason import TABLES as PS_TABLES, read_rows as read_postseaso
 from gold_etl.standings import read_rows as read_standings_rows  # noqa: E402
 from gold_etl.quality import (check_scope, check_postseason_scope,
                               check_standings_scope, check_aggregate_scope,
-                              check_records_scope, check_series_scope,
+                              check_records_scope, check_round_api_scope, check_series_scope,
                               check_identity_scope)  # noqa: E402
-from gold_etl.schema import (AGGREGATE_NAMES, DERIVED_NAMES, IDENTITY_TABLES, RECORDS_TABLES,
-                             SOURCE_NAMES, count_sql)  # noqa: E402
+from gold_etl.schema import (DERIVED_NAMES, IDENTITY_TABLES, RECORDS_TABLES, ROUND_NAMES,
+                             SEASON_DERIVED_NAMES, SOURCE_NAMES, count_sql)  # noqa: E402
+
+
+BUILD_NAMES = (*SOURCE_NAMES, *DERIVED_NAMES, *ROUND_NAMES)
 
 
 def build_parser():
@@ -54,16 +57,16 @@ def main(argv=None):
     parser = build_parser()
     args = parser.parse_args(argv)
     if args.list_tables:
-        print("\n".join((*SOURCE_NAMES, *DERIVED_NAMES)))
+        print("\n".join(BUILD_NAMES))
         return 0
     if args.dry_run and args.quality_only:
         parser.error("--dry-run and --quality-only cannot be combined")
-    unknown = set(args.table) - {"all", *SOURCE_NAMES, *DERIVED_NAMES}
+    unknown = set(args.table) - {"all", *BUILD_NAMES}
     if unknown:
         parser.error("Unknown table(s): " + ", ".join(sorted(unknown)))
     if "all" in args.table and len(args.table) != 1:
         parser.error("'all' must be used alone with --table")
-    tables = (*SOURCE_NAMES, *DERIVED_NAMES) if args.table == ["all"] else tuple(dict.fromkeys(args.table))
+    tables = BUILD_NAMES if args.table == ["all"] else tuple(dict.fromkeys(args.table))
     if args.competition == "eurocup" and any(name in RECORDS_TABLES for name in tables):
         parser.error("EuroCup records are not supported; select non-record tables")
     connection = None
@@ -122,7 +125,7 @@ def main(argv=None):
                         count = replace_standings_scope(connection, *scope)
                         print(f"gold.app_standings {season}: {count} rows", flush=True)
                     continue
-                if name in AGGREGATE_NAMES:
+                if name in SEASON_DERIVED_NAMES:
                     if args.dry_run:
                         with connection.cursor() as cursor:
                             count = len(read_aggregate_rows(cursor, name, *scope))
@@ -130,6 +133,9 @@ def main(argv=None):
                     elif args.quality_only:
                         with connection.cursor() as cursor:
                             issues = check_aggregate_scope(cursor, name, *scope)
+                            if name == "team_round_stats" and not issues:
+                                for warning in check_round_api_scope(cursor, *scope):
+                                    print("WARN " + warning, flush=True)
                         for issue in issues:
                             print(issue, file=sys.stderr, flush=True)
                         passed &= not issues

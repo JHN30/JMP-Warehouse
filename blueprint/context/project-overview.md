@@ -1,6 +1,6 @@
 # EuroLeague Data ETL - Project Overview
 
-<!-- blueprint:source-hash a8aaba6b860362916419d89dddb760871bd884cbb1af27d2673f5220edbb55ad -->
+<!-- blueprint:source-hash 2cd24824a36129cca3a95827f5d107afb012339bf111b852c44c4f9950d3dadd -->
 
 > The data pipeline behind the JMP EuroLeague web app: EuroLeague API data into
 > exact bronze files, typed tables in local PostgreSQL, advanced statistics, and
@@ -60,7 +60,7 @@ Next, in build-plan order (IDs are stable, so order is not numeric):
 30. **Gold layer** - 30a local source projections; 30b `PS` stats and standings; 30c team season stats and coverage; 30d records and postseason series; 30e player and club identity; 30f guarded Neon publishing from Gold; 30g final publishing of the advanced Gold additions after 25-29.
 24. **API team stats** (shipped) - v3 team `traditional`, `advanced`, `opponentsTraditional`, `opponentsAdvanced` into bronze and local tables as reference numbers.
 25. **Per-game advanced stats** - team and player per game: possessions, pace, ratings, four factors, rates, Game Score; in `silver`.
-26. **Per-round team advanced stats** - every round and scope: advanced stats, MOV, Pythagorean, SRS, SOS/SOV, adjusted/relative, home/away, rolling; checked against API team feeds; in `gold`.
+26. **Per-round team advanced stats** (26a cumulative table, 26b SRS/SOS/adjusted, 26c home/away and rolling) - every round and scope: advanced stats, MOV, Pythagorean, SRS, SOS/SOV, adjusted/relative, home/away, rolling; checked against API team feeds; in `gold`.
 27. **Per-round player advanced stats** - every round and scope: USG%, AST%, rebound/steal/block %, per-100, PER, Win Shares, PIE; checked against API player feeds; build in `gold`, publish in 30g.
 28. **Standings stats app table** - per-round team advanced stats in `gold` for the standings page; publish in 30g.
 19. **Play-by-play analytics** - actual possessions, clutch, runs, lead changes, time leading, second-chance/fast-break/points off turnovers, assisted FG%, shot zones, possession length (E2007+); local only (per-game in `silver`, aggregates in `gold`).

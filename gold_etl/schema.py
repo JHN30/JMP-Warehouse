@@ -173,6 +173,40 @@ IDENTITY_TABLES = {
 }
 AGGREGATE_NAMES = ("app_team_season_stats", "app_coverage_seasons",
                    "app_coverage_games")
+# Local-only Gold tables (not app tables): excluded from DERIVED_NAMES, so the Neon
+# allowlist in neon_publish/contract.py stays unchanged until they are published.
+ROUND_MEASURES = (
+    "field_goals_made", "field_goals_attempted", "three_pointers_made",
+    "free_throws_made", "free_throws_attempted", "offensive_rebounds",
+    "defensive_rebounds", "turnovers", "assists",
+)
+ROUND_NAMES = ("team_round_stats",)
+SEASON_DERIVED_NAMES = AGGREGATE_NAMES + ROUND_NAMES
+TEAM_ROUND_TABLE = Table(
+    "team_round_stats",
+    ("competition_code", "season_code", "scope", "round_number", "club_code"),
+    SCOPE + (
+        Field("scope", "TEXT NOT NULL", "games.phase_code"),
+        Field("round_number", "INTEGER NOT NULL", "games.round_number"),
+        Field("club_code", "TEXT NOT NULL", "games.club_code"),
+        Field("club_name", "TEXT", "clubs.name"),
+        Field("games_played", "INTEGER NOT NULL", "game_team_advanced"),
+        Field("wins", "INTEGER NOT NULL", "games.match_winner_club_code"),
+        Field("losses", "INTEGER NOT NULL", "games.match_winner_club_code"),
+        Field("points_for", "NUMERIC", "game_team_stats.points"),
+        Field("points_against", "NUMERIC", "game_team_stats.points"),
+    ) + tuple(Field(f"{side}_{name}", "NUMERIC", f"game_team_stats.{name}")
+              for side in ("own", "opp") for name in ROUND_MEASURES) + tuple(
+        Field(name, "NUMERIC", "game_team_advanced" if name in (
+            "game_minutes", "possessions") else "derived")
+        for name in (
+            "game_minutes", "possessions", "mov", "pythagorean_exponent",
+            "pythagorean_win_pct", "pythagorean_wins", "pace", "offensive_rating",
+            "defensive_rating", "net_rating", "efg_pct", "tov_pct", "orb_pct",
+            "drb_pct", "ft_rate", "opp_efg_pct", "opp_tov_pct", "opp_ft_rate",
+            "true_shooting_pct", "assist_ratio")),
+)
+
 DERIVED_NAMES = ("app_standings", *AGGREGATE_NAMES,
                  *RECORDS_TABLES, "app_postseason_series", *IDENTITY_TABLES)
 GOLD_TABLES = {**TABLES, "app_standings": STANDINGS_TABLE,
@@ -180,7 +214,7 @@ GOLD_TABLES = {**TABLES, "app_standings": STANDINGS_TABLE,
                "app_coverage_seasons": COVERAGE_SEASON_TABLE,
                "app_coverage_games": COVERAGE_GAME_TABLE,
                **RECORDS_TABLES, "app_postseason_series": SERIES_TABLE,
-               **IDENTITY_TABLES}
+               **IDENTITY_TABLES, "team_round_stats": TEAM_ROUND_TABLE}
 
 
 def columns(name):

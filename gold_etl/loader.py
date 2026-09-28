@@ -1,7 +1,8 @@
 """Replace one Gold table/season slice using registered Silver source columns."""
 
-from gold_etl.schema import (AGGREGATE_NAMES, IDENTITY_TABLES, RECORDS_TABLES, TABLES, columns,
-                             create_table_sql, scope_predicate)
+from gold_etl.schema import (IDENTITY_TABLES, RECORDS_TABLES, SEASON_DERIVED_NAMES, TABLES,
+                             columns, create_table_sql, scope_predicate)
+from gold_etl.team_rounds import read_rows as read_round_rows
 from gold_etl.postseason import TABLES as PS_TABLES, read_rows as read_postseason_rows
 from gold_etl.standings import read_rows as read_standings_rows
 from gold_etl.team_season import read_rows as read_team_rows
@@ -84,8 +85,10 @@ def replace_standings_scope(connection, competition_code, season_code):
 
 
 def read_aggregate_rows(cursor, name, competition_code, season_code):
-    if name not in AGGREGATE_NAMES:
+    if name not in SEASON_DERIVED_NAMES:
         raise ValueError(f"Unknown Gold aggregate table: {name}")
+    if name == "team_round_stats":
+        return read_round_rows(cursor, competition_code, season_code)
     if name == "app_team_season_stats":
         return read_team_rows(cursor, competition_code, season_code)
     return read_coverage_rows(cursor, competition_code, season_code)[name]
@@ -93,7 +96,7 @@ def read_aggregate_rows(cursor, name, competition_code, season_code):
 
 def replace_aggregate_scope(connection, name, competition_code, season_code):
     """Replace one registered derived season slice in a single transaction."""
-    if name not in AGGREGATE_NAMES:
+    if name not in SEASON_DERIVED_NAMES:
         raise ValueError(f"Unknown Gold aggregate table: {name}")
     from psycopg2.extras import Json, execute_values
 

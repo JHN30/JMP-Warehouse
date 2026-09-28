@@ -457,6 +457,48 @@ a season-by-season profile history. The Gold CLI rebuilds the selected
 competition in one transaction even when `-sc` names one season. Neon
 publishing replaces this table's competition scope after the approved cutover.
 
+### `team_round_stats` (local only)
+
+Built as `gold.team_round_stats` by `python gold_etl/main.py -sc <seasons> -tb
+team_round_stats` from `silver.games`, `silver.game_team_stats` (`total` rows)
+and `silver.game_team_advanced`. It is not an app table: it is outside the
+Neon publish allowlist until features 28 and 30g decide the published shape.
+
+Key: `competition_code`, `season_code`, `scope`, `round_number`, `club_code`.
+`scope` is `all` (every phase), a phase code (`RS`, `PI`, `PO`, `FF`, `TS`, ...)
+or `PS` (`PI`+`PO`+`FF`). `round_number` is the round stored in `silver.games`,
+continuous across phases within a season. A club has a row for every round of
+the scope from its first counted game on; a round it did not play carries its
+previous cumulative values forward (eliminated clubs keep their final values).
+
+Counted games are played games with a full box score for both sides.
+Forfeits (`game_stat_gaps` `*`, for example E2001 game 264 and E2003 game 200)
+are not counted, so `games_played` can be one lower than the API's.
+
+| Columns | Meaning |
+| --- | --- |
+| `games_played`, `wins`, `losses`, `points_for`, `points_against` | Cumulative record and points through the round |
+| `own_*`, `opp_*` (`field_goals_made`, `field_goals_attempted`, `three_pointers_made`, `free_throws_made`, `free_throws_attempted`, `offensive_rebounds`, `defensive_rebounds`, `turnovers`, `assists`) | Cumulative club and opponent totals |
+| `game_minutes`, `possessions` | Sums of the per-game `game_team_advanced` values |
+| `mov` | (`points_for` - `points_against`) / `games_played` |
+| `pythagorean_win_pct`, `pythagorean_wins`, `pythagorean_exponent` | `PF^e / (PF^e + PA^e)`, times games; `e` = 10.25, stored on every row |
+| `pace`, `offensive_rating`, `defensive_rating`, `net_rating` | Feature 25's formulas on cumulative totals |
+| `efg_pct`, `tov_pct`, `orb_pct`, `drb_pct`, `ft_rate`, `true_shooting_pct`, `assist_ratio`, `opp_efg_pct`, `opp_tov_pct`, `opp_ft_rate` | Feature 25's formulas on cumulative totals (fractions, not per-game averages) |
+
+NULL means an input was missing or a denominator was zero; one missing game
+value makes the later cumulative values NULL.
+
+API cross-check (`--quality-only`, warnings only). The API's accumulated team
+feeds (`season_team_stats_traditional`, `_advanced`) are compared with each
+scope's final round: `games_played` and the counting totals must match exactly,
+and `efg_pct`, `true_shooting_pct`, `orb_pct`, `drb_pct` must agree within 0.06
+percentage points (the API rounds to one decimal). The API's `all` scope is
+every phase, like ours. `PS` has no API feed and is skipped. The API's
+`turnovers_ratio`, `assists_ratio` and `free_throws_rate` use different
+definitions and are not compared. Across E2000-E2026 the only differences are
+the two forfeits above (`games_played` off by one for the forfeit's club in the
+`all` and `TS` scopes).
+
 ## Source responses
 
 The complete API responses are the bronze files under `data/bronze/` (see

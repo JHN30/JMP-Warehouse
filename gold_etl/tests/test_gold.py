@@ -10,7 +10,7 @@ from gold_etl import main
 from gold_etl.loader import replace_scope
 from gold_etl.quality import check_records_scope, check_scope, check_series_scope
 from gold_etl.schema import (AGGREGATE_NAMES, DERIVED_NAMES, GOLD_TABLES, PLAYER_STATS,
-                             RECORDS_TABLES, SOURCE_NAMES, TABLES, columns,
+                             RECORDS_TABLES, ROUND_NAMES, SOURCE_NAMES, TABLES, columns,
                              count_sql, create_table_sql)
 from postgres_etl.flat_schema import TABLES as SILVER_TABLES
 
@@ -289,7 +289,7 @@ class CliTests(unittest.TestCase):
                 contextlib.redirect_stdout(io.StringIO()) as output:
             self.assertEqual(main.main(["--list-tables"]), 0)
         connect.assert_not_called()
-        self.assertEqual(output.getvalue().splitlines(), [*SOURCE_NAMES, *DERIVED_NAMES])
+        self.assertEqual(output.getvalue().splitlines(), [*SOURCE_NAMES, *DERIVED_NAMES, *ROUND_NAMES])
 
     def test_dry_run_is_read_only_and_reports_counts(self):
         code, out, _, db = self.run_cli(["-sc", "2025", "-tb", "games", "--dry-run"])

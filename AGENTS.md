@@ -327,6 +327,9 @@ committed; copy the `.example`). Publishing reads the direct non-pooled
   Records use all loaded EuroLeague seasons regardless of `-sc`; series uses the selected seasons.
 - Build local player and club identities: `python gold_etl/main.py -sc all -tb app_players app_club_identities`.
   Identities use every loaded Silver season for the selected competition, regardless of `-sc`.
+- Build local cumulative team-round stats (local only, not published):
+  `python gold_etl/main.py -sc <seasons> -tb team_round_stats`. `--quality-only` also
+  prints `WARN` lines where final-round rows differ from the API team feeds.
 - Traditional or misc table selections also rebuild their derived `PS` rows.
 - Gold read-only source and derived counts: `python gold_etl/main.py -sc <seasons> --dry-run`
 - Gold read-only equality checks: `python gold_etl/main.py -sc <seasons> --quality-only`

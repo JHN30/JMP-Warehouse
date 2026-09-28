@@ -8,7 +8,7 @@ from contextlib import nullcontext
 from pathlib import Path
 from unittest import mock
 
-from gold_etl.schema import DERIVED_NAMES, GOLD_TABLES, SOURCE_NAMES
+from gold_etl.schema import DERIVED_NAMES, GOLD_TABLES, ROUND_NAMES, SOURCE_NAMES
 from neon_publish import publish
 from neon_publish.contract import (APP_TABLES, GLOBAL_TABLES, inspect_target,
                                    predicate, scope, target_name)
@@ -22,7 +22,8 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(len(APP_TABLES), 26)
         self.assertEqual(len({target_name(name) for name in APP_TABLES}), 26)
         self.assertEqual(len(GLOBAL_TABLES), 5)
-        self.assertEqual(set(APP_TABLES), set(GOLD_TABLES))
+        # Local-only round tables are Gold tables but never published.
+        self.assertEqual(set(APP_TABLES), set(GOLD_TABLES) - set(ROUND_NAMES))
         for name in APP_TABLES:
             self.assertEqual(target_name(name), name if name.startswith("app_")
                              else "app_" + name)

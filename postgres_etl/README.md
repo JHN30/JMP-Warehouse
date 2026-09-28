@@ -17,6 +17,7 @@ python postgres_etl/main.py -sc all
 python postgres_etl/main.py -sc 2025 --quality-only
 python postgres_etl/advanced.py -sc 2025 --dry-run
 python postgres_etl/possessions.py -sc 2025 --dry-run
+python postgres_etl/score_flow.py -sc 2025 --dry-run
 ```
 
 `advanced.py` derives two more `silver` tables, `game_team_advanced` and
@@ -31,6 +32,11 @@ a `load_log` entry (empty `bronze_versions`, since the source is Silver).
 team and game from the play-by-play events, next to the box-score estimate. `main.py`
 runs it after `advanced.py` when a load includes `games` or `play_by_play`; the options
 are the same. Games before E2007 have no play-by-play and no rows.
+
+`score_flow.py` (feature 19b) adds `game_team_score_flow`: lead changes, ties, time
+leading and trailing, largest lead, scoring runs and clutch results per team and game from
+the running score in `play_by_play`. It shares `possessions.py`'s event ordering, clock and
+storage code and runs right after it.
 
 The dry run checks parsing, types, required fields, and duplicate keys without
 a database. A real load needs `psycopg2` and the credentials in

@@ -199,11 +199,13 @@ def read_rows(cursor, competition_code, season_code):
     return derive_rows(*data)
 
 
-def replace_season(connection, competition_code, season_code, rows):
+TABLE = "game_team_possessions"
+
+
+def replace_season(connection, competition_code, season_code, rows, name=TABLE):
     """DDL, delete, insert and the load-log entry commit together or not at all."""
     from psycopg2.extras import Json, execute_values
 
-    name = "game_team_possessions"
     loaded_at = datetime.now(timezone.utc)
     with connection:
         with connection.cursor() as cursor:
@@ -233,6 +235,29 @@ def replace_season(connection, competition_code, season_code, rows):
                  len(values), Json({})))
 
 
+def stored_rows(cursor, name, competition_code, season_code):
+    """The stored season slice of a derived table, without scope or provenance columns."""
+    fields = [field.name for field in ADVANCED_TABLES[name].fields
+              if field.name not in ("competition_code", "season_code")]
+    columns = ", ".join(f'"{field}"' for field in fields)
+    cursor.execute(f'SELECT {columns} FROM "{name}" '
+                   'WHERE competition_code = %s AND season_code = %s',
+                   (competition_code, season_code))
+    return _dict_rows(cursor)
+
+
+def differences_from_derivation(name, actual, expected):
+    """ERROR issues where stored rows differ from a fresh derivation."""
+    key = lambda row: (row["game_code"], row["side"])
+    stored = {key(row): row for row in actual}
+    fresh = {key(row): row for row in expected}
+    if stored.keys() != fresh.keys():
+        return [("ERROR", "keys_differ_from_derivation", name,
+                 len(stored.keys() ^ fresh.keys()))]
+    differing = sum(stored[k] != fresh[k] for k in fresh)
+    return [("ERROR", "values_differ_from_derivation", name, differing)] if differing else []
+
+
 # A game whose counted possessions differ from the box-score estimate by more than this
 # share is reported as a warning (see the data dictionary for the observed distribution).
 TOLERANCE = Decimal("0.10")
@@ -240,41 +265,30 @@ TOLERANCE = Decimal("0.10")
 
 def check_season(connection, competition_code, season_code):
     """Read-only checks; returns (severity, code, table, count) for each failure."""
-    name = "game_team_possessions"
-    issues = []
     with connection.cursor() as cursor:
-        cursor.execute("SELECT to_regclass(%s)", (name,))
+        cursor.execute("SELECT to_regclass(%s)", (TABLE,))
         if cursor.fetchone()[0] is None:
-            return [("ERROR", "missing_table", name, 1)]
+            return [("ERROR", "missing_table", TABLE, 1)]
         expected = read_rows(cursor, competition_code, season_code)
-        fields = [field.name for field in ADVANCED_TABLES[name].fields
-                  if field.name not in ("competition_code", "season_code")]
-        columns = ", ".join(f'"{field}"' for field in fields)
-        cursor.execute(f'SELECT {columns} FROM "{name}" '
-                       'WHERE competition_code = %s AND season_code = %s',
-                       (competition_code, season_code))
-        actual = _dict_rows(cursor)
-        key = lambda row: (row["game_code"], row["side"])
-        stored = {key(row): row for row in actual}
-        fresh = {key(row): row for row in expected}
-        if stored.keys() != fresh.keys():
-            issues.append(("ERROR", "keys_differ_from_derivation", name,
-                           len(stored.keys() ^ fresh.keys())))
-        else:
-            differing = sum(stored[k] != fresh[k] for k in fresh)
-            if differing:
-                issues.append(("ERROR", "values_differ_from_derivation", name, differing))
-        far = sum(1 for row in actual
-                  if row["estimated_possessions"] and abs(
-                      row["counted_possessions"] - row["estimated_possessions"])
-                  > TOLERANCE * row["estimated_possessions"])
-        if far:
-            issues.append(("WARN", "counted_far_from_estimate", name, far))
+        actual = stored_rows(cursor, TABLE, competition_code, season_code)
+    issues = differences_from_derivation(TABLE, actual, expected)
+    far = sum(1 for row in actual
+              if row["estimated_possessions"] and abs(
+                  row["counted_possessions"] - row["estimated_possessions"])
+              > TOLERANCE * row["estimated_possessions"])
+    if far:
+        issues.append(("WARN", "counted_far_from_estimate", TABLE, far))
     return issues
 
 
-def run_seasons(config_path, competition, season_codes, dry_run=False, quality_only=False):
-    """Derive and store every season; returns True when no ERROR was found."""
+def run_seasons(config_path, competition, season_codes, dry_run=False, quality_only=False,
+                read=None, replace=None, check=None):
+    """Derive and store every season; returns True when no ERROR was found.
+
+    `read`, `replace` and `check` default to this module's functions, looked up at call time;
+    the other play-by-play tables pass their own."""
+    read, replace, check = (read or read_rows, replace or replace_season,
+                            check or check_season)
     code = PREFIX[competition]
     started = time.monotonic()
     passed = True
@@ -283,18 +297,18 @@ def run_seasons(config_path, competition, season_codes, dry_run=False, quality_o
         for season_code in season_codes:
             if not quality_only:
                 with connection.cursor() as cursor:
-                    rows = read_rows(cursor, code, season_code)
+                    rows = read(cursor, code, season_code)
                 connection.rollback()
                 if dry_run:
                     print(f"  {season_code}: {len(rows):,} team rows (dry run; "
                           "database unchanged)", flush=True)
                     continue
-                replace_season(connection, code, season_code, rows)
+                replace(connection, code, season_code, rows)
                 print(f"  {season_code}: {len(rows):,} team rows | elapsed "
                       f"{elapsed(started)}", flush=True)
             if dry_run:
                 continue
-            issues = check_season(connection, code, season_code)
+            issues = check(connection, code, season_code)
             connection.rollback()
             errors = [issue for issue in issues if issue[0] == "ERROR"]
             passed &= not errors
@@ -307,11 +321,11 @@ def run_seasons(config_path, competition, season_codes, dry_run=False, quality_o
     return passed
 
 
-def main(argv=None):
+def main(argv=None, run=None,
+         description="Count possessions per team and game in silver from play-by-play."):
     from main import available_seasons, requested_seasons, DEFAULT_DATA_ROOT
 
-    parser = argparse.ArgumentParser(
-        description="Count possessions per team and game in silver from play-by-play.")
+    parser = argparse.ArgumentParser(description=description)
     parser.add_argument("-cp", "--competition", choices=PREFIX, default="euroleague")
     parser.add_argument("-sc", "--season-code", nargs="+", default=["latest"],
                         help="Years, codes, ranges, 'current', 'latest', or 'all' (as postgres_etl/main.py).")
@@ -327,10 +341,10 @@ def main(argv=None):
     seasons = requested_seasons(args.season_code, args.competition,
                                 available_seasons(args.data_root, args.competition), parser)
     try:
-        passed = run_seasons(args.config, args.competition, seasons,
-                             args.dry_run, args.quality_only)
+        passed = (run or run_seasons)(args.config, args.competition, seasons,
+                                      args.dry_run, args.quality_only)
     except (OSError, ValueError, RuntimeError) as error:
-        print(f"Counted possessions failed: {error}", file=sys.stderr, flush=True)
+        print(f"Play-by-play derivation failed: {error}", file=sys.stderr, flush=True)
         return 1
     return 0 if passed else 1
 

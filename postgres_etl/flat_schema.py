@@ -483,6 +483,17 @@ ADVANCED_TABLES = {
         f("counted_possessions", "INTEGER"),
     ), _derived("possession_seconds avg_possession_seconds estimated_possessions"),
         indexes=(("club_code",),)),
+    "game_team_score_flow": table("game_team_score_flow", ("game_code", "side"), (
+        f("game_code", "INTEGER NOT NULL"), f("side", "TEXT NOT NULL"),
+        f("club_code", "TEXT"), f("opponent_club_code", "TEXT"),
+        f("points_for", "INTEGER"), f("points_against", "INTEGER"),
+        f("lead_changes", "INTEGER"), f("ties", "INTEGER"),
+    ), _derived("time_leading_seconds time_trailing_seconds time_tied_seconds"), (
+        f("largest_lead", "INTEGER"), f("longest_run", "INTEGER"),
+        f("runs_6_plus", "INTEGER"),
+    ), _derived("clutch_seconds"), (
+        f("clutch_points_for", "INTEGER"), f("clutch_points_against", "INTEGER"),
+    ), indexes=(("club_code",),)),
     "game_player_advanced": table("game_player_advanced", ("game_code", "side", "person_key"), (
         f("game_code", "INTEGER NOT NULL"), f("side", "TEXT NOT NULL"),
         f("person_key", "TEXT NOT NULL"), f("club_code", "TEXT"),

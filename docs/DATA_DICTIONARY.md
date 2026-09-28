@@ -180,6 +180,33 @@ layups and dunks are included) field goals. `--quality-only` checks the stored r
 fresh derivation and prints a warning for club games whose counted possessions differ from the
 estimate by more than 10% (16 rows across E2007-E2026: 7 in E2007 and 9 in E2009).
 
+### `game_team_score_flow`
+
+Built by `python postgres_etl/score_flow.py -sc <seasons>` from `play_by_play` and `games`
+(E2007 onward; same rows as `game_team_possessions`). Extra key `game_code`, `side`; one row
+per club per played game whose events carry a running score. Same provenance columns; not in
+Gold or Neon.
+
+| Column | Meaning |
+| --- | --- |
+| `points_for`, `points_against` | Final score from the running score (equal to `games.local_score` and `road_score` in every E2007-E2026 game) |
+| `lead_changes`, `ties` | Times the leader differs from the last leader; times the score becomes level above 0-0. Identical on both rows |
+| `time_leading_seconds`, `time_trailing_seconds`, `time_tied_seconds` | Game seconds ahead, behind and level; they add up to 2,400 plus 300 per overtime |
+| `largest_lead` | Biggest own margin (0 when never ahead) |
+| `longest_run`, `runs_6_plus` | Largest unanswered scoring streak, and how many streaks reached 6 points |
+| `clutch_seconds`, `clutch_points_for`, `clutch_points_against` | Time and points in the last five minutes of regulation and all overtime while the margin (before the event) was 5 or less |
+
+`play_by_play.points_a` is the local team's running score and `points_b` the road team's,
+present on scoring events; `None` keeps the previous value. Events are ordered as in
+`game_team_possessions`. An event that changes both scores breaks every run. The time and
+clutch-seconds columns are NULL for a game with a scoring event that has no usable clock
+(20 club games in 10 games: 7 in E2016, 1 in E2020 and 2 in E2022 by game count); counts
+and points do not depend on the clock. A game with no score in its events has no row.
+Across E2007-E2026 (10,098 club games): 5.6 lead changes and 4.3 ties per game, a largest
+lead of 10.8 points on average, a longest run of 9.4 points and 3.1 runs of 6 or more per
+team, and 53% of club games have clutch time. `--quality-only` checks the stored rows against
+a fresh derivation and warns when a final score differs from `games` (none found).
+
 ## Standard column names
 
 The source JSON paths have not changed. Where these stats occur, the SQL

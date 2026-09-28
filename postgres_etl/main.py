@@ -7,6 +7,7 @@ from pathlib import Path
 
 from advanced import SOURCE_TABLES as ADVANCED_SOURCES, run_seasons as run_advanced
 from possessions import TRIGGER_TABLES as POSSESSION_SOURCES, run_seasons as run_possessions
+from score_flow import run_seasons as run_score_flow
 from flat_loader import FlatDatabaseLoader
 from flat_schema import TABLES as FLAT_TABLES, physical_name
 from quality import validate_loaded
@@ -131,6 +132,11 @@ def main(argv=None):
             print("\nCounted possessions", flush=True)
             if not run_possessions(args.config, args.competition, seasons):
                 print("Counted possession checks failed; inspect the reported issues.",
+                      file=sys.stderr, flush=True)
+                return 1
+            print("\nScore flow", flush=True)
+            if not run_score_flow(args.config, args.competition, seasons):
+                print("Score flow checks failed; inspect the reported issues.",
                       file=sys.stderr, flush=True)
                 return 1
         if args.quality_only or (not args.dry_run and not args.skip_quality_check):

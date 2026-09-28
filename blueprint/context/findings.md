@@ -22,10 +22,18 @@ manifest records show it; a one-off manual re-fetch without the guard (or a
 `--refresh-current` override flag) would accept the correction.
 **Resolution:**
 
-### F-06 [P2] open - Refresh regression tests were removed during the publish pause
+### F-07 [P2] open - Preflight misses stricter nullability on an expected column
 
-**File:** neon_publish/tests/test_publish.py:23
-**Found:** 2026-09-27 by independent /audit (scope: current; lenses: quality, security, performance, tests)
-**Why it matters:** The former `RefreshCommandTests` covered load failure and retry state, fetch no-op, summary parsing, and reporting stats feeds kept from an earlier fetch. The replacement has one successful `--skip-fetch` test. A regression in the normal fetch path or the pending-load state can now pass all configured suites while `python pipeline.py` skips or misreports a needed load.
-**Suggested fix:** Restore focused fake-stage tests for a changed fetch, unchanged fetch, load failure and retry, and the kept-feed summary, using the paused publishing contract.
+**File:** neon_publish/contract.py:56
+**Found:** 2026-09-28 by independent /audit (scope: current; lenses: quality, security, performance, tests)
+**Why it matters:** `inspect_target` flags a Gold `NOT NULL` field mapped to a nullable Neon column, but accepts the reverse. A Neon column marked `NOT NULL` where Gold permits null passes preflight and dry run, then COPY can fail after the transaction begins. This violates the promised incompatible-schema preflight and leaves the operator with a misleading preview.
+**Suggested fix:** Flag `nullable == "NO"` when the Gold field does not specify `NOT NULL`, and cover both nullability directions with a preflight test.
+**Resolution:**
+
+### F-08 [P2] open - Preview queries incompatible targets after preflight reports missing columns
+
+**File:** neon_publish/publish.py:132
+**Found:** 2026-09-28 by independent /audit (scope: current; lenses: quality, security, performance, tests)
+**Why it matters:** `_remote_state` still counts every existing incompatible table using the scope columns, and calls `game_rows` for incompatible play-by-play or shots tables. If `competition_code`, `season_code`, or `game_code` is missing, the read-only preview raises a database error before it can return its count and migration report. These are precisely the schema differences preflight is meant to report.
+**Suggested fix:** Avoid querying columns that preflight found missing; report unavailable remote counts or game plans for that table while preserving the schema issues, and test a missing scope or game-code column.
 **Resolution:**

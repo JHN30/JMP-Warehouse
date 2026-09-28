@@ -8,8 +8,33 @@ source JSON paths, and keys are defined in
 responses. Silver contains cleaned source data. The local `gold` schema holds
 16 source projections from Silver, derived postseason player stats, the
 page-shaped standings table, team-season totals, two coverage tables, the three
-record leaderboards and postseason series. Identity tables and Neon publishing are
-still paused. Existing Neon tables are unchanged in the meantime.
+record leaderboards, postseason series, and the two identity tables. The 30f
+publisher maps these 26 tables to Neon's `public.app_*` tables. The one-time
+in-place Neon migration and first E2026 publish completed on 2026-09-28.
+
+## Neon app-table contract
+
+The 16 Gold source tables publish to `public.app_<source>`:
+`app_seasons`, `app_clubs`, `app_people`, `app_registrations`, `app_rounds`,
+`app_games`, `app_game_officials`, `app_game_period_scores`,
+`app_game_player_stats`, `app_game_team_stats`,
+`app_season_player_stats_traditional`, `app_season_player_stats_advanced`,
+`app_season_player_stats_scoring`, `app_season_player_stats_misc`,
+`app_play_by_play`, and `app_shots`. The ten Gold derivations retain their
+`app_*` names: `app_standings`, `app_team_season_stats`,
+`app_coverage_seasons`, `app_coverage_games`,
+`app_records_player_seasons`, `app_records_single_games`,
+`app_records_team_seasons`, `app_postseason_series`, `app_players`, and
+`app_club_identities`.
+
+The three record tables and two identity tables replace all rows for the
+selected competition. The other 21 tables replace one selected season. One
+Neon transaction covers all selected tables. The publisher verifies exact
+post-copy counts and refuses a scope below 90% of its previous row count unless
+`--allow-shrink` is explicit. `app_play_by_play` and `app_shots` copy only changed
+games. A failed transaction leaves previous rows visible. The read-only
+`--dry-run` reports counts, schema differences, changed games, and shrink
+refusals. A failed pipeline run keeps its publish-pending state for retry.
 
 ## Silver provenance
 
@@ -142,7 +167,8 @@ are not copied by 30a.
 `python gold_etl/main.py -sc all` builds all locally loaded Silver seasons.
 `--dry-run` reports Silver source and derived row counts without Gold writes;
 `--quality-only` compares Gold source and derived keys and full values with
-Silver. Both read the local database only. Gold is not published to Neon yet.
+Silver. Both read the local database only. Use
+`python neon_publish/main.py -sc E2025 --dry-run` for the read-only Neon preview.
 Use explicit `gold.games` or `silver.games` names because local connections
 still search `silver` by default.
 
@@ -158,13 +184,15 @@ Feature 30c builds local `gold.app_team_season_stats`,
 `gold.app_coverage_seasons` and `gold.app_coverage_games` from Silver. The
 record and postseason series tables in this section are built locally in 30d.
 Feature 30e builds the player and club identity tables locally from Silver.
-Existing Neon tables remain in place for the web app and receive no updates
-during the pause.
+The separate web app reads the Neon tables. The 30f in-place cutover changed
+some table and column names; the approved
+[one-time migration](../neon_publish/migrations/30f_in_place.sql) was applied
+on 2026-09-28. Further live publishes require owner approval.
 
 ### `app_standings`
 
 Built locally as `gold.app_standings` from the seven `silver.standings_*` feeds
-and `silver.clubs`. Neon still serves its existing copy until feature 30f.
+and `silver.clubs`. It publishes as `public.app_standings` after cutover.
 
 | Extra key | One row represents | Essential use |
 | --- | --- | --- |
@@ -231,7 +259,7 @@ metrics, source filters and tie-break order, so rows are self-contained
   separate forfeit filter applies there.
 - `gold_etl/main.py` rebuilds each selected record table once from every loaded
   EuroLeague season, independent of `-sc`; `--quality-only` compares the full
-  rows with a fresh Silver derivation. Publishing stays paused until 30f.
+  rows with a fresh Silver derivation. These tables publish by competition.
 - The jmp-euroleague2 Express API still computes these records itself for
   now (`SUPPORTED_SEASONS`, currently `E2025`-`E2026` only); switching it to
   read these tables is a separate, coordinated change in that repo.
@@ -241,7 +269,7 @@ metrics, source filters and tie-break order, so rows are self-contained
 Built locally as `gold.app_team_season_stats` from played `silver.games` and
 `silver.game_team_stats` `total` rows. The historical Neon table serves the
 Express `/teams/:clubCode/team-stats?phase=` route; this local rebuild is not
-published yet. This table is season-scoped.
+published until the approved cutover. This table is season-scoped.
 
 | Key | One row represents |
 | --- | --- |
@@ -267,7 +295,7 @@ published yet. This table is season-scoped.
 
 Built locally as `gold.app_coverage_seasons` and `gold.app_coverage_games` from
 Silver. The historical Neon tables serve the Express `/coverage` route (with
-and without `?gameCode=`); the local rebuild is not published yet. Both are
+and without `?gameCode=`); the local rebuild publishes through the 30f cutover. Both are
 season-scoped. `app_coverage_seasons` has
 one row per season; `app_coverage_games` has one row per game (played or
 not).
@@ -354,7 +382,7 @@ that the source data doesn't carry.
 Built locally as `gold.app_players` from player registrations and people in
 every loaded Silver season. The Gold CLI's `-sc` selection does not limit this
 cross-season table. It is rebuilt for the selected competition in one
-transaction. Neon publishing remains paused.
+transaction. Neon publishing replaces each identity table's competition scope.
 
 One row per player (`person_code`), like the records tables above (not
 season-scoped: a player's row spans every season they appeared in). No
@@ -396,7 +424,7 @@ stay NULL. `first_season_code`, `last_season_code`, and `seasons_played INTEGER
 NOT NULL` describe the club's distinct loaded seasons. The table does not store
 a season-by-season profile history. The Gold CLI rebuilds the selected
 competition in one transaction even when `-sc` names one season. Neon
-publishing remains paused.
+publishing replaces this table's competition scope after the approved cutover.
 
 ## Source responses
 

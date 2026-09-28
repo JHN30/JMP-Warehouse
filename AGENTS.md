@@ -19,7 +19,9 @@ responses, loads it into 28 typed tables in the local PostgreSQL `silver`
 schema with quality checks. Gold builds 16 local source tables from Silver,
 postseason player statistics, a page-shaped standings table, team-season totals,
 season/game coverage, all-time records, postseason series, and cross-season
-player and club identities. Neon publishing remains paused until feature 30f.
+player and club identities. The 30f Gold-to-Neon cutover and first E2026
+publish completed on 2026-09-28 with owner approval. Further live publishing
+still requires explicit owner approval.
 Python 3.13 + PostgreSQL, no web framework.
 See `README.md` for the layout and
 `docs/DATA_DICTIONARY.md` for the tables.
@@ -302,14 +304,14 @@ checks do not make the Blueprint unusable.
 
 Run from the repository root (the owner uses the VS Code terminal). Local
 PostgreSQL settings come from `postgres_etl/config_connection.json` (not
-committed; copy the `.example`). Publishing is paused until feature 30f and the
-pipeline does not ask for `NEON_DATABASE_URL`.
+committed; copy the `.example`). Publishing reads the direct non-pooled
+`NEON_DATABASE_URL` from the environment or `.env` only after Gold quality passes.
 
 - Refresh the current season (fetch, load, quality checks): `python pipeline.py`
   (VS Code task "Refresh current season"). Ends with a summary; each run is logged
   to `logs/refresh/refresh_<YYYYMMDD_HHMMSS>.log`.
-- `python pipeline.py --dry-run-publish` remains accepted for the existing VS Code
-  task; publishing is paused for every run.
+- `python pipeline.py --dry-run-publish` builds Gold and checks Neon without
+  remote writes; pending state remains true for a later live retry.
 - Fetch into bronze: `python api_requests/main.py -sc <seasons>` (for example `-sc 2000-2025`)
 - Load into local PostgreSQL: `python postgres_etl/main.py -sc <seasons>`
 - Load dry run (no database): `python postgres_etl/main.py -sc <seasons> --dry-run`
@@ -325,8 +327,14 @@ pipeline does not ask for `NEON_DATABASE_URL`.
 - Traditional or misc table selections also rebuild their derived `PS` rows.
 - Gold read-only source and derived counts: `python gold_etl/main.py -sc <seasons> --dry-run`
 - Gold read-only equality checks: `python gold_etl/main.py -sc <seasons> --quality-only`
-- Publish to Neon: paused until feature 30f. `python neon_publish/main.py --dry-run`
-  reports the pause without connecting to Neon.
+- List the 26 fixed Gold-to-Neon mappings: `python neon_publish/main.py --list-tables`
+- Read-only Neon preflight and count preview: `python neon_publish/main.py -sc E2025 --dry-run`
+- Publish one EuroLeague season and competition-wide Gold tables: `python neon_publish/main.py -sc E2026`
+  after separate owner approval. The one-time
+  [in-place migration](neon_publish/migrations/30f_in_place.sql) completed on
+  2026-09-28. The publisher refuses incompatible schemas and
+  scopes shrinking below 90% unless `--allow-shrink` is explicit. Failures roll
+  back all selected scopes. `-tb` selects registered tables.
 - CSV export: `python tables_to_csv/main.py -sc <seasons>`
 - Test:
   - `cd api_requests && python -m unittest tests.test_scrapper`

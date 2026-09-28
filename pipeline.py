@@ -1,12 +1,12 @@
-"""Refresh one season: fetch -> load silver in local PostgreSQL.
+"""Refresh one season: fetch -> Silver -> Gold -> guarded Neon publish.
 
 Run it from the VS Code terminal whenever you want (for example nightly and
 after each round). When the API returned nothing new, the run stops after the
-fetch. Neon is untouched while publishing is paused. Every run
+fetch unless a publish is pending. Every run
 writes one log file to logs/refresh/ and ends with a summary.
 
     python pipeline.py                     # current EuroLeague season
-    python pipeline.py --dry-run-publish   # accepted while publishing is paused
+    python pipeline.py --dry-run-publish   # read-only Neon preview
     python pipeline.py -sc 2025
 """
 
@@ -112,6 +112,8 @@ class StageFacts:
     failed_requests: int | None = None
     kept: list = field(default_factory=list)
     load_lines: list = field(default_factory=list)
+    gold_lines: list = field(default_factory=list)
+    gold_status: str | None = None
     publish_lines: list = field(default_factory=list)
 
 
@@ -170,8 +172,14 @@ def build_summary(season_code, result, facts, seconds, log_path, next_step=None)
         lines.extend(f"            {issue}" for issue in issues)
         if failure:
             lines.append(f"            {failure}")
+    if facts.gold_status is None:
+        lines.append("Gold:     not run")
+    else:
+        failure = next((line for line in facts.gold_lines
+                        if line.startswith("Gold ETL failed:")), None)
+        lines.append("Gold:     " + (failure or facts.gold_status))
     if not facts.publish_lines:
-        lines.append("Publish:  paused (no gold tables until feature 30)")
+        lines.append("Publish:  skipped")
     else:
         tables, mode, failure = publish_facts(facts.publish_lines)
         lines.append(f"Publish:  {mode or 'not completed'}")
@@ -263,9 +271,9 @@ def build_parser():
     parser.add_argument("--skip-fetch", action="store_true",
                         help="Use the existing raw cache; implies --force.")
     parser.add_argument("--dry-run-publish", action="store_true",
-                        help="Accepted for the existing task; publishing is currently paused.")
+                        help="Read-only Neon publish preview; pending state is retained.")
     parser.add_argument("--allow-shrink", action="store_true",
-                        help="Reserved for publishing after feature 30; currently unused.")
+                        help="Permit a Neon row-count shrink below the normal 90 percent guard.")
     parser.add_argument("--hot-hours", type=float, default=48,
                         help="Passed to the fetcher; see api_requests --hot-hours.")
     parser.add_argument("--request-interval", type=float, default=2.5,
@@ -320,9 +328,10 @@ def refresh(args, season_code, log, state_file, facts, stage_runner=run_stage,
 
     pending = read_state(state_file).get("publish_pending", False)
     if not (pending or args.force or args.skip_fetch):
-        log.line("Nothing changed; local silver and Neon left as is.")
+        log.line("Nothing changed; Silver, Gold and Neon left as is.")
         return 0, "NOTHING TO DO", None
 
+    write_state(state_file, publish_pending=True)
     code = stage("Load local PostgreSQL",
                  [python, "postgres_etl/main.py", "-cp", args.competition, "-sc", season_code],
                  into=facts.load_lines)
@@ -331,8 +340,41 @@ def refresh(args, season_code, log, state_file, facts, stage_runner=run_stage,
                 "Neon was not updated. Fix the load problem (see the log), "
                 "then run again.")
 
+    gold_command = [python, "gold_etl/main.py", "-cp", args.competition,
+                    "-sc", season_code]
+    code = stage("Build local Gold", gold_command, into=facts.gold_lines)
+    if code != 0:
+        facts.gold_status = "build failed"
+        return code, f"FAILED at Gold build (exit {code})", "Fix Gold and retry."
+    facts.gold_status = "built; quality not checked"
+    code = stage("Check local Gold", gold_command + ["--quality-only"],
+                 into=facts.gold_lines)
+    if code != 0:
+        facts.gold_status = "quality failed"
+        return code, f"FAILED at Gold quality (exit {code})", "Fix Gold quality and retry."
+    facts.gold_status = "built and quality checked"
+
+    url, source = resolve_neon_url(environ, prompt, interactive, dotenv_path)
+    if not url:
+        facts.publish_lines.append("Publish failed: NEON_DATABASE_URL is missing")
+        return 1, "FAILED at Publish (missing Neon URL)", "Set NEON_DATABASE_URL and retry."
+    if not looks_like_postgres_url(url):
+        facts.publish_lines.append("Publish failed: malformed Neon URL")
+        return 1, "FAILED at Publish (invalid Neon URL)", "Correct NEON_DATABASE_URL and retry."
+    log.line(f"Neon URL {source}.")
+    publish_env = dict(child_env, NEON_DATABASE_URL=url)
+    publish_command = [python, "neon_publish/main.py", "-sc", season_code]
+    if args.dry_run_publish:
+        publish_command.append("--dry-run")
+    if args.allow_shrink:
+        publish_command.append("--allow-shrink")
+    code = stage("Publish Gold to Neon", publish_command, into=facts.publish_lines,
+                 env=publish_env, redact=redactor(url))
+    if code != 0:
+        return code, f"FAILED at Publish (exit {code})", "Neon was rolled back; retry."
+    if args.dry_run_publish:
+        return 0, "DRY RUN", "Neon unchanged; publish remains pending."
     write_state(state_file, publish_pending=False)
-    log.line("Publishing paused (no gold tables until feature 30). Neon unchanged.")
     return 0, "OK", None
 
 def main(argv=None):

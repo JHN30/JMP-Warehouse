@@ -1,0 +1,79 @@
+"""Fixed Gold source and Neon target contract."""
+
+from gold_etl.schema import (DERIVED_NAMES, GOLD_TABLES, IDENTITY_TABLES,
+                             RECORDS_TABLES, SOURCE_NAMES)
+
+
+APP_TABLES = SOURCE_NAMES + DERIVED_NAMES
+GLOBAL_TABLES = frozenset((*RECORDS_TABLES, *IDENTITY_TABLES))
+GAME_DIFF_TABLES = frozenset(("play_by_play", "shots"))
+
+
+def target_name(name):
+    if name not in APP_TABLES:
+        raise ValueError(f"Unknown publish table: {name}")
+    return name if name.startswith("app_") else f"app_{name}"
+
+
+def scope(name, competition_code, season_code):
+    return ((competition_code,) if name in GLOBAL_TABLES
+            else (competition_code, season_code))
+
+
+def predicate(name):
+    return ("competition_code = %s" if name in GLOBAL_TABLES
+            else "competition_code = %s AND season_code = %s")
+
+
+def expected_type(field):
+    return {"TEXT": "text", "INTEGER": "integer", "NUMERIC": "numeric",
+            "BOOLEAN": "boolean", "JSONB": "jsonb", "TIMESTAMP": "timestamp without time zone",
+            "TIMESTAMPTZ": "timestamp with time zone"}[field.kind.split()[0]]
+
+
+def inspect_target(cursor, name):
+    """Return incompatibilities for an existing target; missing tables need migration."""
+    target = target_name(name)
+    cursor.execute("SELECT to_regclass(%s)", (f"public.{target}",))
+    if cursor.fetchone()[0] is None:
+        return [f"public.{target}: missing table"]
+    cursor.execute(
+        "SELECT column_name, data_type, is_nullable, column_default "
+        "FROM information_schema.columns WHERE table_schema = 'public' AND table_name = %s",
+        (target,),
+    )
+    actual = {column: (kind, nullable, default)
+              for column, kind, nullable, default in cursor.fetchall()}
+    expected = {field.name: field for field in GOLD_TABLES[name].fields}
+    problems = []
+    for column, field in expected.items():
+        if column not in actual:
+            problems.append(f"public.{target}: missing column {column} {field.kind}")
+            continue
+        kind, nullable, _ = actual[column]
+        if kind != expected_type(field):
+            problems.append(f"public.{target}.{column}: {kind}, expected {expected_type(field)}")
+        if "NOT NULL" in field.kind and nullable != "NO":
+            problems.append(f"public.{target}.{column}: expected NOT NULL")
+    for column, (_, nullable, default) in actual.items():
+        if column not in expected and nullable == "NO" and default is None:
+            problems.append(f"public.{target}.{column}: extra required column")
+    cursor.execute(
+        "SELECT co.contype, pg_get_constraintdef(co.oid) FROM pg_constraint co "
+        "JOIN pg_class cl ON cl.oid = co.conrelid "
+        "JOIN pg_namespace ns ON ns.oid = cl.relnamespace "
+        "WHERE ns.nspname = 'public' AND cl.relname = %s AND co.contype IN ('p','f','u','x','c')",
+        (target,),
+    )
+    constraints = cursor.fetchall()
+    key = ", ".join(GOLD_TABLES[name].key)
+    if ("p", f"PRIMARY KEY ({key})") not in constraints:
+        problems.append(f"public.{target}: primary key differs from ({key})")
+    for kind, definition in constraints:
+        if kind != "p":
+            problems.append(f"public.{target}: incompatible constraint {definition}")
+    return problems
+
+
+def preflight(cursor, names):
+    return {name: issues for name in names if (issues := inspect_target(cursor, name))}

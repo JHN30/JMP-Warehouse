@@ -269,6 +269,26 @@ def check_round_rating_invariants(cursor, competition_code, season_code):
     return issues
 
 
+def check_round_player_rating_invariants(cursor, competition_code, season_code):
+    """Errors where a scope round's seconds-weighted mean PER is not 15 (PER is normalized
+    to 15 by construction; single low-minute players can legitimately go negative)."""
+    cursor.execute('SELECT scope, round_number, person_key, seconds_played, per FROM '
+                   'gold."player_round_ratings" WHERE competition_code = %s '
+                   'AND season_code = %s', (competition_code, season_code))
+    groups = {}
+    for row in _dict_rows(cursor):
+        if row["per"] is not None:
+            groups.setdefault((row["scope"], row["round_number"]), []).append(row)
+    issues = []
+    for (scope_name, number), rows in sorted(groups.items()):
+        seconds = sum(float(row["seconds_played"]) for row in rows)
+        mean = sum(float(row["per"]) * float(row["seconds_played"]) for row in rows) / seconds
+        prefix = f"gold.player_round_ratings {season_code} {scope_name} round {number}: "
+        if abs(mean - 15) > 1e-4:
+            issues.append(prefix + f"seconds-weighted mean per is {mean:g}, not 15")
+    return issues
+
+
 def check_round_split_invariants(cursor, competition_code, season_code):
     """Errors where splits disagree with the cumulative `team_round_stats` rows."""
     scope = (competition_code, season_code)

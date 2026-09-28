@@ -590,6 +590,28 @@ computed `usage_pct`, `assist_pct` and the rebound, steal and block rates with a
 minutes share 5x too small. The stored rows were rebuilt with the corrected share
 (seconds over game seconds); `player_round_stats` never used those columns.
 
+### `player_round_ratings` (local only)
+
+Built as `gold.player_round_ratings` by `python gold_etl/main.py -sc <seasons> -tb
+player_round_ratings` from `silver.game_player_stats` and the same counted games as
+`team_round_stats`. Key `competition_code`, `season_code`, `scope` (`all`, each phase,
+`PS`), `round_number`, `person_key`; same row set as `player_round_stats`. Not published
+to Neon (30g).
+
+| Column | Meaning |
+|---|---|
+| `club_code`, `player_name`, `games_played`, `seconds_played` | Latest club and name, appearances and cumulative seconds through the round |
+| `uper` | Hollinger's unadjusted PER per minute from cumulative totals, league constants (factor, VOP, DRB%) summed over every counted game of the scope through the round, and the player's team assist ratio |
+| `aper` | `uper` x league pace / the player's team pace (over the games the player appeared in) |
+| `per` | `aper` x 15 / the seconds-weighted mean `aper` of the scope's players through the round, so the league mean is 15 |
+
+The team context comes from the games the player played (each with that game's own
+club), not the club's full-season totals as Basketball-Reference uses, so values differ
+slightly for players who missed games. There is no minutes cutoff: values for players
+with a few minutes are noisy and can be negative. NULL means an input was missing or a
+denominator was zero. The API player feeds have no PER, so the only checks are the fresh
+derivation equality and the league-mean invariant in `--quality-only`.
+
 ## Source responses
 
 The complete API responses are the bronze files under `data/bronze/` (see

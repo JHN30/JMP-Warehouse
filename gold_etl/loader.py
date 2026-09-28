@@ -3,6 +3,7 @@
 from gold_etl.schema import (IDENTITY_TABLES, RECORDS_TABLES, SEASON_DERIVED_NAMES, TABLES,
                              columns, create_table_sql, scope_predicate)
 from gold_etl.player_rounds import read_rows as read_player_rows
+from gold_etl.player_ratings import read_rows as read_player_rating_rows
 from gold_etl.team_ratings import read_rows as read_rating_rows
 from gold_etl.team_splits import read_rows as read_split_rows
 from gold_etl.team_rounds import read_rows as read_round_rows
@@ -90,6 +91,8 @@ def replace_standings_scope(connection, competition_code, season_code):
 def read_aggregate_rows(cursor, name, competition_code, season_code):
     if name not in SEASON_DERIVED_NAMES:
         raise ValueError(f"Unknown Gold aggregate table: {name}")
+    if name == "player_round_ratings":
+        return read_player_rating_rows(cursor, competition_code, season_code)
     if name == "player_round_stats":
         return read_player_rows(cursor, competition_code, season_code)
     if name == "team_round_splits":

@@ -53,7 +53,7 @@ Items 1-8 were already shipped when the Blueprint was adopted (2026-09-24).
   - [x] 26c. **Home/away and rolling team stats** - home and away splits and last-N-game rolling windows per round
 - [ ] 27. **Per-round player advanced stats** - cumulative after every round for the same scopes: USG%, AST%, rebound/steal/block %, per-100 stats, PER, Win Shares and PIE, checked against the API player feeds; build in `gold`, publish in 30g
   - [x] 27a. **Cumulative player-round table** - `gold.player_round_stats`: cumulative totals, minutes, TS%/eFG%, USG%, AST%, rebound/steal/block/turnover %, per-100 stats, Game Score and PIE after every round for `all`, each phase and `PS`, checked against the API player feeds; local only
-  - [ ] 27b. **Player efficiency rating** - PER per round from league constants computed per scope and round
+  - [x] 27b. **Player efficiency rating** - PER per round from league constants computed per scope and round
   - [ ] 27c. **Win Shares** - offensive, defensive and total Win Shares and WS/48 per round from marginal offense and defense
 - [ ] 28. **Standings stats app table** - per-round team advanced stats in `gold` for the standings page, publish in 30g
 - [ ] 19. **Play-by-play analytics** - actual possessions, clutch, scoring runs, lead changes, time leading, second-chance/fast-break/points off turnovers, assisted FG%, shot zones and possession length (E2007+), local only (per-game in `silver`, aggregates in `gold`)

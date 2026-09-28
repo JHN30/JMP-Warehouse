@@ -45,6 +45,7 @@ def inspect_target(cursor, name):
     actual = {column: (kind, nullable, default)
               for column, kind, nullable, default in cursor.fetchall()}
     expected = {field.name: field for field in GOLD_TABLES[name].fields}
+    key_columns = set(GOLD_TABLES[name].key)
     problems = []
     for column, field in expected.items():
         if column not in actual:
@@ -55,6 +56,9 @@ def inspect_target(cursor, name):
             problems.append(f"public.{target}.{column}: {kind}, expected {expected_type(field)}")
         if "NOT NULL" in field.kind and nullable != "NO":
             problems.append(f"public.{target}.{column}: expected NOT NULL")
+        elif nullable == "NO" and "NOT NULL" not in field.kind and column not in key_columns:
+            # COPY of a NULL would fail after the publish transaction has started.
+            problems.append(f"public.{target}.{column}: NOT NULL in Neon but nullable in Gold")
     for column, (_, nullable, default) in actual.items():
         if column not in expected and nullable == "NO" and default is None:
             problems.append(f"public.{target}.{column}: extra required column")

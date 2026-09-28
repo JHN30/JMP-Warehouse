@@ -10,7 +10,7 @@ from psycopg2 import sql
 from common.dotenv import read_env_value
 from common.seasons import COMPETITION_CODES
 from gold_etl.schema import GOLD_TABLES
-from neon_publish.contract import (APP_TABLES, GAME_DIFF_TABLES, predicate,
+from neon_publish.contract import (APP_TABLES, GAME_DIFF_TABLES, GLOBAL_TABLES, predicate,
                                    preflight, scope, target_name)
 
 
@@ -121,19 +121,32 @@ def _snapshot(local, competition_code, season_code, names, remote_sums, dry_run)
     return counts, spools, plans
 
 
+def _missing_column(issues, column):
+    return any(f": missing column {column} " in issue for issue in issues)
+
+
 def _remote_state(cursor, competition_code, season_code, names, problems):
+    """Neon counts and per-game sums; a table whose queries would fail is unavailable."""
     counts, sums = {}, {}
     for name in names:
-        if problems.get(name) and any("missing table" in issue for issue in problems[name]):
+        issues = problems.get(name) or []
+        scope_columns = ("competition_code",) + (
+            () if name in GLOBAL_TABLES else ("season_code",))
+        if (any("missing table" in issue for issue in issues)
+                or any(_missing_column(issues, column) for column in scope_columns)):
             counts[name] = None
             if name in GAME_DIFF_TABLES:
                 sums[name] = {}
             continue
         counts[name] = _count(cursor, name, competition_code, season_code, "public")
         if name in GAME_DIFF_TABLES:
-            sums[name] = (game_rows(cursor, name, competition_code, season_code)
-                          if problems.get(name) else
-                          game_checksums(cursor, name, competition_code, season_code, "public"))
+            if _missing_column(issues, "game_code"):
+                sums[name] = {}
+            elif issues:
+                sums[name] = game_rows(cursor, name, competition_code, season_code)
+            else:
+                sums[name] = game_checksums(cursor, name, competition_code, season_code,
+                                            "public")
     return counts, sums
 
 

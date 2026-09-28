@@ -67,6 +67,120 @@ class ContractTests(unittest.TestCase):
         self.assertTrue(any("primary key differs" in issue for issue in issues))
 
 
+class NullabilityTests(unittest.TestCase):
+    TYPES = {"TEXT": "text", "INTEGER": "integer", "NUMERIC": "numeric", "BOOLEAN": "boolean",
+             "JSONB": "jsonb", "TIMESTAMP": "timestamp without time zone",
+             "TIMESTAMPTZ": "timestamp with time zone"}
+
+    def inspect(self, name, nullable_overrides=()):
+        spec = GOLD_TABLES[name]
+        columns = [(field.name, self.TYPES[field.kind.split()[0]],
+                    dict(nullable_overrides).get(
+                        field.name, "NO" if "NOT NULL" in field.kind else "YES"), None)
+                   for field in spec.fields]
+        cursor = mock.MagicMock()
+        cursor.fetchone.return_value = (f"app_{name}",)
+        cursor.fetchall.side_effect = [columns,
+                                       [("p", f"PRIMARY KEY ({', '.join(spec.key)})")]]
+        return inspect_target(cursor, name)
+
+    def test_neon_not_null_on_a_nullable_gold_field_is_reported(self):
+        issues = self.inspect("app_players", {"name": "NO"})
+        self.assertEqual(issues, ["public.app_players.name: NOT NULL in Neon but nullable in Gold"])
+
+    def test_both_directions_on_one_table_are_reported(self):
+        issues = self.inspect("app_players", {"name": "NO", "seasons_played": "YES"})
+        self.assertEqual(len(issues), 2)
+        self.assertIn("public.app_players.seasons_played: expected NOT NULL", issues)
+        self.assertIn("public.app_players.name: NOT NULL in Neon but nullable in Gold", issues)
+
+    def test_not_null_neon_columns_for_required_gold_fields_and_keys_are_accepted(self):
+        for name in ("app_players", "games", "play_by_play"):
+            self.assertEqual(self.inspect(name), [], name)
+
+
+class PreviewOfIncompatibleTargetsTests(unittest.TestCase):
+    def state(self, name, issues, **fakes):
+        cursor = mock.MagicMock()
+        with (mock.patch.object(publish, "_count", return_value=7) as count,
+              mock.patch.object(publish, "game_rows", return_value={1: (3, None)}) as rows,
+              mock.patch.object(publish, "game_checksums", return_value={1: (3, "x")}) as sums):
+            result = publish._remote_state(cursor, "E", "E2025", (name,),
+                                           {name: issues} if issues else {})
+        return result, count, rows, sums
+
+    @staticmethod
+    def missing(target, column):
+        return f"public.{target}: missing column {column} TEXT NOT NULL"
+
+    def test_missing_scope_column_makes_counts_and_games_unavailable_without_queries(self):
+        for column in ("competition_code", "season_code"):
+            (counts, sums), count, rows, checks = self.state(
+                "play_by_play", [self.missing("app_play_by_play", column)])
+            self.assertEqual((counts, sums), ({"play_by_play": None}, {"play_by_play": {}}))
+            for fake in (count, rows, checks):
+                fake.assert_not_called()
+
+    def test_missing_game_code_keeps_the_count_but_not_the_game_rows(self):
+        (counts, sums), count, rows, checks = self.state(
+            "shots", [self.missing("app_shots", "game_code")])
+        self.assertEqual((counts, sums), ({"shots": 7}, {"shots": {}}))
+        count.assert_called_once()
+        rows.assert_not_called()
+        checks.assert_not_called()
+
+    def test_season_column_is_not_needed_for_a_competition_wide_table(self):
+        (counts, _), count, _, _ = self.state(
+            "app_players", [self.missing("app_players", "season_code")])
+        self.assertEqual(counts, {"app_players": 7})
+        count.assert_called_once()
+        (counts, _), count, _, _ = self.state(
+            "app_players", [self.missing("app_players", "competition_code")])
+        self.assertEqual(counts, {"app_players": None})
+        count.assert_not_called()
+
+    def test_other_problems_and_clean_tables_are_queried_as_before(self):
+        (counts, sums), count, rows, checks = self.state(
+            "play_by_play", ["public.app_play_by_play: extra required column"])
+        self.assertEqual((counts, sums), ({"play_by_play": 7},
+                                          {"play_by_play": {1: (3, None)}}))
+        checks.assert_not_called()
+        (counts, sums), _, rows, checks = self.state("play_by_play", [])
+        self.assertEqual(sums, {"play_by_play": {1: (3, "x")}})
+        rows.assert_not_called()
+        (counts, sums), _, _, _ = self.state(
+            "games", ["public.app_games: missing table"])
+        self.assertEqual(counts, {"games": None})
+
+    def run_publish(self, dry_run):
+        issues = {"play_by_play": [self.missing("app_play_by_play", "competition_code"),
+                                   self.missing("app_play_by_play", "game_code")]}
+        neon = FakeNeon({})
+        plans = {"play_by_play": ([1], [], 1)}
+        with (mock.patch.object(publish, "preflight", return_value=issues),
+              mock.patch.object(publish, "_snapshot",
+                                return_value=({"play_by_play": 5},
+                                              {"play_by_play": io.BytesIO(b"row\n")}, plans)),
+              mock.patch.object(publish, "_count",
+                                side_effect=AssertionError("queried an incompatible table")),
+              mock.patch.object(publish, "_replace") as replace):
+            try:
+                return publish.publish_season(None, neon, "euroleague", "E2025",
+                                              ("play_by_play",), dry_run=dry_run,
+                                              log=lambda _: None), replace
+            except Exception as error:
+                return error, replace
+
+    def test_dry_run_reports_instead_of_failing_and_real_publish_still_refuses(self):
+        result, replace = self.run_publish(dry_run=True)
+        self.assertEqual(result, {"play_by_play": (None, 5)})
+        replace.assert_not_called()
+        error, replace = self.run_publish(dry_run=False)
+        self.assertIsInstance(error, ValueError)
+        self.assertIn("preflight failed", str(error))
+        replace.assert_not_called()
+
+
 class FakeNeon:
     def __init__(self, counts):
         self.counts = dict(counts)

@@ -1,6 +1,6 @@
 # EuroLeague Data ETL - Project Overview
 
-<!-- blueprint:source-hash 49a470a77301d12f0a8520b4b7d1f9d7366db2b772f05c58d15cd5f4a7920f13 -->
+<!-- blueprint:source-hash 0391c7b67a600378f4bfa3e1325d75a755261873ff1d3f786f834cbeb2d71d2e -->
 
 > The data pipeline behind the JMP EuroLeague web app: EuroLeague API data into
 > exact bronze files, typed tables in local PostgreSQL, advanced statistics, and
@@ -57,7 +57,7 @@ Next, in build-plan order (IDs are stable, so order is not numeric):
 
 23. **Clean up unused tables** (shipped) - dropped local `etl_flat_live_*` and `etl_source_payloads`, the old Neon `etl_flat_*` views and the 7 Neon `app_standings_*` feed tables.
 16. **Silver layer** (headline next feature) - `silver` schema with the 28 source tables rebuilt from bronze. 16a: clean table names, one standard column name per stat, API data only, gold code removed and Neon publishing paused until 30, `public` tables dropped. 16b: provenance (load log with bronze versions, load id and time per row).
-30. **Gold layer** - `gold` schema from silver: standings, records, coverage, postseason series, team season stats, derived `PS` stats, player and club identity tables; Neon publishing from gold.
+30. **Gold layer** - six slices: 30a local source projections; 30b `PS` stats and standings; 30c team season stats and coverage; 30d records and postseason series; 30e player and club identity; 30f guarded Neon publishing from Gold.
 24. **API team stats** (shipped) - v3 team `traditional`, `advanced`, `opponentsTraditional`, `opponentsAdvanced` into bronze and local tables as reference numbers.
 25. **Per-game advanced stats** - team and player per game: possessions, pace, ratings, four factors, rates, Game Score; in `silver`.
 26. **Per-round team advanced stats** - every round and scope: advanced stats, MOV, Pythagorean, SRS, SOS/SOV, adjusted/relative, home/away, rolling; checked against API team feeds; in `gold`.

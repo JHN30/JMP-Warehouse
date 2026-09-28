@@ -16,9 +16,10 @@ for optional tool settings.
 The data pipeline behind the JMP EuroLeague web app (`jmpeuroleague.com`, repo
 `jmp-euroleague2`). It downloads EuroLeague API data into a bronze store of exact
 responses, loads it into 28 typed tables in the local PostgreSQL `silver`
-schema with quality checks. Neon publishing is paused until feature 30.
-Python 3.13 +
-PostgreSQL, no web framework. See `README.md` for the layout and
+schema with quality checks. Feature 30a builds 16 local Gold source tables
+from Silver. Derived Gold tables and Neon publishing remain paused until later
+parts of feature 30. Python 3.13 + PostgreSQL, no web framework.
+See `README.md` for the layout and
 `docs/DATA_DICTIONARY.md` for the tables.
 
 This project is built with the **AI Blueprint**, a workflow layer, not an
@@ -311,12 +312,17 @@ pipeline does not ask for `NEON_DATABASE_URL`.
 - Load into local PostgreSQL: `python postgres_etl/main.py -sc <seasons>`
 - Load dry run (no database): `python postgres_etl/main.py -sc <seasons> --dry-run`
 - Quality report only: `python postgres_etl/main.py -sc <seasons> --quality-only`
-- Publish to Neon: paused until feature 30. `python neon_publish/main.py --dry-run`
+- Build local Gold source tables from Silver: `python gold_etl/main.py -sc <seasons>`
+  (`-sc all` uses every locally loaded Silver season).
+- Gold read-only source counts: `python gold_etl/main.py -sc <seasons> --dry-run`
+- Gold read-only equality checks: `python gold_etl/main.py -sc <seasons> --quality-only`
+- Publish to Neon: paused until feature 30f. `python neon_publish/main.py --dry-run`
   reports the pause without connecting to Neon.
 - CSV export: `python tables_to_csv/main.py -sc <seasons>`
 - Test:
   - `cd api_requests && python -m unittest tests.test_scrapper`
   - `python -m unittest discover -s postgres_etl/tests`
+  - `python -m unittest discover -s gold_etl/tests`
   - `python -m unittest neon_publish.tests.test_publish tables_to_csv.tests.test_csv_export`
 
 There is no build, lint, format or typecheck step, no dependency file, and no

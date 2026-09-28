@@ -5,8 +5,9 @@ The current local database has 28 source-derived tables in the PostgreSQL
 a bare name such as `games` means `silver.games`. Exact SQL columns, types,
 source JSON paths, and keys are defined in
 [flat_schema.py](../postgres_etl/flat_schema.py). Bronze keeps the exact API
-responses. Silver contains cleaned source data; gold tables are paused until
-feature 30. Existing Neon tables are unchanged in the meantime.
+responses. Silver contains cleaned source data. The local `gold` schema holds
+16 source projections from Silver; derived Gold tables and Neon publishing are
+still paused. Existing Neon tables are unchanged in the meantime.
 
 ## Silver provenance
 
@@ -121,12 +122,34 @@ keeps the stronger stored response and the load quality report flags missing or
 partial phase/mode feeds. Live `player_code` is the upstream ID while
 `person_code` is the matched person key; join on `person_code`.
 
-## Web-app tables
+## Local Gold source tables
 
-**Paused until feature 30.** This section preserves the former gold table
-contract as a reference. These tables are no longer built locally, and the
-commands in this section are historical. Existing Neon tables remain in place
-for the web app, but receive no updates during the pause.
+Feature 30a builds these 16 tables in the local `gold` schema, with the same
+names, source columns, types, and natural primary keys as their Silver sources:
+`seasons`, `clubs`, `people`, `registrations`, `rounds`, `games`,
+`game_officials`, `game_period_scores`, `game_player_stats`, `game_team_stats`,
+`season_player_stats_traditional`, `season_player_stats_advanced`,
+`season_player_stats_scoring`, `season_player_stats_misc`, `play_by_play`, and
+`shots`. Gold omits Silver's `load_id` and `loaded_at` metadata. It copies
+source values and NULLs unchanged. The four player-season tables copy only
+non-`PS` API rows; future derived `PS` rows belong to feature 30b and survive
+a rerun of this source copy. The other 12 Silver tables and `silver.load_log`
+are not copied by 30a.
+
+`python gold_etl/main.py -sc all` builds all locally loaded Silver seasons.
+`--dry-run` reports Silver source counts without Gold writes;
+`--quality-only` compares Gold counts and full source-column values with
+Silver. Both read the local database only. Gold is not published to Neon yet.
+Use explicit `gold.games` or `silver.games` names because local connections
+still search `silver` by default.
+
+## Historical web-app tables
+
+**Paused until features 30b-30f.** This section preserves the former derived
+web-app table contract as a reference. The 30a source tables above are built
+locally, but these derived tables are not yet rebuilt or published. Existing
+Neon tables remain in place for the web app and receive no updates during the
+pause.
 
 ### `app_standings`
 

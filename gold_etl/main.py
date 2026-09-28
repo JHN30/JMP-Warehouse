@@ -1,0 +1,104 @@
+"""Build the local Gold source layer from already-loaded Silver seasons."""
+
+import argparse
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from common.db import DEFAULT_CONFIG, connect  # noqa: E402
+from common.seasons import COMPETITION_CODES, select_seasons  # noqa: E402
+from gold_etl.loader import replace_scope  # noqa: E402
+from gold_etl.quality import check_scope  # noqa: E402
+from gold_etl.schema import SOURCE_NAMES, count_sql  # noqa: E402
+
+
+def build_parser():
+    parser = argparse.ArgumentParser(description="Build local Gold source tables from Silver.")
+    parser.add_argument("-cp", "--competition", choices=COMPETITION_CODES,
+                        default="euroleague")
+    parser.add_argument("-sc", "--season-code", nargs="+", default=["latest"],
+                        help="Years, codes, ranges, current, latest, or all in local Silver.")
+    parser.add_argument("-tb", "--table", nargs="+", default=["all"],
+                        help="Gold source tables; default all.")
+    parser.add_argument("--list-tables", action="store_true")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="Show source row counts without Gold writes.")
+    parser.add_argument("--quality-only", action="store_true",
+                        help="Compare Gold source rows with Silver without writes.")
+    parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
+    return parser
+
+
+def available_seasons(cursor, competition_code):
+    cursor.execute('SELECT season_code FROM silver."seasons" '
+                   'WHERE competition_code = %s ORDER BY season_code',
+                   (competition_code,))
+    return [row[0] for row in cursor.fetchall()]
+
+
+def main(argv=None):
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    if args.list_tables:
+        print("\n".join(SOURCE_NAMES))
+        return 0
+    if args.dry_run and args.quality_only:
+        parser.error("--dry-run and --quality-only cannot be combined")
+    unknown = set(args.table) - {"all", *SOURCE_NAMES}
+    if unknown:
+        parser.error("Unknown table(s): " + ", ".join(sorted(unknown)))
+    if "all" in args.table and len(args.table) != 1:
+        parser.error("'all' must be used alone with --table")
+    tables = SOURCE_NAMES if args.table == ["all"] else tuple(dict.fromkeys(args.table))
+    connection = None
+    try:
+        connection = connect(args.config)
+        if args.dry_run or args.quality_only:
+            connection.set_session(readonly=True, isolation_level="REPEATABLE READ")
+        with connection.cursor() as cursor:
+            available = available_seasons(cursor, COMPETITION_CODES[args.competition])
+        seasons, missing = select_seasons(args.season_code, args.competition, available)
+        if missing:
+            print("Not loaded in Silver; skipping: " + ", ".join(missing), flush=True)
+        print(f"Competition: {args.competition}")
+        print(f"Seasons: {', '.join(seasons)}")
+        print(f"Tables: {', '.join(tables)}")
+        print("Mode: " + ("read-only dry run" if args.dry_run else
+                          "read-only quality check" if args.quality_only else "Gold load"),
+              flush=True)
+        passed = True
+        for season in seasons:
+            for name in tables:
+                scope = (COMPETITION_CODES[args.competition], season)
+                if args.dry_run:
+                    with connection.cursor() as cursor:
+                        cursor.execute(count_sql(name, "silver"), scope)
+                        count = cursor.fetchone()[0]
+                    print(f"silver.{name} {season}: {count} source rows", flush=True)
+                elif args.quality_only:
+                    with connection.cursor() as cursor:
+                        issues = check_scope(cursor, name, *scope)
+                    for issue in issues:
+                        print(issue, file=sys.stderr, flush=True)
+                    passed &= not issues
+                else:
+                    count = replace_scope(connection, name, *scope)
+                    print(f"gold.{name} {season}: {count} rows", flush=True)
+        if args.quality_only:
+            print("Gold quality: passed" if passed else "Gold quality: failed", flush=True)
+            return 0 if passed else 1
+        return 0
+    except (OSError, ValueError, RuntimeError) as error:
+        print(f"Gold ETL failed: {error}", file=sys.stderr, flush=True)
+        return 1
+    except KeyboardInterrupt:
+        print("\nInterrupted. Active scope was rolled back.", file=sys.stderr)
+        return 130
+    finally:
+        if connection is not None:
+            connection.close()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

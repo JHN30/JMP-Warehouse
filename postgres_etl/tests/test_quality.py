@@ -166,7 +166,9 @@ class QualityRulesTests(unittest.TestCase):
     def test_flat_load_runs_quality_checks_after_loading(self):
         with patch.object(etl_main, "available_seasons", return_value=["E2025"]), \
                 patch.object(etl_main, "FlatDatabaseLoader") as loader, \
-                patch.object(etl_main, "validate_loaded", return_value=True) as validate,                 patch.object(etl_main, "run_advanced", return_value=True),                 patch.object(etl_main, "run_possessions", return_value=True),                 patch.object(etl_main, "run_score_flow", return_value=True):
+                patch.object(etl_main, "validate_loaded", return_value=True) as validate,                 patch.object(etl_main, "run_advanced", return_value=True),                 patch.object(etl_main, "run_possessions", return_value=True),                 patch.object(etl_main, "run_shot_splits", return_value=True), \
+                patch.object(etl_main, "run_shot_zones", return_value=True), \
+                patch.object(etl_main, "run_score_flow", return_value=True):
             self.assertEqual(etl_main.main(["-sc", "2025", "-tb", "games"]), 0)
             loader.return_value.run.assert_called_once()
             validate.assert_called_once()

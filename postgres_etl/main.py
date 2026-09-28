@@ -8,6 +8,8 @@ from pathlib import Path
 from advanced import SOURCE_TABLES as ADVANCED_SOURCES, run_seasons as run_advanced
 from possessions import TRIGGER_TABLES as POSSESSION_SOURCES, run_seasons as run_possessions
 from score_flow import run_seasons as run_score_flow
+from shot_splits import TRIGGER_TABLES as SHOT_SOURCES, run_seasons as run_shot_splits
+from shot_zones import run_seasons as run_shot_zones
 from flat_loader import FlatDatabaseLoader
 from flat_schema import TABLES as FLAT_TABLES, physical_name
 from quality import validate_loaded
@@ -139,6 +141,14 @@ def main(argv=None):
                 print("Score flow checks failed; inspect the reported issues.",
                       file=sys.stderr, flush=True)
                 return 1
+        if not (args.quality_only or args.dry_run) and set(tables) & set(SHOT_SOURCES):
+            for label, run in (("Shot splits", run_shot_splits),
+                               ("Shot zones", run_shot_zones)):
+                print(f"\n{label}", flush=True)
+                if not run(args.config, args.competition, seasons):
+                    print(f"{label} checks failed; inspect the reported issues.",
+                          file=sys.stderr, flush=True)
+                    return 1
         if args.quality_only or (not args.dry_run and not args.skip_quality_check):
             print("\nRead-only quality checks", flush=True)
             passed = True

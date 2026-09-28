@@ -494,6 +494,18 @@ ADVANCED_TABLES = {
     ), _derived("clutch_seconds"), (
         f("clutch_points_for", "INTEGER"), f("clutch_points_against", "INTEGER"),
     ), indexes=(("club_code",),)),
+    "game_team_shot_splits": table("game_team_shot_splits", ("game_code", "side"), (
+        f("game_code", "INTEGER NOT NULL"), f("side", "TEXT NOT NULL"),
+        f("club_code", "TEXT"), f("opponent_club_code", "TEXT"),
+        f("fast_break_points", "INTEGER"), f("second_chance_points", "INTEGER"),
+        f("points_off_turnover_points", "INTEGER"), f("field_goals_made", "INTEGER"),
+        f("assisted_field_goals", "INTEGER"),
+    ), _derived("assisted_fg_pct"), indexes=(("club_code",),)),
+    "game_team_shot_zones": table("game_team_shot_zones", ("game_code", "side", "zone"), (
+        f("game_code", "INTEGER NOT NULL"), f("side", "TEXT NOT NULL"),
+        f("zone", "TEXT NOT NULL"), f("club_code", "TEXT"),
+        f("attempts", "INTEGER"), f("made", "INTEGER"), f("points", "INTEGER"),
+    ), indexes=(("club_code",),)),
     "game_player_advanced": table("game_player_advanced", ("game_code", "side", "person_key"), (
         f("game_code", "INTEGER NOT NULL"), f("side", "TEXT NOT NULL"),
         f("person_key", "TEXT NOT NULL"), f("club_code", "TEXT"),

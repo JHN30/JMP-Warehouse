@@ -324,6 +324,9 @@ committed; copy the `.example`). Publishing reads the direct non-pooled
   as above.
 - Score flow from play-by-play (lead changes, time leading, runs, clutch; same triggers):
   `python postgres_etl/score_flow.py -sc <seasons>` (E2007+); `--dry-run` and `--quality-only`.
+- Shot splits and shot zones (also run after a load of `games`, `play_by_play` or `shots`):
+  `python postgres_etl/shot_splits.py -sc <seasons>` and
+  `python postgres_etl/shot_zones.py -sc <seasons>` (E2007+); same options.
 - Build local Gold from Silver: `python gold_etl/main.py -sc <seasons>`
   (`-sc all` uses every locally loaded Silver season).
 - Build only local standings: `python gold_etl/main.py -sc <seasons> -tb app_standings`

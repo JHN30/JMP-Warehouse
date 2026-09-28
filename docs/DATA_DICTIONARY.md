@@ -207,6 +207,55 @@ lead of 10.8 points on average, a longest run of 9.4 points and 3.1 runs of 6 or
 team, and 53% of club games have clutch time. `--quality-only` checks the stored rows against
 a fresh derivation and warns when a final score differs from `games` (none found).
 
+### `game_team_shot_splits`
+
+Built by `python postgres_etl/shot_splits.py -sc <seasons>` from `games`, `shots` and
+`play_by_play` (E2007 onward; same rows as `game_team_possessions`). Extra key `game_code`,
+`side`. Same provenance columns; not in Gold or Neon.
+
+| Column | Meaning |
+| --- | --- |
+| `fast_break_points`, `second_chance_points`, `points_off_turnover_points` | Points of the team's made shots (free throws included, since the feed flags them) whose `fastbreak`, `second_chance` or `points_off_turnover` flag is true; a shot with several flags counts in each |
+| `field_goals_made` | Made field goal events in `play_by_play` |
+| `assisted_field_goals`, `assisted_fg_pct` | Number of the team's `AS` events, capped at its made field goals, and that count over `field_goals_made` |
+
+The three point columns are NULL for a game in which any shot has a NULL flag or which has
+no shots. Flag coverage by season: none before E2015 (a few club games in E2008, E2009, E2013 and E2014
+have flags), 76% of E2015 team games (382 of 500) and every game from E2016 on, so 6,510 of
+the 10,098 club games have them. Assists are logged at other clock times than their shots
+(sometimes much later), so pairing an assist with its shot by clock undercounted badly; the
+`AS` count equals the box score's assists in 99.5% of club games (mean difference -0.003).
+The average assisted share is 58% (62% in E2025). `--quality-only` checks the stored rows
+against a fresh derivation and warns when assisted goals exceed made goals or a team's shot
+points differ from `games` (none found).
+
+### `game_team_shot_zones`
+
+Built by `python postgres_etl/shot_zones.py -sc <seasons>` from `games` and `shots`
+(E2007 onward). Extra key `game_code`, `side`, `zone`; columns `club_code`, `attempts`,
+`made`, `points`. Field goals only: `2FGM`, `3FGM`, `LAYUPMD`, `DUNK` made and `2FGA`, `3FGA`,
+`LAYUPATT`, `2FGAB`, `3FGAB` missed (E2008-E2014 use the layup, dunk and blocked types; 19a
+has the same list). Free throws and shots without a zone code are left out, and a team has a
+row only for zones it shot from. Zone totals equal the box score's field goals made in every
+game and its field goals attempted in 97-100% of games per season (a few shots have no zone).
+The feed's zone codes are letters; what the data shows for each, over E2007-E2026:
+
+| Zone | Shots | Mean court x, y | Three-pointers | Made |
+| --- | --- | --- | --- | --- |
+| A | 29,247 | 65, 23 | 10% | 87% |
+| B | 112,559 | -85, 95 | 0% | 57% |
+| C | 102,786 | 96, 95 | 0% | 56% |
+| D | 50,971 | -161, 178 | 0% | 43% |
+| E | 38,561 | 160, 211 | 0% | 37% |
+| F | 27,226 | -346, 318 | 10% | 40% |
+| G | 29,981 | 320, 385 | 20% | 38% |
+| H | 108,086 | -431, 515 | 99% | 36% |
+| I | 109,581 | 433, 512 | 99% | 36% |
+| J | 6,427 | -286, 673 | 100% | 32% |
+
+The codes are the feed's own; no names are assumed. The table has 87,037 rows over 5,049
+games.
+
 ## Standard column names
 
 The source JSON paths have not changed. Where these stats occur, the SQL

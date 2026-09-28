@@ -246,9 +246,9 @@ def stored_rows(cursor, name, competition_code, season_code):
     return _dict_rows(cursor)
 
 
-def differences_from_derivation(name, actual, expected):
+def differences_from_derivation(name, actual, expected, columns=("game_code", "side")):
     """ERROR issues where stored rows differ from a fresh derivation."""
-    key = lambda row: (row["game_code"], row["side"])
+    key = lambda row: tuple(row[column] for column in columns)
     stored = {key(row): row for row in actual}
     fresh = {key(row): row for row in expected}
     if stored.keys() != fresh.keys():

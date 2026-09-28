@@ -18,6 +18,8 @@ python postgres_etl/main.py -sc 2025 --quality-only
 python postgres_etl/advanced.py -sc 2025 --dry-run
 python postgres_etl/possessions.py -sc 2025 --dry-run
 python postgres_etl/score_flow.py -sc 2025 --dry-run
+python postgres_etl/shot_splits.py -sc 2025 --dry-run
+python postgres_etl/shot_zones.py -sc 2025 --dry-run
 ```
 
 `advanced.py` derives two more `silver` tables, `game_team_advanced` and
@@ -37,6 +39,12 @@ are the same. Games before E2007 have no play-by-play and no rows.
 leading and trailing, largest lead, scoring runs and clutch results per team and game from
 the running score in `play_by_play`. It shares `possessions.py`'s event ordering, clock and
 storage code and runs right after it.
+
+`shot_splits.py` and `shot_zones.py` (feature 19c) add `game_team_shot_splits` (fast-break,
+second-chance and off-turnover points, assisted field goals) and `game_team_shot_zones`
+(attempts, makes and points per shot zone) per team and game from the shots and
+play-by-play feeds. `main.py` runs both after a load that includes `games`,
+`play_by_play` or `shots`.
 
 The dry run checks parsing, types, required fields, and duplicate keys without
 a database. A real load needs `psycopg2` and the credentials in

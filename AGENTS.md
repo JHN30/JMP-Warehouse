@@ -355,6 +355,10 @@ committed; copy the `.example`). Publishing reads the direct non-pooled
   the three team round tables; local only until 30g):
   `python gold_etl/main.py -sc <seasons> -tb app_standings_stats`. `--quality-only` ties each
   row to the stored team round tables.
+- Build local play-by-play aggregates per club and scope (from the Silver tables of
+  `possessions.py`, `score_flow.py`, `shot_splits.py`, `shot_zones.py`; local only):
+  `python gold_etl/main.py -sc <seasons> -tb team_pbp_stats team_shot_zone_stats`.
+  `--quality-only` checks that the `all` scope equals the sum of the phase scopes.
 - Traditional or misc table selections also rebuild their derived `PS` rows.
 - Gold read-only source and derived counts: `python gold_etl/main.py -sc <seasons> --dry-run`
 - Gold read-only equality checks: `python gold_etl/main.py -sc <seasons> --quality-only`

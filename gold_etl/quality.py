@@ -3,7 +3,7 @@
 from gold_etl.schema import TABLES, columns, count_sql, scope_predicate
 from gold_etl.postseason import TABLES as PS_TABLES, _dict_rows, read_rows as read_postseason_rows
 from gold_etl.standings import KEY as STANDINGS_KEY, read_rows as read_standings_rows
-from gold_etl.schema import STANDINGS_STATS_SOURCES
+from gold_etl.schema import STANDINGS_STATS_SOURCES, TEAM_PBP_ADDITIVE, ZONE_ADDITIVE
 from gold_etl.schema import GOLD_TABLES, SEASON_DERIVED_NAMES, WINDOWS, IDENTITY_TABLES, RECORDS_TABLES
 from gold_etl.loader import read_aggregate_rows
 from gold_etl.records import read_rows as read_record_rows
@@ -349,6 +349,36 @@ def check_standings_stats_ties(cursor, competition_code, season_code):
                 issues.append(f"gold.app_standings_stats {season_code} {row_key}: "
                               f"{differing[0]} differs from gold.{name}")
                 break
+    return issues
+
+
+def check_pbp_partition(cursor, name, competition_code, season_code):
+    """Errors where a club's `all` scope is not the sum of its phase scopes for an additive
+    column (holds by construction when the scopes group games correctly)."""
+    zones = name == "team_shot_zone_stats"
+    columns = ZONE_ADDITIVE if zones else TEAM_PBP_ADDITIVE
+    key = ("club_code", "zone") if zones else ("club_code",)
+    cursor.execute(f'SELECT scope, {", ".join(key + columns)} FROM gold."{name}" '
+                   'WHERE competition_code = %s AND season_code = %s',
+                   (competition_code, season_code))
+    whole, parts = {}, {}
+    for row in _dict_rows(cursor):
+        target = whole if row["scope"] == "all" else parts if row["scope"] != "PS" else None
+        if target is None:
+            continue
+        ident = tuple(row[column] for column in key)
+        entry = target.setdefault(ident, {column: 0 for column in columns})
+        for column in columns:
+            entry[column] += row[column] or 0
+    issues = []
+    for ident, entry in sorted(whole.items()):
+        for column in columns:
+            if parts.get(ident, {}).get(column, 0) != entry[column]:
+                issues.append(f"gold.{name} {season_code} {ident}: {column} of the all scope "
+                              "is not the sum of the phase scopes")
+                break
+    for ident in sorted(set(parts) - set(whole)):
+        issues.append(f"gold.{name} {season_code} {ident}: phase rows without an all row")
     return issues
 
 

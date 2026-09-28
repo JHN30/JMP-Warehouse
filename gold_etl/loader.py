@@ -6,6 +6,8 @@ from gold_etl.player_rounds import read_rows as read_player_rows
 from gold_etl.player_ratings import read_rows as read_player_rating_rows
 from gold_etl.player_win_shares import read_rows as read_win_share_rows
 from gold_etl.standings_stats import read_rows as read_standings_stats_rows
+from gold_etl.team_pbp import read_rows as read_team_pbp_rows
+from gold_etl.team_shot_zones import read_rows as read_team_zone_rows
 from gold_etl.team_ratings import read_rows as read_rating_rows
 from gold_etl.team_splits import read_rows as read_split_rows
 from gold_etl.team_rounds import read_rows as read_round_rows
@@ -93,6 +95,10 @@ def replace_standings_scope(connection, competition_code, season_code):
 def read_aggregate_rows(cursor, name, competition_code, season_code):
     if name not in SEASON_DERIVED_NAMES:
         raise ValueError(f"Unknown Gold aggregate table: {name}")
+    if name == "team_pbp_stats":
+        return read_team_pbp_rows(cursor, competition_code, season_code)
+    if name == "team_shot_zone_stats":
+        return read_team_zone_rows(cursor, competition_code, season_code)
     if name == "app_standings_stats":
         return read_standings_stats_rows(cursor, competition_code, season_code)
     if name == "player_round_win_shares":

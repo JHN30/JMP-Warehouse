@@ -256,6 +256,35 @@ The feed's zone codes are letters; what the data shows for each, over E2007-E202
 The codes are the feed's own; no names are assumed. The table has 87,037 rows over 5,049
 games.
 
+### `team_pbp_stats` and `team_shot_zone_stats` (local only)
+
+Built as `gold.team_pbp_stats` and `gold.team_shot_zone_stats` by `python gold_etl/main.py
+-sc <seasons> -tb team_pbp_stats team_shot_zone_stats` from `silver.games` (phase) and the
+per-game tables `game_team_possessions`, `game_team_score_flow`, `game_team_shot_splits` and
+`game_team_shot_zones` (E2007 onward; earlier seasons build zero rows, and a missing Silver
+table stops the build with the command that creates it). Key `competition_code`,
+`season_code`, `scope` (`all`, each phase, `PS`), `club_code` (and `zone` for the zone table).
+Not published to Neon (30g).
+
+`team_pbp_stats` columns: `games` (games with a possessions row); from `game_team_possessions`
+`counted_possessions`, `estimated_possessions`, `possession_seconds` (sums) and
+`avg_possession_seconds` (per-game averages weighted by counted possessions); from
+`game_team_score_flow` `lead_changes_per_game`, `ties_per_game` (means), `timed_games` and the
+`time_leading_seconds`, `time_trailing_seconds`, `time_tied_seconds` sums over the games that have
+time data, `largest_lead` and `longest_run` (maxima), `runs_6_plus`, `clutch_games` (timed games
+with clutch time), `clutch_seconds` (timed games) and `clutch_points_for`/`clutch_points_against`
+(all games); from `game_team_shot_splits` `flagged_games` (games with point splits),
+`fast_break_points`, `second_chance_points`, `points_off_turnover_points` (sums over flagged
+games), `field_goals_made`, `assisted_field_goals` and `assisted_fg_pct` (sum over sum). NULL means
+no usable game for that column; a club can have a row with some columns NULL when a source table
+has no rows for it.
+
+`team_shot_zone_stats` columns: `attempts`, `made`, `points` (sums per zone), `fg_pct` and
+`attempt_share` (the zone's attempts over the club's attempts in the scope). A club has a row only
+for zones it shot from. `--quality-only` for both checks the fresh derivation and that the `all`
+scope equals the sum of the phase scopes for every additive column. E2025: 66 club-scope rows and
+630 zone rows.
+
 ## Standard column names
 
 The source JSON paths have not changed. Where these stats occur, the SQL

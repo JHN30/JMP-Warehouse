@@ -182,7 +182,8 @@ ROUND_MEASURES = (
 )
 ROUND_NAMES = ("team_round_stats", "team_round_ratings", "team_round_splits",
                "player_round_stats", "player_round_ratings", "player_round_win_shares",
-               "app_standings_stats")
+               "app_standings_stats", "team_pbp_stats", "team_shot_zone_stats")
+PBP_NAMES = ("team_pbp_stats", "team_shot_zone_stats")
 WINDOWS = (5, 10)
 SPLIT_GROUPS = ("home", "away", *(f"last{size}" for size in WINDOWS))
 SPLIT_MEASURES = ("mov", "offensive_rating", "defensive_rating", "net_rating", "pace")
@@ -322,6 +323,39 @@ STANDINGS_STATS_TABLE = Table(
               for _, source, names in STANDINGS_STATS_SOURCES for name in names),
 )
 
+# Play-by-play aggregates (feature 19d): per club and scope from the Silver tables of 19a-19c.
+TEAM_PBP_INTEGERS = ("games", "timed_games", "runs_6_plus", "clutch_games", "flagged_games",
+                     "field_goals_made", "assisted_field_goals")
+TEAM_PBP_ADDITIVE = (
+    "games", "counted_possessions", "estimated_possessions", "possession_seconds",
+    "timed_games", "time_leading_seconds", "time_trailing_seconds", "time_tied_seconds",
+    "runs_6_plus", "clutch_games", "clutch_seconds", "clutch_points_for",
+    "clutch_points_against", "flagged_games", "fast_break_points", "second_chance_points",
+    "points_off_turnover_points", "field_goals_made", "assisted_field_goals")
+TEAM_PBP_COLUMNS = TEAM_PBP_ADDITIVE + (
+    "avg_possession_seconds", "lead_changes_per_game", "ties_per_game", "largest_lead",
+    "longest_run", "assisted_fg_pct")
+TEAM_PBP_TABLE = Table(
+    "team_pbp_stats",
+    ("competition_code", "season_code", "scope", "club_code"),
+    SCOPE + (
+        Field("scope", "TEXT NOT NULL", "games.phase_code"),
+        Field("club_code", "TEXT NOT NULL", "game_team_possessions.club_code"),
+    ) + tuple(Field(name, "INTEGER" if name in TEAM_PBP_INTEGERS else "NUMERIC", "derived")
+              for name in TEAM_PBP_COLUMNS),
+)
+ZONE_ADDITIVE = ("attempts", "made", "points")
+TEAM_ZONE_TABLE = Table(
+    "team_shot_zone_stats",
+    ("competition_code", "season_code", "scope", "club_code", "zone"),
+    SCOPE + (
+        Field("scope", "TEXT NOT NULL", "games.phase_code"),
+        Field("club_code", "TEXT NOT NULL", "game_team_shot_zones.club_code"),
+        Field("zone", "TEXT NOT NULL", "game_team_shot_zones.zone"),
+    ) + tuple(Field(name, "INTEGER", "game_team_shot_zones") for name in ZONE_ADDITIVE)
+      + tuple(Field(name, "NUMERIC", "derived") for name in ("fg_pct", "attempt_share")),
+)
+
 DERIVED_NAMES = ("app_standings", *AGGREGATE_NAMES,
                  *RECORDS_TABLES, "app_postseason_series", *IDENTITY_TABLES)
 GOLD_TABLES = {**TABLES, "app_standings": STANDINGS_TABLE,
@@ -335,7 +369,8 @@ GOLD_TABLES = {**TABLES, "app_standings": STANDINGS_TABLE,
                "player_round_stats": PLAYER_ROUND_TABLE,
                "player_round_ratings": PLAYER_RATINGS_TABLE,
                "player_round_win_shares": PLAYER_WIN_SHARES_TABLE,
-               "app_standings_stats": STANDINGS_STATS_TABLE}
+               "app_standings_stats": STANDINGS_STATS_TABLE,
+               "team_pbp_stats": TEAM_PBP_TABLE, "team_shot_zone_stats": TEAM_ZONE_TABLE}
 
 
 def columns(name):

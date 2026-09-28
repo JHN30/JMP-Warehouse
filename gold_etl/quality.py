@@ -304,3 +304,63 @@ def check_round_split_invariants(cursor, competition_code, season_code):
             elif total["games_played"] <= size and row[f"last{size}_mov"] != total["mov"]:
                 problem(row, f"last{size}_mov differs from the cumulative mov")
     return issues
+
+
+# Player final-round cumulative values against the API's accumulated player feeds.
+# Counting stats and games must match exactly and minutes within rounding. Rates are
+# compared only for players with at least 100 minutes: eFG% and TS% within the API's
+# one-decimal rounding, rebound rates within 2 points (the API's team-minute
+# conventions differ slightly). The API's turnovers_ratio, assists_ratio and
+# possessions use other definitions and are not compared.
+PLAYER_API_COUNTS = tuple((name, "traditional", name) for name in (
+    "games_played", "points", "three_pointers_made", "free_throws_made",
+    "free_throws_attempted", "offensive_rebounds", "defensive_rebounds", "total_rebounds",
+    "assists", "steals", "turnovers", "blocks", "fouls_committed", "pir"))
+PLAYER_API_RATES = (("efg_pct", "effective_field_goal_percentage", 0.06),
+                    ("ts_pct", "true_shooting_percentage", 0.06),
+                    ("orb_pct", "offensive_rebounds_percentage", 2.0),
+                    ("drb_pct", "defensive_rebounds_percentage", 2.0),
+                    ("trb_pct", "rebounds_percentage", 2.0))
+PLAYER_RATE_MIN_SECONDS = 6000
+PLAYER_MINUTES_TOLERANCE = 0.01
+
+
+def check_round_player_api_scope(cursor, competition_code, season_code):
+    """Warnings where player final-round rows differ from the API feeds."""
+    scope = (competition_code, season_code)
+    cursor.execute(
+        'SELECT DISTINCT ON (scope, person_key) * FROM gold."player_round_stats" '
+        'WHERE competition_code = %s AND season_code = %s '
+        'ORDER BY scope, person_key, round_number DESC', scope)
+    ours = _dict_rows(cursor)
+    api = {}
+    for kind in ("traditional", "advanced"):
+        cursor.execute(
+            f'SELECT * FROM silver."season_player_stats_{kind}" WHERE competition_code = %s '
+            "AND season_code = %s AND mode = 'accumulated'", scope)
+        api[kind] = {(row["phase_code"], row["person_key"]): row for row in _dict_rows(cursor)}
+    differences = {}
+
+    def note(row, metric, mine, theirs):
+        differences.setdefault((row["scope"], metric), []).append(
+            f'{row["person_key"]}: {mine:g} vs API {theirs:g}')
+
+    for row in ours:
+        key = (row["scope"], row["person_key"])
+        traditional = api["traditional"].get(key)
+        if traditional is not None:
+            for column, _, source in PLAYER_API_COUNTS:
+                if row[column] is not None and traditional.get(source) is not None                         and float(row[column]) != float(traditional[source]):
+                    note(row, column, float(row[column]), float(traditional[source]))
+            minutes = traditional.get("minutes_played")
+            if row["seconds_played"] is not None and minutes is not None and abs(
+                    float(row["seconds_played"]) / 60 - float(minutes)) > PLAYER_MINUTES_TOLERANCE:
+                note(row, "minutes", float(row["seconds_played"]) / 60, float(minutes))
+        advanced = api["advanced"].get(key)
+        if advanced is not None and row["seconds_played"] is not None                 and float(row["seconds_played"]) >= PLAYER_RATE_MIN_SECONDS:
+            for column, source, tolerance in PLAYER_API_RATES:
+                if row[column] is not None and advanced.get(source) is not None                         and abs(float(row[column]) * 100 - float(advanced[source])) > tolerance:
+                    note(row, column, float(row[column]) * 100, float(advanced[source]))
+    return [f"gold.player_round_stats {season_code} {scope_name}: {metric} differs from the "
+            f"API feed for {len(examples)} player(s) (e.g. {examples[0]})"
+            for (scope_name, metric), examples in sorted(differences.items())]

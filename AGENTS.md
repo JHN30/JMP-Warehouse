@@ -334,6 +334,9 @@ committed; copy the `.example`). Publishing reads the direct non-pooled
   `python gold_etl/main.py -sc <seasons> -tb team_round_ratings`.
 - Build local team-round splits (home/away, last 5 and 10 games; local only):
   `python gold_etl/main.py -sc <seasons> -tb team_round_splits`.
+- Build local player round stats (cumulative rates, per-100, Game Score, PIE; local only):
+  `python gold_etl/main.py -sc <seasons> -tb player_round_stats`. `--quality-only` prints
+  `WARN` lines where final-round rows differ from the API player feeds.
 - Traditional or misc table selections also rebuild their derived `PS` rows.
 - Gold read-only source and derived counts: `python gold_etl/main.py -sc <seasons> --dry-run`
 - Gold read-only equality checks: `python gold_etl/main.py -sc <seasons> --quality-only`

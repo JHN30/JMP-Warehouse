@@ -552,6 +552,43 @@ compares it, and errors if home plus away games or wins differ from
 a window's MOV differs from the cumulative MOV while the club has no more games
 than the window.
 
+### `player_round_stats` (local only)
+
+Built as `gold.player_round_stats` by `python gold_etl/main.py -sc <seasons> -tb
+player_round_stats` from `silver.game_player_stats`, `game_player_advanced` and the
+counted team games of `team_round_stats`. Not published to Neon.
+
+Key: `competition_code`, `season_code`, `scope`, `round_number`, `person_key`
+(`scope` as in `team_round_stats`). A player has a row for every scope round from
+their first appearance on; idle rounds carry the previous values. `club_code` and
+`player_name` come from the latest appearance, so a player who changes club keeps
+one row and blended rates. An appearance is a counted game with `seconds_played` > 0
+(DNP rows are not counted); `games_played` and `games_started` count appearances.
+
+| Columns | Meaning |
+| --- | --- |
+| `seconds_played`, `points`, `field_goals_*`, `three_pointers_*`, `free_throws_*`, `offensive_rebounds`, `defensive_rebounds`, `total_rebounds`, `assists`, `steals`, `turnovers`, `blocks`, `fouls_committed`, `pir` | Cumulative totals |
+| `ts_pct`, `efg_pct` | `PTS / (2 (FGA + 0.44 FTA))`, `(FGM + 0.5 3PM) / FGA` |
+| `usg_pct`, `ast_pct`, `orb_pct`, `drb_pct`, `trb_pct`, `stl_pct`, `blk_pct`, `tov_pct` | Standard forms as ratios of sums over the player's games, each game with its own team and opponent; `s/T` is the share of the game the player was on court (`seconds / (game_minutes x 60)`) |
+| `possessions_played`, `*_per_100` | Estimated player possessions (sum of `s/T x game possessions`) and points, rebounds, assists, steals, blocks, turnovers per 100 of them |
+| `game_score_total`, `game_score_average` | Sum and mean of `game_player_advanced.game_score` |
+| `pie` | Player numerator over the numerator of both teams in the same games (`PTS + FGM + FTM - FGA - FTA + DREB + OREB/2 + AST + STL + BLK/2 - PF - TOV`) |
+
+Rates are fractions; NULL means an input was missing or a denominator was zero.
+API cross-check (`--quality-only`, warnings only), against the accumulated
+`season_player_stats_traditional` and `_advanced` feeds for each scope's final
+round (`PS` has no feed): games, counting totals and `pir` must match exactly and
+minutes within 0.01 (they do for all 23,274 comparable rows in E2000-E2026);
+for players with at least 100 minutes, `efg_pct` and `ts_pct` must agree within
+0.06 percentage points and the rebound rates within 2 points (the API's team-minute
+conventions differ a little). The API's `turnovers_ratio`, `assists_ratio` and
+`possessions` use other definitions and are not compared. The only differences across
+E2000-E2026 are two `efg_pct` warnings (E2007, a 0.7-point gap for 2 players).
+
+Note: `silver.game_player_advanced` (feature 25) computes `usage_pct`, `assist_pct`,
+the rebound, steal and block rates with a minutes share that is 5x too small, so those
+columns are wrong there; `player_round_stats` does not use them.
+
 ## Source responses
 
 The complete API responses are the bronze files under `data/bronze/` (see

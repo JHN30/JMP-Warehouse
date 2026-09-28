@@ -180,7 +180,8 @@ ROUND_MEASURES = (
     "free_throws_made", "free_throws_attempted", "offensive_rebounds",
     "defensive_rebounds", "turnovers", "assists",
 )
-ROUND_NAMES = ("team_round_stats", "team_round_ratings", "team_round_splits")
+ROUND_NAMES = ("team_round_stats", "team_round_ratings", "team_round_splits",
+               "player_round_stats")
 WINDOWS = (5, 10)
 SPLIT_GROUPS = ("home", "away", *(f"last{size}" for size in WINDOWS))
 SPLIT_MEASURES = ("mov", "offensive_rating", "defensive_rating", "net_rating", "pace")
@@ -236,6 +237,33 @@ TEAM_SPLITS_TABLE = Table(
     ) + tuple(Field(f"{group}_{name}", "NUMERIC", "derived") for name in SPLIT_MEASURES)),
 )
 
+PLAYER_TOTALS = (
+    "seconds_played", "points", "field_goals_made", "field_goals_attempted",
+    "three_pointers_made", "three_pointers_attempted", "free_throws_made",
+    "free_throws_attempted", "offensive_rebounds", "defensive_rebounds",
+    "total_rebounds", "assists", "steals", "turnovers", "blocks", "fouls_committed", "pir",
+)
+PLAYER_RATES = (
+    "ts_pct", "efg_pct", "usg_pct", "ast_pct", "orb_pct", "drb_pct", "trb_pct",
+    "stl_pct", "blk_pct", "tov_pct", "possessions_played", "points_per_100",
+    "rebounds_per_100", "assists_per_100", "steals_per_100", "blocks_per_100",
+    "turnovers_per_100", "game_score_total", "game_score_average", "pie",
+)
+PLAYER_ROUND_TABLE = Table(
+    "player_round_stats",
+    ("competition_code", "season_code", "scope", "round_number", "person_key"),
+    SCOPE + (
+        Field("scope", "TEXT NOT NULL", "games.phase_code"),
+        Field("round_number", "INTEGER NOT NULL", "games.round_number"),
+        Field("person_key", "TEXT NOT NULL", "game_player_stats.person_key"),
+        Field("club_code", "TEXT", "game_player_stats.club_code"),
+        Field("player_name", "TEXT", "game_player_stats.person_name"),
+        Field("games_played", "INTEGER NOT NULL", "game_player_stats"),
+        Field("games_started", "INTEGER NOT NULL", "game_player_stats.started"),
+    ) + tuple(Field(name, "NUMERIC", f"game_player_stats.{name}") for name in PLAYER_TOTALS)
+      + tuple(Field(name, "NUMERIC", "derived") for name in PLAYER_RATES),
+)
+
 DERIVED_NAMES = ("app_standings", *AGGREGATE_NAMES,
                  *RECORDS_TABLES, "app_postseason_series", *IDENTITY_TABLES)
 GOLD_TABLES = {**TABLES, "app_standings": STANDINGS_TABLE,
@@ -245,7 +273,8 @@ GOLD_TABLES = {**TABLES, "app_standings": STANDINGS_TABLE,
                **RECORDS_TABLES, "app_postseason_series": SERIES_TABLE,
                **IDENTITY_TABLES, "team_round_stats": TEAM_ROUND_TABLE,
                "team_round_ratings": TEAM_RATINGS_TABLE,
-               "team_round_splits": TEAM_SPLITS_TABLE}
+               "team_round_splits": TEAM_SPLITS_TABLE,
+               "player_round_stats": PLAYER_ROUND_TABLE}
 
 
 def columns(name):

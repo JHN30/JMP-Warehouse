@@ -3,7 +3,7 @@
 from gold_etl.schema import TABLES, columns, count_sql, scope_predicate
 from gold_etl.postseason import TABLES as PS_TABLES, _dict_rows, read_rows as read_postseason_rows
 from gold_etl.standings import KEY as STANDINGS_KEY, read_rows as read_standings_rows
-from gold_etl.schema import GOLD_TABLES, SEASON_DERIVED_NAMES, IDENTITY_TABLES, RECORDS_TABLES
+from gold_etl.schema import GOLD_TABLES, SEASON_DERIVED_NAMES, WINDOWS, IDENTITY_TABLES, RECORDS_TABLES
 from gold_etl.loader import read_aggregate_rows
 from gold_etl.records import read_rows as read_record_rows
 from gold_etl.identity import read_rows as read_identity_rows
@@ -266,4 +266,41 @@ def check_round_rating_invariants(cursor, competition_code, season_code):
         if net_sum is None or abs(net_sum) > 1e-4:
             issues.append(f"gold.team_round_ratings {season_code} {scope_name} round {number}: "
                           f"possession-weighted adj_net_rating averages {net_sum}, not 0")
+    return issues
+
+
+def check_round_split_invariants(cursor, competition_code, season_code):
+    """Errors where splits disagree with the cumulative `team_round_stats` rows."""
+    scope = (competition_code, season_code)
+    cursor.execute('SELECT * FROM gold."team_round_splits" WHERE competition_code = %s '
+                   'AND season_code = %s', scope)
+    splits = _dict_rows(cursor)
+    cursor.execute('SELECT scope, round_number, club_code, games_played, wins, mov FROM '
+                   'gold."team_round_stats" WHERE competition_code = %s '
+                   'AND season_code = %s', scope)
+    stats = {(row["scope"], row["round_number"], row["club_code"]): row
+             for row in _dict_rows(cursor)}
+    issues = []
+
+    def problem(row, message):
+        issues.append(f'gold.team_round_splits {season_code} {row["scope"]} round '
+                      f'{row["round_number"]} {row["club_code"]}: {message}')
+
+    for row in splits:
+        total = stats.get((row["scope"], row["round_number"], row["club_code"]))
+        if total is None:
+            problem(row, "no matching team_round_stats row")
+            continue
+        if row["home_games"] + row["away_games"] != total["games_played"]:
+            problem(row, f'home + away games {row["home_games"] + row["away_games"]} '
+                         f'!= games_played {total["games_played"]}')
+        if row["home_wins"] + row["away_wins"] != total["wins"]:
+            problem(row, f'home + away wins {row["home_wins"] + row["away_wins"]} '
+                         f'!= wins {total["wins"]}')
+        for size in WINDOWS:
+            games = row[f"last{size}_games"]
+            if games != min(size, total["games_played"]):
+                problem(row, f"last{size}_games {games} is not min({size}, games_played)")
+            elif total["games_played"] <= size and row[f"last{size}_mov"] != total["mov"]:
+                problem(row, f"last{size}_mov differs from the cumulative mov")
     return issues

@@ -56,6 +56,7 @@ def _counted_games(games, team_stats, advanced):
             entries.append({
                 "phase": game["phase_code"], "round": game["round_number"],
                 "club": club, "opponent": game.get(f"{other}_club_code"),
+                "home": side == "local", "game_code": code,
                 "name": game.get(f"{side}_club_name"),
                 "own": totals[(code, side)], "opp": totals[(code, other)],
                 "won": None if winner is None else winner == club,

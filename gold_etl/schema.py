@@ -180,7 +180,10 @@ ROUND_MEASURES = (
     "free_throws_made", "free_throws_attempted", "offensive_rebounds",
     "defensive_rebounds", "turnovers", "assists",
 )
-ROUND_NAMES = ("team_round_stats", "team_round_ratings")
+ROUND_NAMES = ("team_round_stats", "team_round_ratings", "team_round_splits")
+WINDOWS = (5, 10)
+SPLIT_GROUPS = ("home", "away", *(f"last{size}" for size in WINDOWS))
+SPLIT_MEASURES = ("mov", "offensive_rating", "defensive_rating", "net_rating", "pace")
 SEASON_DERIVED_NAMES = AGGREGATE_NAMES + ROUND_NAMES
 TEAM_ROUND_TABLE = Table(
     "team_round_stats",
@@ -220,6 +223,19 @@ TEAM_RATINGS_TABLE = Table(
         "adj_offensive_rating", "adj_defensive_rating", "adj_net_rating")),
 )
 
+TEAM_SPLITS_TABLE = Table(
+    "team_round_splits",
+    ("competition_code", "season_code", "scope", "round_number", "club_code"),
+    SCOPE + (
+        Field("scope", "TEXT NOT NULL", "games.phase_code"),
+        Field("round_number", "INTEGER NOT NULL", "games.round_number"),
+        Field("club_code", "TEXT NOT NULL", "games.club_code"),
+    ) + tuple(field for group in SPLIT_GROUPS for field in (
+        Field(f"{group}_games", "INTEGER NOT NULL", "games"),
+        Field(f"{group}_wins", "INTEGER NOT NULL", "games.match_winner_club_code"),
+    ) + tuple(Field(f"{group}_{name}", "NUMERIC", "derived") for name in SPLIT_MEASURES)),
+)
+
 DERIVED_NAMES = ("app_standings", *AGGREGATE_NAMES,
                  *RECORDS_TABLES, "app_postseason_series", *IDENTITY_TABLES)
 GOLD_TABLES = {**TABLES, "app_standings": STANDINGS_TABLE,
@@ -228,7 +244,8 @@ GOLD_TABLES = {**TABLES, "app_standings": STANDINGS_TABLE,
                "app_coverage_games": COVERAGE_GAME_TABLE,
                **RECORDS_TABLES, "app_postseason_series": SERIES_TABLE,
                **IDENTITY_TABLES, "team_round_stats": TEAM_ROUND_TABLE,
-               "team_round_ratings": TEAM_RATINGS_TABLE}
+               "team_round_ratings": TEAM_RATINGS_TABLE,
+               "team_round_splits": TEAM_SPLITS_TABLE}
 
 
 def columns(name):

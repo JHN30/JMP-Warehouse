@@ -525,6 +525,33 @@ net rating is still defined. `--quality-only` re-derives the table, compares it,
 and reports an error if a connected scope-round's `srs` sum or possession-weighted
 `adj_net_rating` mean is not zero.
 
+### `team_round_splits` (local only)
+
+Built as `gold.team_round_splits` by `python gold_etl/main.py -sc <seasons> -tb
+team_round_splits` from the same Silver inputs and counted games as
+`team_round_stats`, with the same key (`competition_code`, `season_code`,
+`scope`, `round_number`, `club_code`) and the same rows. Not published to Neon.
+
+Four groups of columns, each with the same measures, all through the round
+within the scope:
+
+| Group | Games included |
+| --- | --- |
+| `home_*` | The club was the `local` side in `silver.games` |
+| `away_*` | The club was the `road` side |
+| `last5_*`, `last10_*` | The club's most recent 5 and 10 counted games in the scope, ordered by `round_number` then `game_code` (fewer early in a scope) |
+
+Per group `g`: `g_games`, `g_wins`, `g_mov` (points for minus against per game),
+`g_offensive_rating`, `g_defensive_rating`, `g_net_rating` (per 100 possessions)
+and `g_pace` (per 40 minutes), using `game_team_advanced` possessions and
+minutes. A group with no games has zero counts and NULL rates; a missing input
+makes that group's rates NULL. Neutral-site games (for example the Final Four)
+keep the source's local/road designation. `--quality-only` re-derives the table,
+compares it, and errors if home plus away games or wins differ from
+`team_round_stats`, if a window's game count is not `min(N, games_played)`, or if
+a window's MOV differs from the cumulative MOV while the club has no more games
+than the window.
+
 ## Source responses
 
 The complete API responses are the bronze files under `data/bronze/` (see

@@ -289,6 +289,37 @@ def check_round_player_rating_invariants(cursor, competition_code, season_code):
     return issues
 
 
+# Win Shares should add up to about one win per counted game (E2000-E2026: 0.90-1.07 of
+# the games, tightest with many games). Rounds with few games are too noisy to judge.
+WIN_SHARE_MIN_GAMES = 30
+WIN_SHARE_TOLERANCE = 0.15
+
+
+def check_round_win_share_totals(cursor, competition_code, season_code):
+    """Warnings where a scope round's total Win Shares is far from its counted games."""
+    scope = (competition_code, season_code)
+    cursor.execute('SELECT scope, round_number, win_shares FROM gold."player_round_win_shares" '
+                   'WHERE competition_code = %s AND season_code = %s', scope)
+    totals = {}
+    for row in _dict_rows(cursor):
+        if row["win_shares"] is not None:
+            key = (row["scope"], row["round_number"])
+            totals[key] = totals.get(key, 0.0) + float(row["win_shares"])
+    cursor.execute('SELECT scope, round_number, games_played FROM gold."team_round_stats" '
+                   'WHERE competition_code = %s AND season_code = %s', scope)
+    games = {}
+    for row in _dict_rows(cursor):
+        key = (row["scope"], row["round_number"])
+        games[key] = games.get(key, 0) + row["games_played"]
+    warnings = []
+    for key, total in sorted(totals.items()):
+        counted = games.get(key, 0) / 2
+        if counted >= WIN_SHARE_MIN_GAMES and abs(total / counted - 1) > WIN_SHARE_TOLERANCE:
+            warnings.append(f"gold.player_round_win_shares {season_code} {key[0]} round "
+                            f"{key[1]}: win shares total {total:.1f} for {counted:g} games")
+    return warnings
+
+
 def check_round_split_invariants(cursor, competition_code, season_code):
     """Errors where splits disagree with the cumulative `team_round_stats` rows."""
     scope = (competition_code, season_code)

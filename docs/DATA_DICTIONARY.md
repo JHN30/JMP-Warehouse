@@ -612,6 +612,33 @@ with a few minutes are noisy and can be negative. NULL means an input was missin
 denominator was zero. The API player feeds have no PER, so the only checks are the fresh
 derivation equality and the league-mean invariant in `--quality-only`.
 
+### `player_round_win_shares` (local only)
+
+Built as `gold.player_round_win_shares` by `python gold_etl/main.py -sc <seasons> -tb
+player_round_win_shares` from `silver.game_player_stats` and the same counted games as
+`team_round_stats`. Key `competition_code`, `season_code`, `scope` (`all`, each phase,
+`PS`), `round_number`, `person_key`; same row set as `player_round_stats`. Not published
+to Neon (30g).
+
+| Column | Meaning |
+|---|---|
+| `club_code`, `player_name`, `games_played`, `seconds_played` | Latest club and name, appearances and cumulative seconds through the round |
+| `off_win_shares` | (Points produced - 0.92 x league points per possession x individual possessions) / marginal points per win, Basketball-Reference's method |
+| `def_win_shares` | Minutes share x team possessions x (1.08 x league points per possession - individual defensive rating / 100) / marginal points per win; the defensive rating uses stops and the stop percentage |
+| `win_shares`, `win_shares_per_48` | `off_win_shares + def_win_shares`, and `win_shares` x 48 / minutes played |
+
+Marginal points per win = 0.32 x league points per team game x (the player's team pace
+over the games the player played / league pace). Player, club and opponent totals are
+summed over the games the player played (each game with its own club), league values over
+every counted game of the scope through the round, so values differ slightly from
+Basketball-Reference for players who missed games. A bracketed ratio whose count is zero
+(free throw percentage with no attempts, no field goal attempts, no team free throws) counts
+as 0; any other zero denominator or a missing input gives NULL. Early rounds are noisy and
+values can be negative. There is no API Win Shares figure. `--quality-only` checks the
+fresh derivation equality and prints `WARN` when a scope round with at least 30 games has
+total Win Shares more than 15% away from its game count (each game has one win). Across
+E2000-E2026 those totals are 0.90-1.07 of the games, mostly 1.03, so no warning is printed.
+
 ## Source responses
 
 The complete API responses are the bronze files under `data/bronze/` (see

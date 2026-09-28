@@ -340,6 +340,9 @@ committed; copy the `.example`). Publishing reads the direct non-pooled
 - Build local player PER (Hollinger PER per round, league mean 15; local only):
   `python gold_etl/main.py -sc <seasons> -tb player_round_ratings`. `--quality-only` checks
   the league-mean invariant.
+- Build local player Win Shares (offensive, defensive, total and per 48; local only):
+  `python gold_etl/main.py -sc <seasons> -tb player_round_win_shares`. `--quality-only`
+  prints `WARN` lines where a scope round's total Win Shares is far from its games.
 - Traditional or misc table selections also rebuild their derived `PS` rows.
 - Gold read-only source and derived counts: `python gold_etl/main.py -sc <seasons> --dry-run`
 - Gold read-only equality checks: `python gold_etl/main.py -sc <seasons> --quality-only`

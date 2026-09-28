@@ -181,7 +181,7 @@ ROUND_MEASURES = (
     "defensive_rebounds", "turnovers", "assists",
 )
 ROUND_NAMES = ("team_round_stats", "team_round_ratings", "team_round_splits",
-               "player_round_stats", "player_round_ratings")
+               "player_round_stats", "player_round_ratings", "player_round_win_shares")
 WINDOWS = (5, 10)
 SPLIT_GROUPS = ("home", "away", *(f"last{size}" for size in WINDOWS))
 SPLIT_MEASURES = ("mov", "offensive_rating", "defensive_rating", "net_rating", "pace")
@@ -278,6 +278,21 @@ PLAYER_RATINGS_TABLE = Table(
     ) + tuple(Field(name, "NUMERIC", "derived") for name in ("uper", "aper", "per")),
 )
 
+PLAYER_WIN_SHARES_TABLE = Table(
+    "player_round_win_shares",
+    ("competition_code", "season_code", "scope", "round_number", "person_key"),
+    SCOPE + (
+        Field("scope", "TEXT NOT NULL", "games.phase_code"),
+        Field("round_number", "INTEGER NOT NULL", "games.round_number"),
+        Field("person_key", "TEXT NOT NULL", "game_player_stats.person_key"),
+        Field("club_code", "TEXT", "game_player_stats.club_code"),
+        Field("player_name", "TEXT", "game_player_stats.person_name"),
+        Field("games_played", "INTEGER NOT NULL", "game_player_stats"),
+        Field("seconds_played", "NUMERIC", "game_player_stats.seconds_played"),
+    ) + tuple(Field(name, "NUMERIC", "derived") for name in (
+        "off_win_shares", "def_win_shares", "win_shares", "win_shares_per_48")),
+)
+
 DERIVED_NAMES = ("app_standings", *AGGREGATE_NAMES,
                  *RECORDS_TABLES, "app_postseason_series", *IDENTITY_TABLES)
 GOLD_TABLES = {**TABLES, "app_standings": STANDINGS_TABLE,
@@ -289,7 +304,8 @@ GOLD_TABLES = {**TABLES, "app_standings": STANDINGS_TABLE,
                "team_round_ratings": TEAM_RATINGS_TABLE,
                "team_round_splits": TEAM_SPLITS_TABLE,
                "player_round_stats": PLAYER_ROUND_TABLE,
-               "player_round_ratings": PLAYER_RATINGS_TABLE}
+               "player_round_ratings": PLAYER_RATINGS_TABLE,
+               "player_round_win_shares": PLAYER_WIN_SHARES_TABLE}
 
 
 def columns(name):

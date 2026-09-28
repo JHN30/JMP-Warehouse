@@ -477,6 +477,12 @@ ADVANCED_TABLES = {
         "defensive_rating net_rating efg_pct tov_pct orb_pct drb_pct ft_rate "
         "opp_efg_pct opp_tov_pct opp_ft_rate true_shooting_pct assist_ratio",
     ), indexes=(("club_code",),)),
+    "game_team_possessions": table("game_team_possessions", ("game_code", "side"), (
+        f("game_code", "INTEGER NOT NULL"), f("side", "TEXT NOT NULL"),
+        f("club_code", "TEXT"), f("opponent_club_code", "TEXT"),
+        f("counted_possessions", "INTEGER"),
+    ), _derived("possession_seconds avg_possession_seconds estimated_possessions"),
+        indexes=(("club_code",),)),
     "game_player_advanced": table("game_player_advanced", ("game_code", "side", "person_key"), (
         f("game_code", "INTEGER NOT NULL"), f("side", "TEXT NOT NULL"),
         f("person_key", "TEXT NOT NULL"), f("club_code", "TEXT"),

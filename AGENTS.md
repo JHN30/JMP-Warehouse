@@ -16,7 +16,7 @@ for optional tool settings.
 The data pipeline behind the JMP EuroLeague web app (`jmpeuroleague.com`, repo
 `jmp-euroleague2`). It downloads EuroLeague API data into a bronze store of exact
 responses, loads it into 28 typed tables in the local PostgreSQL `silver`
-schema with quality checks, plus two derived per-game advanced tables. Gold builds 16 local source tables from Silver,
+schema with quality checks, plus derived per-game advanced tables (box-score estimates and counted possessions). Gold builds 16 local source tables from Silver,
 postseason player statistics, a page-shaped standings table, team-season totals,
 season/game coverage, all-time records, postseason series, and cross-season
 player and club identities. The 30f Gold-to-Neon cutover and first E2026
@@ -319,6 +319,9 @@ committed; copy the `.example`). Publishing reads the direct non-pooled
 - Per-game advanced stats (also run after every Silver load of game tables):
   `python postgres_etl/advanced.py -sc <seasons>`; `--dry-run` counts rows without
   writing, `--quality-only` checks the stored rows.
+- Counted possessions from play-by-play (also run after a load of `games` or `play_by_play`):
+  `python postgres_etl/possessions.py -sc <seasons>` (E2007+); `--dry-run` and `--quality-only`
+  as above.
 - Build local Gold from Silver: `python gold_etl/main.py -sc <seasons>`
   (`-sc all` uses every locally loaded Silver season).
 - Build only local standings: `python gold_etl/main.py -sc <seasons> -tb app_standings`

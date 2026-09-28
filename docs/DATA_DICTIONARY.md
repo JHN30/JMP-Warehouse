@@ -138,8 +138,47 @@ no rows.
 | `usage_pct`, `assist_pct`, `orb_pct`, `drb_pct`, `trb_pct`, `steal_pct`, `block_pct` (player) | Basketball-Reference forms using `seconds_played` and the club's official `total` row; NULL for zero minutes. `steal_pct` uses the game's possessions, `block_pct` the opponent's two-point attempts |
 | `tov_pct`, `efg_pct`, `true_shooting_pct` (player) | Same forms as the club columns, from the player's own line |
 
-These are box-score estimates; feature 19 will add counted play-by-play
-possessions next to them, never silently replacing them.
+These are box-score estimates. Counted play-by-play possessions sit next to them in
+`game_team_possessions` (below) and never replace them.
+
+### `game_team_possessions`
+
+Built by `python postgres_etl/possessions.py -sc <seasons>` from `play_by_play`, `games`
+and `game_team_advanced` (E2007 onward; earlier seasons have no play-by-play and no
+rows). Extra key `game_code`, `side`; one row per club per played game with events and a
+`game_team_advanced` row. Same provenance columns; not in Gold or Neon.
+
+| Column | Meaning |
+| --- | --- |
+| `counted_possessions` | Possessions counted from the event stream |
+| `possession_seconds` | Sum of the measurable possession lengths, in game seconds |
+| `avg_possession_seconds` | `possession_seconds` / the number of possessions with a measurable length (NULL when none) |
+| `estimated_possessions` | The box-score `possessions` of `game_team_advanced`, copied for comparison |
+
+Rules. Events are ordered by period, then `event_ordinal` (which restarts each period;
+`play_number` is not chronological). `marker_time` is the time left in the period, turned
+into elapsed game seconds (10:00 per quarter, 5:00 per overtime; every overtime carries the
+period label `ExtraTime`, the overtime number comes from `minute`). Shots are `2FGM`,
+`3FGM`, `LAYUPMD` and `DUNK` (made) and `2FGA`, `3FGA`, `LAYUPATT`, `2FGAB`, `3FGAB`
+(missed): E2008-E2014 record many shots as layups, dunks and blocked attempts, and with those
+types the event totals equal the box score's field goals made and attempted. A possession
+ends, for the team that had it, on a made field goal, a turnover, a defensive rebound after a
+miss, the last made free throw of a trip, and the end of a period; an offensive rebound
+continues it. A trip is consecutive free throws of one club at the same clock, ignoring
+substitutions, timeouts and fouls between them; technical free throws (after a technical or
+coach or bench technical event) count for nothing, and an and-one adds no possession. When
+the other club acts while a club is recorded as holding the ball, the earlier club's
+possession is ended at that point. Length is the elapsed time from the previous possession's
+end (or the period start) to the end.
+
+Agreement with the box-score estimate over E2007-E2026 (10,098 club games): counted minus
+estimated averages +0.12 possessions (standard deviation 1.38), 90.2% of club games are within
+3%, 98.3% within 5% and 99.8% within 10%; the average possession lasts 17.0 seconds. E2007-E2009
+are looser (E2007 within 3%: 71%) and E2019-E2025 tighter (93-95%). Event counts match the box
+score exactly for turnovers (99.4% of club games), free throws made and attempted, and (once
+layups and dunks are included) field goals. `--quality-only` checks the stored rows against a
+fresh derivation and prints a warning for club games whose counted possessions differ from the
+estimate by more than 10% (16 rows across E2007-E2026: 7 in E2007 and 9 in E2009).
 
 ## Standard column names
 

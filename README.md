@@ -39,6 +39,7 @@ python postgres_etl/main.py -sc 2025 --dry-run
 python postgres_etl/main.py -sc 2025
 python postgres_etl/main.py -sc all
 python postgres_etl/advanced.py -sc all --dry-run
+python postgres_etl/possessions.py -sc 2007-2026 --dry-run
 ```
 
 Build or inspect local Gold from already loaded Silver rows:

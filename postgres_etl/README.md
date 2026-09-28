@@ -16,6 +16,7 @@ python postgres_etl/main.py -sc 2025
 python postgres_etl/main.py -sc all
 python postgres_etl/main.py -sc 2025 --quality-only
 python postgres_etl/advanced.py -sc 2025 --dry-run
+python postgres_etl/possessions.py -sc 2025 --dry-run
 ```
 
 `advanced.py` derives two more `silver` tables, `game_team_advanced` and
@@ -25,6 +26,11 @@ any real load that includes a game table, and it fails the run when its own
 checks report an error. `--dry-run` derives and counts rows; `--quality-only`
 checks stored rows. Each table and season is replaced in one transaction with
 a `load_log` entry (empty `bronze_versions`, since the source is Silver).
+
+`possessions.py` (feature 19a) adds `game_team_possessions`, counted possessions per
+team and game from the play-by-play events, next to the box-score estimate. `main.py`
+runs it after `advanced.py` when a load includes `games` or `play_by_play`; the options
+are the same. Games before E2007 have no play-by-play and no rows.
 
 The dry run checks parsing, types, required fields, and duplicate keys without
 a database. A real load needs `psycopg2` and the credentials in

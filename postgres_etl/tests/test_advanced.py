@@ -249,7 +249,8 @@ class MainWiringTests(unittest.TestCase):
     def run_main(self, argv, advanced_result=True):
         import main
 
-        with patch.object(main, "available_seasons", return_value=["E2025"]),                 patch.object(main, "FlatDatabaseLoader"),                 patch.object(main, "validate_loaded", return_value=True),                 patch.object(main, "run_advanced", return_value=advanced_result) as run:
+        with patch.object(main, "available_seasons", return_value=["E2025"]),                 patch.object(main, "FlatDatabaseLoader"),                 patch.object(main, "validate_loaded", return_value=True),                 patch.object(main, "run_advanced", return_value=advanced_result) as run, \
+                patch.object(main, "run_possessions", return_value=True):
             return main.main(argv), run
 
     def test_runs_after_a_load_that_includes_game_tables(self):

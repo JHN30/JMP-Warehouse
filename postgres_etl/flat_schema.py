@@ -462,6 +462,31 @@ STANDINGS_FEED_TABLES = (
     "standings_calendar_streaks", "standings_basic_form",
 )
 
+def _derived(names):
+    return tuple(f(name, "NUMERIC") for name in names.split())
+
+
+# Derived per-record enrichment (feature 25): computed from Silver, not loaded from Bronze.
+ADVANCED_TABLES = {
+    "game_team_advanced": table("game_team_advanced", ("game_code", "side"), (
+        f("game_code", "INTEGER NOT NULL"), f("side", "TEXT NOT NULL"),
+        f("club_code", "TEXT"), f("opponent_club_code", "TEXT"),
+        f("phase_code", "TEXT"), f("round_number", "INTEGER"),
+    ), _derived(
+        "game_minutes possessions own_possessions_estimate pace offensive_rating "
+        "defensive_rating net_rating efg_pct tov_pct orb_pct drb_pct ft_rate "
+        "opp_efg_pct opp_tov_pct opp_ft_rate true_shooting_pct assist_ratio",
+    ), indexes=(("club_code",),)),
+    "game_player_advanced": table("game_player_advanced", ("game_code", "side", "person_key"), (
+        f("game_code", "INTEGER NOT NULL"), f("side", "TEXT NOT NULL"),
+        f("person_key", "TEXT NOT NULL"), f("club_code", "TEXT"),
+    ), _derived(
+        "seconds_played game_score true_shooting_pct efg_pct usage_pct assist_pct "
+        "orb_pct drb_pct trb_pct steal_pct block_pct tov_pct",
+    ), indexes=(("person_key",), ("club_code",))),
+}
+
+ALL_TABLES = {**TABLES, **ADVANCED_TABLES}
 PUBLISHED_TABLES = ()
 
 PROVENANCE_COLUMNS = (("load_id", "UUID"), ("loaded_at", "TIMESTAMPTZ"))
@@ -483,7 +508,7 @@ def physical_name(name):
 
 
 def create_table_sql(name):
-    spec = TABLES[name]
+    spec = ALL_TABLES[name]
     columns = ", ".join(
         [*(f'"{field.name}" {field.kind}' for field in spec.fields),
          *(f'"{column}" {kind} NOT NULL' for column, kind in PROVENANCE_COLUMNS)]
@@ -494,7 +519,7 @@ def create_table_sql(name):
 
 def add_column_sql(name):
     """Safely add columns when a later code version enriches a flat table."""
-    for field in TABLES[name].fields:
+    for field in ALL_TABLES[name].fields:
         yield (f'ALTER TABLE "{physical_name(name)}" '
                f'ADD COLUMN IF NOT EXISTS "{field.name}" {field.kind}')
     for column, kind in PROVENANCE_COLUMNS:
@@ -504,7 +529,7 @@ def add_column_sql(name):
 
 
 def create_index_sql(name):
-    for index in TABLES[name].indexes:
+    for index in ALL_TABLES[name].indexes:
         columns = ", ".join(f'"{column}"' for column in index)
         suffix = "_".join(index)
         yield (f'CREATE INDEX IF NOT EXISTS "idx_flat_{name}_{suffix}" '

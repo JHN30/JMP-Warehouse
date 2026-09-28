@@ -2,7 +2,8 @@
 
 Python 3.13 and PostgreSQL pipeline for EuroLeague and EuroCup data. The fetcher
 stores exact versioned API responses in bronze. The loader builds 28 typed
-tables in the local `silver` schema and runs quality checks. The local Gold
+tables in the local `silver` schema and runs quality checks, then derives two
+per-game advanced tables (team and player) from the box scores. The local Gold
 stage copies 16 source tables from Silver into `gold` and derives postseason
 player stats, a page-shaped standings table, team-season totals, coverage,
 all-time records and postseason series, plus cross-season player and club
@@ -37,6 +38,7 @@ python postgres_etl/main.py --list-tables
 python postgres_etl/main.py -sc 2025 --dry-run
 python postgres_etl/main.py -sc 2025
 python postgres_etl/main.py -sc all
+python postgres_etl/advanced.py -sc all --dry-run
 ```
 
 Build or inspect local Gold from already loaded Silver rows:

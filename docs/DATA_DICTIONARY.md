@@ -110,6 +110,37 @@ completes the primary key.
 | `standings_calendar_streaks` | `phase_code`, `round_number`, `club_code`, `streak_ordinal` | One calendar streak. |
 | `standings_basic_form` | `phase_code`, `round_number`, `club_code`, `result_ordinal` | One recent result. |
 
+### Derived per-game advanced tables
+
+`game_team_advanced` (extra key `game_code`, `side`; one row per club per played
+game with a full box score) and `game_player_advanced` (`game_code`, `side`,
+`person_key`; one row per player box score) are computed by
+`postgres_etl/advanced.py` from Silver only. They are not loaded from Bronze,
+not part of Gold or Neon, and carry the same `load_id` and `loaded_at` columns.
+Ratios are fractions (0.512); NULL means a needed measure was missing or a
+denominator was zero. Forfeits (`game_stat_gaps` `*`) and unplayed games have
+no rows.
+
+| Column | Formula |
+| --- | --- |
+| `game_minutes` | 40, plus 5 per overtime period in `game_period_scores` |
+| `own_possessions_estimate` | `field_goals_attempted + 0.44 x free_throws_attempted - offensive_rebounds + turnovers` for the club |
+| `possessions` | Average of both clubs' estimates, identical on both rows |
+| `pace` | `40 x possessions / game_minutes` |
+| `offensive_rating`, `defensive_rating`, `net_rating` | `100 x points / possessions` for the club and its opponent; net is the difference |
+| `efg_pct`, `opp_efg_pct` | `(field_goals_made + 0.5 x three_pointers_made) / field_goals_attempted` |
+| `tov_pct`, `opp_tov_pct` | `turnovers / (field_goals_attempted + 0.44 x free_throws_attempted + turnovers)` |
+| `orb_pct`, `drb_pct` | Own rebounds of a type / (own + opponent's of the other type) |
+| `ft_rate`, `opp_ft_rate` | `free_throws_made / field_goals_attempted` |
+| `true_shooting_pct` | `points / (2 x (field_goals_attempted + 0.44 x free_throws_attempted))` |
+| `assist_ratio` | `assists / field_goals_made` |
+| `game_score` (player) | Hollinger: `points + 0.4 FGM - 0.7 FGA - 0.4 (FTA - FTM) + 0.7 OREB + 0.3 DREB + steals + 0.7 assists + 0.7 blocks - 0.4 fouls_committed - turnovers` |
+| `usage_pct`, `assist_pct`, `orb_pct`, `drb_pct`, `trb_pct`, `steal_pct`, `block_pct` (player) | Basketball-Reference forms using `seconds_played` and the club's official `total` row; NULL for zero minutes. `steal_pct` uses the game's possessions, `block_pct` the opponent's two-point attempts |
+| `tov_pct`, `efg_pct`, `true_shooting_pct` (player) | Same forms as the club columns, from the player's own line |
+
+These are box-score estimates; feature 19 will add counted play-by-play
+possessions next to them, never silently replacing them.
+
 ## Standard column names
 
 The source JSON paths have not changed. Where these stats occur, the SQL

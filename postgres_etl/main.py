@@ -5,6 +5,7 @@ import re
 import sys
 from pathlib import Path
 
+from advanced import SOURCE_TABLES as ADVANCED_SOURCES, run_seasons as run_advanced
 from flat_loader import FlatDatabaseLoader
 from flat_schema import TABLES as FLAT_TABLES, physical_name
 from quality import validate_loaded
@@ -119,6 +120,12 @@ def main(argv=None):
     try:
         if not args.quality_only:
             loader.run()
+        if not (args.quality_only or args.dry_run) and set(tables) & set(ADVANCED_SOURCES):
+            print("\nPer-game advanced stats", flush=True)
+            if not run_advanced(args.config, args.competition, seasons):
+                print("Advanced stats checks failed; inspect the reported issues.",
+                      file=sys.stderr, flush=True)
+                return 1
         if args.quality_only or (not args.dry_run and not args.skip_quality_check):
             print("\nRead-only quality checks", flush=True)
             passed = True

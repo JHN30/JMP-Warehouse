@@ -15,7 +15,16 @@ python postgres_etl/main.py -sc 2025 --dry-run
 python postgres_etl/main.py -sc 2025
 python postgres_etl/main.py -sc all
 python postgres_etl/main.py -sc 2025 --quality-only
+python postgres_etl/advanced.py -sc 2025 --dry-run
 ```
+
+`advanced.py` derives two more `silver` tables, `game_team_advanced` and
+`game_player_advanced`, from the loaded box scores of one season (possessions,
+pace, ratings, four factors, Game Score, player rates). `main.py` runs it after
+any real load that includes a game table, and it fails the run when its own
+checks report an error. `--dry-run` derives and counts rows; `--quality-only`
+checks stored rows. Each table and season is replaced in one transaction with
+a `load_log` entry (empty `bronze_versions`, since the source is Silver).
 
 The dry run checks parsing, types, required fields, and duplicate keys without
 a database. A real load needs `psycopg2` and the credentials in

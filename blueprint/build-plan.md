@@ -49,7 +49,7 @@ Items 1-8 were already shipped when the Blueprint was adopted (2026-09-24).
 - [x] 25. **Per-game advanced stats** - per game, team and player (with opponent): possessions, pace, ratings, four factors, player rates and Game Score, in `silver` (enrichment per record)
 - [ ] 26. **Per-round team advanced stats** - cumulative after every round for scopes `all`, each phase and `PS`: team and opponent advanced stats, MOV, Pythagorean, SRS, SOS/SOV, adjusted and relative ratings, home/away and rolling, checked against the API team feeds, in `gold`
   - [x] 26a. **Cumulative team-round table** - `gold.team_round_stats`: cumulative own and opponent totals, record, MOV, Pythagorean wins, possessions, pace, ratings and four factors after every round for `all`, each phase and `PS`, checked against the API team feeds; local only
-  - [ ] 26b. **Strength-adjusted team ratings** - SRS, SOS, SOV, adjusted and relative ratings per round, using league averages per scope and round
+  - [x] 26b. **Strength-adjusted team ratings** - SRS, SOS, SOV, adjusted and relative ratings per round, using league averages per scope and round
   - [ ] 26c. **Home/away and rolling team stats** - home and away splits and last-N-game rolling windows per round
 - [ ] 27. **Per-round player advanced stats** - cumulative after every round for the same scopes: USG%, AST%, rebound/steal/block %, per-100 stats, PER, Win Shares and PIE, checked against the API player feeds; build in `gold`, publish in 30g
 - [ ] 28. **Standings stats app table** - per-round team advanced stats in `gold` for the standings page, publish in 30g

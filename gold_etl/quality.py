@@ -235,3 +235,35 @@ def check_round_api_scope(cursor, competition_code, season_code):
     return [f"gold.team_round_stats {season_code} {scope_name}: {column} differs from the API "
             f"feed for {len(examples)} club(s) (e.g. {examples[0]})"
             for (scope_name, column), examples in sorted(differences.items())]
+
+
+def check_round_rating_invariants(cursor, competition_code, season_code):
+    """Errors where a connected scope-round's SRS sum or possession-weighted adjusted
+    net sum is not zero (both hold by construction of the linear systems)."""
+    scope = (competition_code, season_code)
+    cursor.execute('SELECT * FROM gold."team_round_ratings" WHERE competition_code = %s '
+                   'AND season_code = %s', scope)
+    ratings = _dict_rows(cursor)
+    cursor.execute('SELECT scope, round_number, club_code, possessions FROM '
+                   'gold."team_round_stats" WHERE competition_code = %s '
+                   'AND season_code = %s', scope)
+    possessions = {(row["scope"], row["round_number"], row["club_code"]): row["possessions"]
+                   for row in _dict_rows(cursor)}
+    groups = {}
+    for row in ratings:
+        if row["connected"]:
+            groups.setdefault((row["scope"], row["round_number"]), []).append(row)
+    issues = []
+    for (scope_name, number), rows in sorted(groups.items()):
+        srs_sum = sum(float(row["srs"]) for row in rows)
+        weights = [float(possessions.get((scope_name, number, row["club_code"])) or 0)
+                   for row in rows]
+        net_sum = sum(w * float(row["adj_net_rating"]) for w, row in zip(weights, rows))
+        net_sum = net_sum / sum(weights) if sum(weights) else None
+        if abs(srs_sum) > 1e-4:
+            issues.append(f"gold.team_round_ratings {season_code} {scope_name} round {number}: "
+                          f"srs sums to {srs_sum:g}, not 0")
+        if net_sum is None or abs(net_sum) > 1e-4:
+            issues.append(f"gold.team_round_ratings {season_code} {scope_name} round {number}: "
+                          f"possession-weighted adj_net_rating averages {net_sum}, not 0")
+    return issues

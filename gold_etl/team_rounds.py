@@ -55,7 +55,8 @@ def _counted_games(games, team_stats, advanced):
             winner = game.get("match_winner_club_code")
             entries.append({
                 "phase": game["phase_code"], "round": game["round_number"],
-                "club": club, "name": game.get(f"{side}_club_name"),
+                "club": club, "opponent": game.get(f"{other}_club_code"),
+                "name": game.get(f"{side}_club_name"),
                 "own": totals[(code, side)], "opp": totals[(code, other)],
                 "won": None if winner is None else winner == club,
                 "possessions": extra[(code, side)].get("possessions"),
@@ -188,7 +189,8 @@ def derive_rows(games, team_stats, advanced, clubs):
     return rows
 
 
-def read_rows(cursor, competition_code, season_code):
+def read_tables(cursor, competition_code, season_code):
+    """Silver inputs shared by the round tables: games, totals, advanced rows, clubs."""
     scope = (competition_code, season_code)
     tables = []
     for query in (
@@ -202,4 +204,8 @@ def read_rows(cursor, competition_code, season_code):
     ):
         cursor.execute(query, scope)
         tables.append(_dict_rows(cursor))
-    return derive_rows(*tables)
+    return tables
+
+
+def read_rows(cursor, competition_code, season_code):
+    return derive_rows(*read_tables(cursor, competition_code, season_code))

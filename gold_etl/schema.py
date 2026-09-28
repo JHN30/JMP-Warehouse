@@ -180,7 +180,7 @@ ROUND_MEASURES = (
     "free_throws_made", "free_throws_attempted", "offensive_rebounds",
     "defensive_rebounds", "turnovers", "assists",
 )
-ROUND_NAMES = ("team_round_stats",)
+ROUND_NAMES = ("team_round_stats", "team_round_ratings")
 SEASON_DERIVED_NAMES = AGGREGATE_NAMES + ROUND_NAMES
 TEAM_ROUND_TABLE = Table(
     "team_round_stats",
@@ -206,6 +206,19 @@ TEAM_ROUND_TABLE = Table(
             "drb_pct", "ft_rate", "opp_efg_pct", "opp_tov_pct", "opp_ft_rate",
             "true_shooting_pct", "assist_ratio")),
 )
+TEAM_RATINGS_TABLE = Table(
+    "team_round_ratings",
+    ("competition_code", "season_code", "scope", "round_number", "club_code"),
+    SCOPE + (
+        Field("scope", "TEXT NOT NULL", "games.phase_code"),
+        Field("round_number", "INTEGER NOT NULL", "games.round_number"),
+        Field("club_code", "TEXT NOT NULL", "games.club_code"),
+        Field("connected", "BOOLEAN NOT NULL", "derived"),
+    ) + tuple(Field(name, "NUMERIC", "derived") for name in (
+        "league_offensive_rating", "league_pace", "relative_offensive_rating",
+        "relative_defensive_rating", "relative_pace", "srs", "sos", "sov",
+        "adj_offensive_rating", "adj_defensive_rating", "adj_net_rating")),
+)
 
 DERIVED_NAMES = ("app_standings", *AGGREGATE_NAMES,
                  *RECORDS_TABLES, "app_postseason_series", *IDENTITY_TABLES)
@@ -214,7 +227,8 @@ GOLD_TABLES = {**TABLES, "app_standings": STANDINGS_TABLE,
                "app_coverage_seasons": COVERAGE_SEASON_TABLE,
                "app_coverage_games": COVERAGE_GAME_TABLE,
                **RECORDS_TABLES, "app_postseason_series": SERIES_TABLE,
-               **IDENTITY_TABLES, "team_round_stats": TEAM_ROUND_TABLE}
+               **IDENTITY_TABLES, "team_round_stats": TEAM_ROUND_TABLE,
+               "team_round_ratings": TEAM_RATINGS_TABLE}
 
 
 def columns(name):

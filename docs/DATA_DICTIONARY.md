@@ -499,6 +499,32 @@ definitions and are not compared. Across E2000-E2026 the only differences are
 the two forfeits above (`games_played` off by one for the forfeit's club in the
 `all` and `TS` scopes).
 
+### `team_round_ratings` (local only)
+
+Built as `gold.team_round_ratings` by `python gold_etl/main.py -sc <seasons> -tb
+team_round_ratings` from the same Silver inputs and counted games as
+`team_round_stats`, with the same key (`competition_code`, `season_code`,
+`scope`, `round_number`, `club_code`) and the same rows. Not published to Neon.
+All values are cumulative through the round within the scope.
+
+| Column | Meaning |
+| --- | --- |
+| `league_offensive_rating`, `league_pace` | `100 x points / possessions` and `40 x possessions / minutes` over every counted game in the scope, each game counted once per side |
+| `relative_offensive_rating`, `relative_defensive_rating`, `relative_pace` | The club's cumulative value minus the league value (relative net rating equals `net_rating`, so it is not stored) |
+| `connected` | True when every club in the scope-round can reach every other through played games |
+| `srs` | Simple Rating System: solves `r_i = MOV_i + mean of opponents' r`, mean 0, from per-game margins (no home-court or margin cap) |
+| `sos`, `sov` | Mean opponent `srs` over all games (`srs - mov`) and over games won (NULL without wins) |
+| `adj_net_rating`, `adj_offensive_rating`, `adj_defensive_rating` | Possession-weighted, opponent-adjusted ratings per 100 possessions. The possession-weighted league mean of the offensive and defensive ratings is the league rating and of the net rating is 0 |
+
+`srs`, `sos`, `sov` and the adjusted ratings are NULL when `connected` is false
+(for example the playoff-only scopes `PI`, `PO`, and often `FF`/`PS`, whose series
+form separate pairs, and RS rounds 1-2 before schedules link up). The adjusted
+offensive and defensive ratings are also NULL when the game graph is bipartite
+(RS rounds 1-2), because offense and defense cannot be separated; the adjusted
+net rating is still defined. `--quality-only` re-derives the table, compares it,
+and reports an error if a connected scope-round's `srs` sum or possession-weighted
+`adj_net_rating` mean is not zero.
+
 ## Source responses
 
 The complete API responses are the bronze files under `data/bronze/` (see

@@ -20,7 +20,8 @@ from gold_etl.postseason import TABLES as PS_TABLES, read_rows as read_postseaso
 from gold_etl.standings import read_rows as read_standings_rows  # noqa: E402
 from gold_etl.quality import (check_scope, check_postseason_scope,
                               check_standings_scope, check_aggregate_scope,
-                              check_records_scope, check_round_api_scope, check_series_scope,
+                              check_records_scope, check_round_api_scope,
+                              check_round_rating_invariants, check_series_scope,
                               check_identity_scope)  # noqa: E402
 from gold_etl.schema import (DERIVED_NAMES, IDENTITY_TABLES, RECORDS_TABLES, ROUND_NAMES,
                              SEASON_DERIVED_NAMES, SOURCE_NAMES, count_sql)  # noqa: E402
@@ -136,6 +137,8 @@ def main(argv=None):
                             if name == "team_round_stats" and not issues:
                                 for warning in check_round_api_scope(cursor, *scope):
                                     print("WARN " + warning, flush=True)
+                            if name == "team_round_ratings" and not issues:
+                                issues = check_round_rating_invariants(cursor, *scope)
                         for issue in issues:
                             print(issue, file=sys.stderr, flush=True)
                         passed &= not issues

@@ -114,10 +114,10 @@ def _game_score(s):
             + Decimal("0.7") * s["blk"] - Decimal("0.4") * s["pf"] - s["tov"]).quantize(PLACES)
 
 
-def _player_row(game_code, side, row, own, opp, opp_possessions, team_seconds):
+def _player_row(game_code, side, row, own, opp, opp_possessions, game_seconds):
     p = _stats(row)
     seconds = _num(row.get("seconds_played"))
-    share = _div(seconds, team_seconds)  # None for zero or unknown minutes
+    share = _div(seconds, game_seconds)  # None for zero or unknown minutes
     used = _sum(p["fga"], None if p["fta"] is None else FT_WEIGHT * p["fta"], p["tov"])
     team_used = _sum(own["fga"], None if own["fta"] is None else FT_WEIGHT * own["fta"],
                      own["tov"])
@@ -174,7 +174,7 @@ def derive_rows(games, periods, team_stats, player_stats, gaps):
             team_rows.append(row)
             for player in players.get((code, side), []):
                 player_rows.append(_player_row(code, side, player, stats[side], stats[other],
-                                               row["possessions"], minutes * 5 * 60))
+                                               row["possessions"], minutes * 60))
     return team_rows, player_rows
 
 

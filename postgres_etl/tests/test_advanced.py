@@ -114,7 +114,7 @@ class PlayerTests(unittest.TestCase):
         self.assertEqual(row["seconds_played"], 1200)
         self.assertEqual(row["efg_pct"], Decimal("0.600000"))    # (8 + 1) / 15
         self.assertAlmostEqual(float(row["true_shooting_pct"]), 20 / (2 * 16.76), places=5)
-        share = 1200 / 12000                                       # 20 of the team's 200 minutes
+        share = 1200 / 2400                                        # 20 of the game's 40 minutes
         self.assertAlmostEqual(float(row["usage_pct"]),
                                (15 + 0.44 * 4 + 3) / (share * 80.8), places=4)
         self.assertAlmostEqual(float(row["assist_pct"]), 5 / (share * 30 - 8), places=4)
@@ -124,6 +124,7 @@ class PlayerTests(unittest.TestCase):
         self.assertAlmostEqual(float(row["steal_pct"]), 2 / (share * 70.42), places=4)
         self.assertAlmostEqual(float(row["block_pct"]), 1 / (share * (62 - 18)), places=4)
         self.assertAlmostEqual(float(row["tov_pct"]), 3 / (15 + 1.76 + 3), places=5)
+        self.assertLess(float(row["usage_pct"]), 1)                # a share, never above the team
 
     def test_zero_minutes_keeps_the_row_without_rates(self):
         bench = player("P2", 0, side="road", turnovers=1)
@@ -137,7 +138,7 @@ class PlayerTests(unittest.TestCase):
     def test_rates_use_the_official_team_total_not_the_player_sum(self):
         row = derive(players=[player("P3", 2400, assists=4, field_goals_made=1)])[1][0]
         # Player sum (1 FGM) disagrees with the team total (30 FGM); the total is used.
-        self.assertAlmostEqual(float(row["assist_pct"]), 4 / (0.2 * 30 - 1), places=4)
+        self.assertAlmostEqual(float(row["assist_pct"]), 4 / (1.0 * 30 - 1), places=4)
 
 
 class FakeCursor:

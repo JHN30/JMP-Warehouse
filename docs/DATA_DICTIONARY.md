@@ -585,9 +585,10 @@ conventions differ a little). The API's `turnovers_ratio`, `assists_ratio` and
 `possessions` use other definitions and are not compared. The only differences across
 E2000-E2026 are two `efg_pct` warnings (E2007, a 0.7-point gap for 2 players).
 
-Note: `silver.game_player_advanced` (feature 25) computes `usage_pct`, `assist_pct`,
-the rebound, steal and block rates with a minutes share that is 5x too small, so those
-columns are wrong there; `player_round_stats` does not use them.
+Note: until the `silver-player-minutes-share` fix, `silver.game_player_advanced`
+computed `usage_pct`, `assist_pct` and the rebound, steal and block rates with a
+minutes share 5x too small. The stored rows were rebuilt with the corrected share
+(seconds over game seconds); `player_round_stats` never used those columns.
 
 ## Source responses
 

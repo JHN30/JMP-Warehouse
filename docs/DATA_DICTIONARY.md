@@ -7,8 +7,8 @@ source JSON paths, and keys are defined in
 [flat_schema.py](../postgres_etl/flat_schema.py). Bronze keeps the exact API
 responses. Silver contains cleaned source data. The local `gold` schema holds
 16 source projections from Silver, derived postseason player stats, the
-page-shaped standings table, team-season totals and two coverage tables. Other
-derived Gold tables and Neon publishing are
+page-shaped standings table, team-season totals, two coverage tables, the three
+record leaderboards and postseason series. Identity tables and Neon publishing are
 still paused. Existing Neon tables are unchanged in the meantime.
 
 ## Silver provenance
@@ -156,8 +156,8 @@ per-game counting values round half-even to one decimal. No played postseason
 means no `PS` rows. The local `gold.app_standings` table below is also active.
 Feature 30c builds local `gold.app_team_season_stats`,
 `gold.app_coverage_seasons` and `gold.app_coverage_games` from Silver. The
-remaining derived tables in this section preserve the historical web-app
-contract for features 30d-30f. Existing Neon tables remain in place for the
+record and postseason series tables in this section are built locally in 30d.
+The identity table remains a historical reference for 30e. Existing Neon tables remain in place for the
 web app and receive no updates during the pause.
 
 ### `app_standings`
@@ -199,8 +199,8 @@ queries):
 
 ### `app_records_player_seasons`, `app_records_single_games`, `app_records_team_seasons`
 
-All-time EuroLeague leaderboards (top 50 per metric), computed by
-`postgres_etl/records.py` from already-loaded local data, not from bronze
+All-time EuroLeague leaderboards (top 50 per metric), computed in local Gold by
+`gold_etl/records.py` from all loaded Silver seasons, not from bronze
 files. Unlike every other table, they are **not season-scoped**: a table's
 rows span every season loaded locally (`E2000`-current), so `season_code` is
 a plain column (which season a record happened in), not part of the key.
@@ -212,21 +212,25 @@ metrics, source filters and tie-break order, so rows are self-contained
 
 | Table | Key | One row represents | Metrics |
 | --- | --- | --- | --- |
-| `app_records_player_seasons` | `competition_code`, `metric`, `rank_ordinal` | One player's season total, from `app_season_stats_traditional` (`phase_code = 'all'`, `mode = 'accumulated'`). | `points_scored`, `total_rebounds`, `assists`, `pir` |
-| `app_records_single_games` | `competition_code`, `metric`, `rank_ordinal` | One player's box score in one played game, from `app_game_player_stats`. | `points`, `valuation`, `total_rebounds`, `assistances` |
-| `app_records_team_seasons` | `competition_code`, `metric`, `rank_ordinal` | One club's season total (`stats_kind = 'total'`), summed from `app_game_team_stats`. | `points`, `valuation`, `total_rebounds`, `assistances` |
+| `app_records_player_seasons` | `competition_code`, `metric`, `rank_ordinal` | One player's season total, from `silver.season_player_stats_traditional` (`phase_code = 'all'`, `mode = 'accumulated'`). | `points_scored`, `total_rebounds`, `assists`, `pir` |
+| `app_records_single_games` | `competition_code`, `metric`, `rank_ordinal` | One player's box score in one played game, from `silver.game_player_stats`. | `points`, `valuation`, `total_rebounds`, `assistances` |
+| `app_records_team_seasons` | `competition_code`, `metric`, `rank_ordinal` | One club's season total (`stats_kind = 'total'`), summed from `silver.game_team_stats`. | `points`, `valuation`, `total_rebounds`, `assistances` |
 
 - `rank_ordinal` is 1-50 per metric (fewer when a metric has fewer than 50
   qualifying rows); dense, no gaps or duplicates.
 - Tie-break order: player-seasons and team-seasons by value desc, then
   `season_code` asc, then `person_key`/`club_code` asc; single-games by value
   desc, then `season_code` asc, `game_code` asc, `person_key` asc.
-- Forfeits are excluded from the two game-level tables via `app_games.played
+- The historical metric labels are preserved. Silver's clean `points`, `pir`
+  and `assists` columns supply the `points_scored`, `valuation` and
+  `assistances` labels where applicable.
+- Forfeits are excluded from the two game-level tables via `silver.games.played
   = TRUE` (a forfeit has no box-score rows to rank in the first place);
   `app_records_player_seasons` reads a season-level source aggregate, so no
   separate forfeit filter applies there.
-- The former builder recomputed these cross-season rows from local data.
-  Feature 30 will define the replacement gold build and publish path.
+- `gold_etl/main.py` rebuilds each selected record table once from every loaded
+  EuroLeague season, independent of `-sc`; `--quality-only` compares the full
+  rows with a fresh Silver derivation. Publishing stays paused until 30f.
 - The jmp-euroleague2 Express API still computes these records itself for
   now (`SUPPORTED_SEASONS`, currently `E2025`-`E2026` only); switching it to
   read these tables is a separate, coordinated change in that repo.
@@ -304,6 +308,11 @@ Express quirk, replicated as-is, not a design choice made here.
   Express read these tables, it hardcoded both as `unavailable`.
 
 ### `app_postseason_series`
+
+Built locally as `gold.app_postseason_series` from `silver.games`, one selected
+competition and season at a time. Read-only quality checks compare all fields
+and the ordered game list with a fresh Silver derivation. Neon continues serving
+its existing table until 30f.
 
 One row per club pairing per phase per season, for `phase_code IN ('PI',
 'PO', 'FF')` only (play-in, playoffs, Final Four — not the `TS` "Top 16"

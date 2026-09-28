@@ -8,8 +8,9 @@ from unittest.mock import patch
 
 from gold_etl import main
 from gold_etl.loader import replace_scope
-from gold_etl.quality import check_scope
-from gold_etl.schema import (DERIVED_NAMES, PLAYER_STATS, SOURCE_NAMES, TABLES, columns,
+from gold_etl.quality import check_records_scope, check_scope, check_series_scope
+from gold_etl.schema import (AGGREGATE_NAMES, DERIVED_NAMES, GOLD_TABLES, PLAYER_STATS,
+                             RECORDS_TABLES, SOURCE_NAMES, TABLES, columns,
                              count_sql, create_table_sql)
 from postgres_etl.flat_schema import TABLES as SILVER_TABLES
 
@@ -84,6 +85,33 @@ class FakeConnection:
 
 
 class SchemaTests(unittest.TestCase):
+    def test_records_and_series_contract(self):
+        self.assertEqual(tuple(RECORDS_TABLES), (
+            "app_records_player_seasons", "app_records_single_games",
+            "app_records_team_seasons"))
+        self.assertEqual(GOLD_TABLES["app_postseason_series"].key,
+                         ("competition_code", "season_code", "phase_code",
+                          "club_a_code", "club_b_code"))
+        for name in RECORDS_TABLES:
+            with self.subTest(name=name):
+                self.assertEqual(GOLD_TABLES[name].key,
+                                 ("competition_code", "metric", "rank_ordinal"))
+                self.assertEqual(GOLD_TABLES[name].fields[-1].kind, "NUMERIC NOT NULL")
+                self.assertIn('PRIMARY KEY ("competition_code", "metric", "rank_ordinal")',
+                              create_table_sql(name))
+        self.assertEqual(columns("app_records_player_seasons"),
+                         ("competition_code", "metric", "rank_ordinal", "season_code",
+                          "person_key", "player_name", "club_code", "club_name", "value"))
+        self.assertEqual(columns("app_records_single_games"),
+                         ("competition_code", "metric", "rank_ordinal", "season_code",
+                          "game_code", "scheduled_at", "person_key", "player_name",
+                          "club_code", "club_name", "value"))
+        self.assertEqual(columns("app_records_team_seasons"),
+                         ("competition_code", "metric", "rank_ordinal", "season_code",
+                          "club_code", "club_name", "value"))
+        self.assertEqual(GOLD_TABLES["app_postseason_series"].fields[-1].kind,
+                         "JSONB NOT NULL")
+
     def test_contract_has_exact_source_tables_fields_and_keys(self):
         self.assertEqual(len(SOURCE_NAMES), 16)
         self.assertEqual(len(TABLES), 16)
@@ -147,6 +175,36 @@ class LoaderTests(unittest.TestCase):
 
 
 class QualityTests(unittest.TestCase):
+    def test_records_and_series_detect_missing_keys_and_value_drift(self):
+        db = FakeConnection()
+        record = {field: None for field in columns("app_records_team_seasons")}
+        record.update(competition_code="E", metric="points", rank_ordinal=1,
+                      season_code="E2025", club_code="A", value=90)
+        series = {field: None for field in columns("app_postseason_series")}
+        series.update(competition_code="E", season_code="E2025", phase_code="PO",
+                      club_a_code="A", club_b_code="B", games_played=1,
+                      club_a_wins=1, club_b_wins=0, games=[{"gameCode": 1}])
+        with db.cursor() as cursor:
+            db.table_exists = False
+            self.assertIn("missing", check_records_scope(cursor,
+                          "app_records_team_seasons", "E")[0])
+            self.assertIn("missing", check_series_scope(cursor, "E", "E2025")[0])
+            db.table_exists = True
+            with patch("gold_etl.quality.read_record_rows", return_value=[record]), \
+                    patch("gold_etl.quality._dict_rows", return_value=[]):
+                self.assertIn("keys differ", check_records_scope(cursor,
+                              "app_records_team_seasons", "E")[0])
+            with patch("gold_etl.quality.read_record_rows", return_value=[record]), \
+                    patch("gold_etl.quality._dict_rows",
+                          return_value=[{**record, "value": 91}]):
+                self.assertIn("values differ", check_records_scope(cursor,
+                              "app_records_team_seasons", "E")[0])
+            with patch("gold_etl.quality.read_series_rows", return_value=[series]), \
+                    patch("gold_etl.quality._dict_rows",
+                          return_value=[{**series, "games": [{"gameCode": 2}]}]):
+                self.assertIn("games differ", check_series_scope(cursor,
+                              "E", "E2025")[0])
+
     def test_missing_table(self):
         db = FakeConnection()
         db.table_exists = False
@@ -173,6 +231,51 @@ class QualityTests(unittest.TestCase):
 
 
 class CliTests(unittest.TestCase):
+    def test_records_run_once_across_selected_seasons(self):
+        names = tuple(RECORDS_TABLES)
+        with patch.object(main, "replace_records_scope", return_value=200) as replace:
+            code, out, _, db = self.run_cli(["-sc", "all", "-tb", *names])
+        self.assertEqual(code, 0)
+        self.assertEqual(replace.call_count, 3)
+        self.assertEqual([call.args[1:] for call in replace.call_args_list],
+                         [(name, "E") for name in names])
+        self.assertIn("Records scope: all locally loaded EuroLeague seasons", out)
+        with patch.object(main, "read_record_rows", return_value=[{}]):
+            code, out, _, db = self.run_cli(["-sc", "2025", "-tb", names[0],
+                                             "--dry-run"])
+        self.assertEqual(code, 0)
+        self.assertTrue(db.readonly)
+        self.assertIn("all seasons: 1 derived rows", out)
+        with patch.object(main, "check_records_scope", return_value=["record drift"]):
+            code, _, err, db = self.run_cli(["-sc", "2025", "-tb", names[0],
+                                             "--quality-only"])
+        self.assertEqual(code, 1)
+        self.assertTrue(db.readonly)
+        self.assertIn("record drift", err)
+
+    def test_series_scopes_and_eurocup_records_rejected(self):
+        with patch.object(main, "replace_series_scope", return_value=2) as replace:
+            code, out, _, db = self.run_cli(["-sc", "all", "-tb",
+                                             "app_postseason_series"])
+        self.assertEqual(code, 0)
+        self.assertEqual([call.args[1:] for call in replace.call_args_list],
+                         [("E", "E2025"), ("E", "E2026")])
+        with patch.object(main, "read_series_rows", return_value=[{}]):
+            code, out, _, db = self.run_cli(["-sc", "2025", "-tb",
+                                             "app_postseason_series", "--dry-run"])
+        self.assertEqual(code, 0)
+        self.assertTrue(db.readonly)
+        with patch.object(main, "check_series_scope", return_value=["series drift"]):
+            code, _, err, db = self.run_cli(["-sc", "2025", "-tb",
+                                             "app_postseason_series", "--quality-only"])
+        self.assertEqual(code, 1)
+        self.assertTrue(db.readonly)
+        self.assertIn("series drift", err)
+        with contextlib.redirect_stderr(io.StringIO()) as stderr:
+            with self.assertRaises(SystemExit):
+                main.main(["-cp", "eurocup", "-tb", "app_records_single_games"])
+        self.assertIn("EuroCup records are not supported", stderr.getvalue())
+
     def run_cli(self, args, db=None):
         db = db or FakeConnection()
         out, err = io.StringIO(), io.StringIO()
@@ -283,7 +386,7 @@ class CliTests(unittest.TestCase):
         replace.assert_called_once_with(db, "E", "E2025")
 
     def test_aggregate_selection_and_read_only_modes(self):
-        for name in DERIVED_NAMES[1:]:
+        for name in AGGREGATE_NAMES:
             with self.subTest(name=name):
                 with patch.object(main, "read_aggregate_rows", return_value=[{}]):
                     code, out, _, db = self.run_cli(["-sc", "2025", "-tb", name,

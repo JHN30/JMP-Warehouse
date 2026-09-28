@@ -6,7 +6,9 @@ schema into `gold`. It reads only the registered Silver columns, leaving
 types, and primary keys. It also derives traditional and misc player-season
 `PS` rows from played PI/PO/FF box scores, builds `gold.app_standings` from
 the seven Silver standings feeds, and derives team-season totals plus season
-and game coverage from Silver. Advanced and scoring player stats remain API-only.
+and game coverage from Silver. It also builds three full-history top-50 record
+tables and season-scoped postseason series. Advanced and scoring player stats
+remain API-only.
 
 Run from the repository root with the local connection settings in
 `postgres_etl/config_connection.json`:
@@ -19,6 +21,7 @@ python gold_etl/main.py -sc all --quality-only
 python gold_etl/main.py -sc E2025 -tb games
 python gold_etl/main.py -sc E2025 -tb season_player_stats_traditional season_player_stats_misc app_standings
 python gold_etl/main.py -sc E2025 -tb app_team_season_stats app_coverage_seasons app_coverage_games
+python gold_etl/main.py -sc E2025 -tb app_records_player_seasons app_records_single_games app_records_team_seasons app_postseason_series
 ```
 
 `-cp` selects `euroleague` (default) or `eurocup`; `-sc` accepts codes, years,
@@ -31,7 +34,11 @@ derived `PS` slice; a source rerun preserves existing `PS` rows until they are
 recalculated. `-tb app_standings` selects only the standings page table; each
 team or coverage table can also be selected alone. The quality path compares
 full source and derived values, including the eight ordered JSON coverage items.
-The stage reads no Bronze files and never writes Silver or Neon. Records,
-postseason series, identity tables and publishing remain paused.
+Records always read every locally loaded EuroLeague season and replace the
+selected table's full leaderboard once per invocation, even with `-sc E2025`.
+EuroCup records are not supported. `app_postseason_series` uses the selected
+seasons and is replaced one season at a time. Its game list includes scheduled
+fixtures; only played games count as wins. The stage reads no Bronze files and
+never writes Silver or Neon. Identity tables and publishing remain paused.
 
 Run focused tests with `python -m unittest discover -s gold_etl/tests`.

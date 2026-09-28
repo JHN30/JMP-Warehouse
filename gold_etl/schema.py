@@ -92,13 +92,63 @@ COVERAGE_GAME_TABLE = Table(
     SCOPE + (Field("game_code", "INTEGER NOT NULL", "games.game_code"),
              Field("items", "JSONB NOT NULL", "silver")),
 )
+RECORDS_KEY = ("competition_code", "metric", "rank_ordinal")
+RECORDS_BASE = (
+    Field("competition_code", "TEXT NOT NULL", "silver"),
+    Field("metric", "TEXT NOT NULL", "silver"),
+    Field("rank_ordinal", "INTEGER NOT NULL", "silver"),
+    Field("season_code", "TEXT NOT NULL", "silver"),
+)
+RECORDS_TABLES = {
+    "app_records_player_seasons": Table("records_player_seasons", RECORDS_KEY,
+        RECORDS_BASE + (
+            Field("person_key", "TEXT NOT NULL", "season_player_stats_traditional"),
+            Field("player_name", "TEXT", "season_player_stats_traditional"),
+            Field("club_code", "TEXT", "season_player_stats_traditional"),
+            Field("club_name", "TEXT", "season_player_stats_traditional"),
+            Field("value", "NUMERIC NOT NULL", "season_player_stats_traditional"),
+        )),
+    "app_records_single_games": Table("records_single_games", RECORDS_KEY,
+        RECORDS_BASE + (
+            Field("game_code", "INTEGER NOT NULL", "game_player_stats"),
+            Field("scheduled_at", "TIMESTAMPTZ", "games"),
+            Field("person_key", "TEXT NOT NULL", "game_player_stats"),
+            Field("player_name", "TEXT", "game_player_stats"),
+            Field("club_code", "TEXT", "game_player_stats"),
+            Field("club_name", "TEXT", "game_player_stats"),
+            Field("value", "NUMERIC NOT NULL", "game_player_stats"),
+        )),
+    "app_records_team_seasons": Table("records_team_seasons", RECORDS_KEY,
+        RECORDS_BASE + (
+            Field("club_code", "TEXT NOT NULL", "games"),
+            Field("club_name", "TEXT", "games"),
+            Field("value", "NUMERIC NOT NULL", "game_team_stats"),
+        )),
+}
+SERIES_TABLE = Table("postseason_series",
+    ("competition_code", "season_code", "phase_code", "club_a_code", "club_b_code"),
+    SCOPE + (
+        Field("phase_code", "TEXT NOT NULL", "games"),
+        Field("club_a_code", "TEXT NOT NULL", "games"),
+        Field("club_b_code", "TEXT NOT NULL", "games"),
+        Field("club_a_name", "TEXT", "games"),
+        Field("club_b_name", "TEXT", "games"),
+        Field("games_played", "INTEGER NOT NULL", "games"),
+        Field("club_a_wins", "INTEGER NOT NULL", "games"),
+        Field("club_b_wins", "INTEGER NOT NULL", "games"),
+        Field("winner_club_code", "TEXT", "games"),
+        Field("games", "JSONB NOT NULL", "games"),
+    ),
+)
 AGGREGATE_NAMES = ("app_team_season_stats", "app_coverage_seasons",
                    "app_coverage_games")
-DERIVED_NAMES = ("app_standings", *AGGREGATE_NAMES)
+DERIVED_NAMES = ("app_standings", *AGGREGATE_NAMES,
+                 *RECORDS_TABLES, "app_postseason_series")
 GOLD_TABLES = {**TABLES, "app_standings": STANDINGS_TABLE,
                "app_team_season_stats": TEAM_SEASON_TABLE,
                "app_coverage_seasons": COVERAGE_SEASON_TABLE,
-               "app_coverage_games": COVERAGE_GAME_TABLE}
+               "app_coverage_games": COVERAGE_GAME_TABLE,
+               **RECORDS_TABLES, "app_postseason_series": SERIES_TABLE}
 
 
 def columns(name):

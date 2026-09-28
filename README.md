@@ -4,8 +4,9 @@ Python 3.13 and PostgreSQL pipeline for EuroLeague and EuroCup data. The fetcher
 stores exact versioned API responses in bronze. The loader builds 28 typed
 tables in the local `silver` schema and runs quality checks. The local Gold
 stage copies 16 source tables from Silver into `gold` and derives postseason
-player stats, a page-shaped standings table, team-season totals and coverage.
-Remaining derived Gold tables and Neon publishing remain paused. The web app
+player stats, a page-shaped standings table, team-season totals, coverage,
+all-time records and postseason series. Identity tables and Neon publishing
+remain paused. The web app
 continues reading its existing Neon data during the pause.
 
 Each silver row has a `load_id` and UTC `loaded_at`. The append-only
@@ -44,10 +45,13 @@ python gold_etl/main.py --list-tables
 python gold_etl/main.py -sc E2025 --dry-run
 python gold_etl/main.py -sc all
 python gold_etl/main.py -sc all --quality-only
+python gold_etl/main.py -sc E2025 -tb app_records_player_seasons app_records_single_games app_records_team_seasons app_postseason_series
 ```
 
 The dry run and quality check read the local database without changing Gold.
-The load replaces each source or derived table slice in one transaction. Selecting
+The load replaces each season-scoped table slice in one transaction. Record
+leaderboards use every loaded EuroLeague season and replace the selected table
+once per run, regardless of `-sc`. Selecting
 traditional or misc player season stats also rebuilds their derived `PS` rows;
 `-tb app_standings` builds only the standings page table. Select
 `app_team_season_stats`, `app_coverage_seasons` or `app_coverage_games` to

@@ -1,11 +1,13 @@
 """Replace one Gold table/season slice using registered Silver source columns."""
 
-from gold_etl.schema import (AGGREGATE_NAMES, TABLES, columns, create_table_sql,
-                             scope_predicate)
+from gold_etl.schema import (AGGREGATE_NAMES, RECORDS_TABLES, TABLES, columns,
+                             create_table_sql, scope_predicate)
 from gold_etl.postseason import TABLES as PS_TABLES, read_rows as read_postseason_rows
 from gold_etl.standings import read_rows as read_standings_rows
 from gold_etl.team_season import read_rows as read_team_rows
 from gold_etl.coverage import read_rows as read_coverage_rows
+from gold_etl.records import read_rows as read_record_rows
+from gold_etl.series import read_rows as read_series_rows
 
 
 def replace_scope(connection, name, competition_code, season_code):
@@ -110,6 +112,53 @@ def replace_aggregate_scope(connection, name, competition_code, season_code):
                 values = [tuple(competition_code if field == "competition_code" else
                                 season_code if field == "season_code" else
                                 Json(row[field]) if field == "items" else row.get(field)
+                                for field in fields) for row in rows]
+                execute_values(cursor, f'INSERT INTO gold."{name}" ({names}) VALUES %s',
+                               values, page_size=1000)
+            return len(rows)
+
+
+def replace_records_scope(connection, name, competition_code):
+    """Replace one competition's full-history leaderboard atomically."""
+    if name not in RECORDS_TABLES:
+        raise ValueError(f"Unknown Gold records table: {name}")
+    from psycopg2.extras import execute_values
+
+    with connection:
+        with connection.cursor() as cursor:
+            rows = read_record_rows(cursor, name, competition_code)
+            cursor.execute("CREATE SCHEMA IF NOT EXISTS gold")
+            cursor.execute(create_table_sql(name))
+            cursor.execute(f'DELETE FROM gold."{name}" WHERE competition_code = %s',
+                           (competition_code,))
+            if rows:
+                fields = columns(name)
+                names = ", ".join(f'"{field}"' for field in fields)
+                values = [tuple(row[field] for field in fields) for row in rows]
+                execute_values(cursor, f'INSERT INTO gold."{name}" ({names}) VALUES %s',
+                               values, page_size=1000)
+            return len(rows)
+
+
+def replace_series_scope(connection, competition_code, season_code):
+    """Replace one postseason season slice without touching other Gold rows."""
+    from psycopg2.extras import Json, execute_values
+
+    name = "app_postseason_series"
+    with connection:
+        with connection.cursor() as cursor:
+            rows = read_series_rows(cursor, competition_code, season_code)
+            cursor.execute("CREATE SCHEMA IF NOT EXISTS gold")
+            cursor.execute(create_table_sql(name))
+            cursor.execute(
+                f'DELETE FROM gold."{name}" WHERE competition_code = %s '
+                'AND season_code = %s', (competition_code, season_code))
+            if rows:
+                fields = columns(name)
+                names = ", ".join(f'"{field}"' for field in fields)
+                values = [tuple(competition_code if field == "competition_code" else
+                                season_code if field == "season_code" else
+                                Json(row[field]) if field == "games" else row[field]
                                 for field in fields) for row in rows]
                 execute_values(cursor, f'INSERT INTO gold."{name}" ({names}) VALUES %s',
                                values, page_size=1000)

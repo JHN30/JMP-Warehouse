@@ -12,11 +12,16 @@ from gold_etl.loader import replace_scope  # noqa: E402
 from gold_etl.loader import replace_postseason_scope  # noqa: E402
 from gold_etl.loader import replace_standings_scope  # noqa: E402
 from gold_etl.loader import read_aggregate_rows, replace_aggregate_scope  # noqa: E402
+from gold_etl.loader import replace_records_scope, replace_series_scope  # noqa: E402
+from gold_etl.records import read_rows as read_record_rows  # noqa: E402
+from gold_etl.series import read_rows as read_series_rows  # noqa: E402
 from gold_etl.postseason import TABLES as PS_TABLES, read_rows as read_postseason_rows  # noqa: E402
 from gold_etl.standings import read_rows as read_standings_rows  # noqa: E402
 from gold_etl.quality import (check_scope, check_postseason_scope,
-                              check_standings_scope, check_aggregate_scope)  # noqa: E402
-from gold_etl.schema import AGGREGATE_NAMES, DERIVED_NAMES, SOURCE_NAMES, count_sql  # noqa: E402
+                              check_standings_scope, check_aggregate_scope,
+                              check_records_scope, check_series_scope)  # noqa: E402
+from gold_etl.schema import (AGGREGATE_NAMES, DERIVED_NAMES, RECORDS_TABLES,
+                             SOURCE_NAMES, count_sql)  # noqa: E402
 
 
 def build_parser():
@@ -57,6 +62,8 @@ def main(argv=None):
     if "all" in args.table and len(args.table) != 1:
         parser.error("'all' must be used alone with --table")
     tables = (*SOURCE_NAMES, *DERIVED_NAMES) if args.table == ["all"] else tuple(dict.fromkeys(args.table))
+    if args.competition == "eurocup" and any(name in RECORDS_TABLES for name in tables):
+        parser.error("EuroCup records are not supported; select non-record tables")
     connection = None
     try:
         connection = connect(args.config)
@@ -70,6 +77,8 @@ def main(argv=None):
         print(f"Competition: {args.competition}")
         print(f"Seasons: {', '.join(seasons)}")
         print(f"Tables: {', '.join(tables)}")
+        if any(name in RECORDS_TABLES for name in tables):
+            print("Records scope: all locally loaded EuroLeague seasons", flush=True)
         print("Mode: " + ("read-only dry run" if args.dry_run else
                           "read-only quality check" if args.quality_only else "Gold load"),
               flush=True)
@@ -77,6 +86,23 @@ def main(argv=None):
         for season in seasons:
             for name in tables:
                 scope = (COMPETITION_CODES[args.competition], season)
+                if name in RECORDS_TABLES:
+                    continue
+                if name == "app_postseason_series":
+                    if args.dry_run:
+                        with connection.cursor() as cursor:
+                            count = len(read_series_rows(cursor, *scope))
+                        print(f"gold.{name} {season}: {count} derived rows", flush=True)
+                    elif args.quality_only:
+                        with connection.cursor() as cursor:
+                            issues = check_series_scope(cursor, *scope)
+                        for issue in issues:
+                            print(issue, file=sys.stderr, flush=True)
+                        passed &= not issues
+                    else:
+                        count = replace_series_scope(connection, *scope)
+                        print(f"gold.{name} {season}: {count} rows", flush=True)
+                    continue
                 if name == "app_standings":
                     if args.dry_run:
                         with connection.cursor() as cursor:
@@ -130,6 +156,23 @@ def main(argv=None):
                     if name in PS_TABLES:
                         derived = replace_postseason_scope(connection, name, *scope)
                         print(f"gold.{name} PS {season}: {derived} derived rows", flush=True)
+        for name in tables:
+            if name not in RECORDS_TABLES:
+                continue
+            competition_code = COMPETITION_CODES[args.competition]
+            if args.dry_run:
+                with connection.cursor() as cursor:
+                    count = len(read_record_rows(cursor, name, competition_code))
+                print(f"gold.{name} all seasons: {count} derived rows", flush=True)
+            elif args.quality_only:
+                with connection.cursor() as cursor:
+                    issues = check_records_scope(cursor, name, competition_code)
+                for issue in issues:
+                    print(issue, file=sys.stderr, flush=True)
+                passed &= not issues
+            else:
+                count = replace_records_scope(connection, name, competition_code)
+                print(f"gold.{name} all seasons: {count} rows", flush=True)
         if args.quality_only:
             print("Gold quality: passed" if passed else "Gold quality: failed", flush=True)
             return 0 if passed else 1

@@ -18,7 +18,7 @@ The data pipeline behind the JMP EuroLeague web app (`jmpeuroleague.com`, repo
 responses, loads it into 28 typed tables in the local PostgreSQL `silver`
 schema with quality checks. Gold builds 16 local source tables from Silver,
 postseason player statistics, a page-shaped standings table, team-season totals,
-and season/game coverage. Other derived Gold tables and Neon publishing remain
+season/game coverage, all-time records and postseason series. Identity tables and Neon publishing remain
 paused until later parts of feature 30. Python 3.13 + PostgreSQL, no web framework.
 See `README.md` for the layout and
 `docs/DATA_DICTIONARY.md` for the tables.
@@ -317,6 +317,8 @@ pipeline does not ask for `NEON_DATABASE_URL`.
   (`-sc all` uses every locally loaded Silver season).
 - Build only local standings: `python gold_etl/main.py -sc <seasons> -tb app_standings`
 - Build local team and coverage tables: `python gold_etl/main.py -sc <seasons> -tb app_team_season_stats app_coverage_seasons app_coverage_games`
+- Build local records and postseason series: `python gold_etl/main.py -sc <seasons> -tb app_records_player_seasons app_records_single_games app_records_team_seasons app_postseason_series`.
+  Records use all loaded EuroLeague seasons regardless of `-sc`; series uses the selected seasons.
 - Traditional or misc table selections also rebuild their derived `PS` rows.
 - Gold read-only source and derived counts: `python gold_etl/main.py -sc <seasons> --dry-run`
 - Gold read-only equality checks: `python gold_etl/main.py -sc <seasons> --quality-only`

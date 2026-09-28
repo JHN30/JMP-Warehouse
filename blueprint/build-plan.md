@@ -55,7 +55,7 @@ Items 1-8 were already shipped when the Blueprint was adopted (2026-09-24).
   - [x] 27a. **Cumulative player-round table** - `gold.player_round_stats`: cumulative totals, minutes, TS%/eFG%, USG%, AST%, rebound/steal/block/turnover %, per-100 stats, Game Score and PIE after every round for `all`, each phase and `PS`, checked against the API player feeds; local only
   - [x] 27b. **Player efficiency rating** - PER per round from league constants computed per scope and round
   - [x] 27c. **Win Shares** - offensive, defensive and total Win Shares and WS/48 per round from marginal offense and defense
-- [ ] 28. **Standings stats app table** - per-round team advanced stats in `gold` for the standings page, publish in 30g
+- [x] 28. **Standings stats app table** - per-round team advanced stats in `gold` for the standings page, publish in 30g
 - [ ] 19. **Play-by-play analytics** - actual possessions, clutch, scoring runs, lead changes, time leading, second-chance/fast-break/points off turnovers, assisted FG%, shot zones and possession length (E2007+), local only (per-game in `silver`, aggregates in `gold`)
 - [ ] 29. **Lineups and on/off** - on-court lineups rebuilt from play-by-play substitutions: on/off ratings, lineup, 2/3/5-man ratings and RAPM (E2007+), build in `gold`, publish in 30g
 - [ ] 30g. **Publish completed Gold tables** - after 25-29, publish their new and updated Gold tables to Neon, update the refresh and quality paths and coordinate their web-app contracts; confirm the exact table list and Neon storage scope in its feature spec

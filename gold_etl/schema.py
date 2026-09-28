@@ -181,7 +181,8 @@ ROUND_MEASURES = (
     "defensive_rebounds", "turnovers", "assists",
 )
 ROUND_NAMES = ("team_round_stats", "team_round_ratings", "team_round_splits",
-               "player_round_stats", "player_round_ratings", "player_round_win_shares")
+               "player_round_stats", "player_round_ratings", "player_round_win_shares",
+               "app_standings_stats")
 WINDOWS = (5, 10)
 SPLIT_GROUPS = ("home", "away", *(f"last{size}" for size in WINDOWS))
 SPLIT_MEASURES = ("mov", "offensive_rating", "defensive_rating", "net_rating", "pace")
@@ -293,6 +294,34 @@ PLAYER_WIN_SHARES_TABLE = Table(
         "off_win_shares", "def_win_shares", "win_shares", "win_shares_per_48")),
 )
 
+# app_standings_stats projects the three team round tables (no new formulas); its final
+# Neon name is app_standings_stats, but it stays outside the allowlist until 30g.
+STANDINGS_STATS_SOURCES = (
+    ("team_round_stats", TEAM_ROUND_TABLE, (
+        "club_name", "games_played", "wins", "losses", "points_for", "points_against",
+        "possessions", "mov", "pythagorean_win_pct", "pythagorean_wins", "pace",
+        "offensive_rating", "defensive_rating", "net_rating", "efg_pct", "tov_pct",
+        "orb_pct", "drb_pct", "ft_rate", "opp_efg_pct", "opp_tov_pct", "opp_ft_rate",
+        "true_shooting_pct", "assist_ratio")),
+    ("team_round_ratings", TEAM_RATINGS_TABLE, (
+        "connected", "league_offensive_rating", "league_pace", "relative_offensive_rating",
+        "relative_defensive_rating", "relative_pace", "srs", "sos", "sov",
+        "adj_offensive_rating", "adj_defensive_rating", "adj_net_rating")),
+    ("team_round_splits", TEAM_SPLITS_TABLE, tuple(
+        f"{group}_{name}" for group in SPLIT_GROUPS
+        for name in ("games", "wins", *SPLIT_MEASURES))),
+)
+STANDINGS_STATS_TABLE = Table(
+    "app_standings_stats",
+    ("competition_code", "season_code", "scope", "round_number", "club_code"),
+    SCOPE + (
+        Field("scope", "TEXT NOT NULL", "games.phase_code"),
+        Field("round_number", "INTEGER NOT NULL", "games.round_number"),
+        Field("club_code", "TEXT NOT NULL", "games.club_code"),
+    ) + tuple(next(field for field in source.fields if field.name == name)
+              for _, source, names in STANDINGS_STATS_SOURCES for name in names),
+)
+
 DERIVED_NAMES = ("app_standings", *AGGREGATE_NAMES,
                  *RECORDS_TABLES, "app_postseason_series", *IDENTITY_TABLES)
 GOLD_TABLES = {**TABLES, "app_standings": STANDINGS_TABLE,
@@ -305,7 +334,8 @@ GOLD_TABLES = {**TABLES, "app_standings": STANDINGS_TABLE,
                "team_round_splits": TEAM_SPLITS_TABLE,
                "player_round_stats": PLAYER_ROUND_TABLE,
                "player_round_ratings": PLAYER_RATINGS_TABLE,
-               "player_round_win_shares": PLAYER_WIN_SHARES_TABLE}
+               "player_round_win_shares": PLAYER_WIN_SHARES_TABLE,
+               "app_standings_stats": STANDINGS_STATS_TABLE}
 
 
 def columns(name):

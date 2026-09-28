@@ -639,6 +639,32 @@ fresh derivation equality and prints `WARN` when a scope round with at least 30 
 total Win Shares more than 15% away from its game count (each game has one win). Across
 E2000-E2026 those totals are 0.90-1.07 of the games, mostly 1.03, so no warning is printed.
 
+### `app_standings_stats` (local only until 30g)
+
+Built as `gold.app_standings_stats` by `python gold_etl/main.py -sc <seasons> -tb
+app_standings_stats`: one wide, page-shaped row per club, scope and round, a projection of
+`team_round_stats`, `team_round_ratings` and `team_round_splits` (same row set; values
+identical, nothing recomputed). Key `competition_code`, `season_code`, `scope`, `round_number`,
+`club_code`. For a group phase, `scope = phase_code` joins it to `app_standings` on
+(`season_code`, `phase_code`, `round_number`, `club_code`); `scope` also takes `all` and `PS`.
+It is registered with the round tables and is not in the Neon allowlist until 30g, where
+whether it replaces `app_team_season_stats` is decided (both are kept for now).
+
+| Columns | Source |
+|---|---|
+| `club_name`, `games_played`, `wins`, `losses`, `points_for`, `points_against`, `possessions`, `mov`, `pythagorean_win_pct`, `pythagorean_wins`, `pace`, `offensive_rating`, `defensive_rating`, `net_rating`, `efg_pct`, `tov_pct`, `orb_pct`, `drb_pct`, `ft_rate`, `opp_efg_pct`, `opp_tov_pct`, `opp_ft_rate`, `true_shooting_pct`, `assist_ratio` | `team_round_stats` (raw own/opponent totals, `game_minutes` and `pythagorean_exponent` are left out) |
+| `connected`, `league_offensive_rating`, `league_pace`, `relative_*`, `srs`, `sos`, `sov`, `adj_*` | `team_round_ratings` |
+| `home_*`, `away_*`, `last5_*`, `last10_*` (`games`, `wins`, `mov`, `offensive_rating`, `defensive_rating`, `net_rating`, `pace`) | `team_round_splits` |
+
+`--quality-only` checks the fresh derivation and that every stored row equals the stored
+source rows. Comparison with `app_standings` (E2000-E2026, all 12,345 group-phase rows have a
+match): `games_played` differs in 191 rows (1.5%), `wins` in 135 and `points_for` in 2,858
+(23%, an average gap of about 5-15 points a row). The largest gap is E2021's regular season
+(for example round 12, where `app_standings` lists 21-23 games per club and this table 12), so
+the standings feed's round numbering differs from the game round there; the cause was not
+investigated. The remaining `games_played` and `wins` differences are in a few rounds of
+E2001 and E2003 (top sixteen), E2012, E2020 and E2022. No gate is applied.
+
 ## Source responses
 
 The complete API responses are the bronze files under `data/bronze/` (see

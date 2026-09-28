@@ -343,6 +343,10 @@ committed; copy the `.example`). Publishing reads the direct non-pooled
 - Build local player Win Shares (offensive, defensive, total and per 48; local only):
   `python gold_etl/main.py -sc <seasons> -tb player_round_win_shares`. `--quality-only`
   prints `WARN` lines where a scope round's total Win Shares is far from its games.
+- Build local page-shaped team advanced stats (`app_standings_stats`, a per-round projection of
+  the three team round tables; local only until 30g):
+  `python gold_etl/main.py -sc <seasons> -tb app_standings_stats`. `--quality-only` ties each
+  row to the stored team round tables.
 - Traditional or misc table selections also rebuild their derived `PS` rows.
 - Gold read-only source and derived counts: `python gold_etl/main.py -sc <seasons> --dry-run`
 - Gold read-only equality checks: `python gold_etl/main.py -sc <seasons> --quality-only`

@@ -50,7 +50,7 @@ python gold_etl/main.py -sc all
 python gold_etl/main.py -sc all --quality-only
 python gold_etl/main.py -sc E2025 -tb app_records_player_seasons app_records_single_games app_records_team_seasons app_postseason_series
 python gold_etl/main.py -sc all -tb app_players app_club_identities
-python gold_etl/main.py -sc all -tb team_round_stats team_round_ratings team_round_splits player_round_stats player_round_ratings player_round_win_shares
+python gold_etl/main.py -sc all -tb team_round_stats team_round_ratings team_round_splits player_round_stats player_round_ratings player_round_win_shares app_standings_stats
 ```
 
 The dry run and quality check read the local database without changing Gold.

@@ -23,7 +23,7 @@ from gold_etl.quality import (check_scope, check_postseason_scope,
                               check_records_scope, check_round_api_scope,
                               check_round_player_api_scope, check_round_rating_invariants,
                               check_round_player_rating_invariants,
-                              check_round_win_share_totals,
+                              check_round_win_share_totals, check_standings_stats_ties,
                               check_round_split_invariants,
                               check_series_scope,
                               check_identity_scope)  # noqa: E402
@@ -143,6 +143,8 @@ def main(argv=None):
                                     print("WARN " + warning, flush=True)
                             if name == "team_round_ratings" and not issues:
                                 issues = check_round_rating_invariants(cursor, *scope)
+                            if name == "app_standings_stats" and not issues:
+                                issues = check_standings_stats_ties(cursor, *scope)
                             if name == "player_round_win_shares" and not issues:
                                 for warning in check_round_win_share_totals(cursor, *scope):
                                     print("WARN " + warning, flush=True)

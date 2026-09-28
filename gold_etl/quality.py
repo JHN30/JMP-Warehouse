@@ -3,6 +3,7 @@
 from gold_etl.schema import TABLES, columns, count_sql, scope_predicate
 from gold_etl.postseason import TABLES as PS_TABLES, _dict_rows, read_rows as read_postseason_rows
 from gold_etl.standings import KEY as STANDINGS_KEY, read_rows as read_standings_rows
+from gold_etl.schema import STANDINGS_STATS_SOURCES
 from gold_etl.schema import GOLD_TABLES, SEASON_DERIVED_NAMES, WINDOWS, IDENTITY_TABLES, RECORDS_TABLES
 from gold_etl.loader import read_aggregate_rows
 from gold_etl.records import read_rows as read_record_rows
@@ -318,6 +319,37 @@ def check_round_win_share_totals(cursor, competition_code, season_code):
             warnings.append(f"gold.player_round_win_shares {season_code} {key[0]} round "
                             f"{key[1]}: win shares total {total:.1f} for {counted:g} games")
     return warnings
+
+
+def check_standings_stats_ties(cursor, competition_code, season_code):
+    """Errors where a stored standings stats row differs from a stored source row, or has
+    none. A source table that has not been built is skipped."""
+    scope = (competition_code, season_code)
+    cursor.execute('SELECT * FROM gold."app_standings_stats" WHERE competition_code = %s '
+                   'AND season_code = %s', scope)
+    key = lambda row: (row["scope"], row["round_number"], row["club_code"])
+    ours = {key(row): row for row in _dict_rows(cursor)}
+    issues = []
+    for name, _, names in STANDINGS_STATS_SOURCES:
+        cursor.execute("SELECT to_regclass(%s)", (f"gold.{name}",))
+        if cursor.fetchone()[0] is None:
+            continue
+        fields = ", ".join(f'"{column}"' for column in ("scope", "round_number", "club_code",
+                                                         *names))
+        cursor.execute(f'SELECT {fields} FROM gold."{name}" WHERE competition_code = %s '
+                       'AND season_code = %s', scope)
+        source = {key(row): row for row in _dict_rows(cursor)}
+        if source.keys() != ours.keys():
+            issues.append(f"gold.app_standings_stats {season_code}: keys differ from "
+                          f"gold.{name} ({len(ours)} rows, {len(source)} in the source)")
+            continue
+        for row_key, row in sorted(ours.items()):
+            differing = [column for column in names if row[column] != source[row_key][column]]
+            if differing:
+                issues.append(f"gold.app_standings_stats {season_code} {row_key}: "
+                              f"{differing[0]} differs from gold.{name}")
+                break
+    return issues
 
 
 def check_round_split_invariants(cursor, competition_code, season_code):

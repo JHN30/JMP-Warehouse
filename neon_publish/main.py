@@ -58,7 +58,7 @@ def main(argv=None):
         results = publish_season(local, neon, "euroleague", season, names,
                                  dry_run=args.dry_run, allow_shrink=args.allow_shrink)
         for name, (before, after) in results.items():
-            old = "missing" if before is None else f"{before:,}"
+            old = "unavailable" if before is None else f"{before:,}"
             print(f"  {target_name(name)}: {old} -> {after:,} rows")
         print(f"Season {season} {'checked (Neon unchanged)' if args.dry_run else 'committed'}")
         return 0

@@ -152,6 +152,41 @@ class PreviewOfIncompatibleTargetsTests(unittest.TestCase):
             "games", ["public.app_games: missing table"])
         self.assertEqual(counts, {"games": None})
 
+    @staticmethod
+    def wrong_type(target, column):
+        return f"public.{target}.{column}: integer, expected TEXT"
+
+    def test_wrong_scope_column_type_makes_counts_unavailable_without_queries(self):
+        for column in ("competition_code", "season_code"):
+            (counts, sums), count, rows, checks = self.state(
+                "play_by_play", [self.wrong_type("app_play_by_play", column)])
+            self.assertEqual((counts, sums), ({"play_by_play": None}, {"play_by_play": {}}))
+            for fake in (count, rows, checks):
+                fake.assert_not_called()
+
+    def test_wrong_type_on_other_columns_and_global_season_column_still_query(self):
+        (counts, _), count, _, _ = self.state(
+            "play_by_play", [self.wrong_type("app_play_by_play", "quarter"),
+                             "public.app_play_by_play.season_code: expected NOT NULL"])
+        self.assertEqual(counts, {"play_by_play": 7})
+        (counts, _), count, _, _ = self.state(
+            "app_players", [self.wrong_type("app_players", "season_code")])
+        self.assertEqual(counts, {"app_players": 7})
+        (counts, _), count, _, _ = self.state(
+            "app_players", [self.wrong_type("app_players", "competition_code")])
+        self.assertEqual(counts, {"app_players": None})
+        count.assert_not_called()
+
+    def test_cli_labels_an_unavailable_count(self):
+        from neon_publish import main as cli
+        with (mock.patch.object(cli, "connect"), mock.patch.object(cli, "neon_connect"),
+              mock.patch.object(cli, "publish_season",
+                                return_value={"play_by_play": (None, 5), "shots": (2, 5)}),
+              mock.patch("sys.stdout", new_callable=io.StringIO) as out):
+            self.assertEqual(cli.main(["-sc", "E2025", "--dry-run"]), 0)
+        self.assertIn("unavailable -> 5 rows", out.getvalue())
+        self.assertNotIn("missing", out.getvalue())
+
     def run_publish(self, dry_run):
         issues = {"play_by_play": [self.missing("app_play_by_play", "competition_code"),
                                    self.missing("app_play_by_play", "game_code")]}

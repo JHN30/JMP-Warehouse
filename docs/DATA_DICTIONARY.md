@@ -6,8 +6,9 @@ a bare name such as `games` means `silver.games`. Exact SQL columns, types,
 source JSON paths, and keys are defined in
 [flat_schema.py](../postgres_etl/flat_schema.py). Bronze keeps the exact API
 responses. Silver contains cleaned source data. The local `gold` schema holds
-16 source projections from Silver, derived postseason player stats, and the
-page-shaped standings table. Other derived Gold tables and Neon publishing are
+16 source projections from Silver, derived postseason player stats, the
+page-shaped standings table, team-season totals and two coverage tables. Other
+derived Gold tables and Neon publishing are
 still paused. Existing Neon tables are unchanged in the meantime.
 
 ## Silver provenance
@@ -139,8 +140,8 @@ have no derived `PS` rows. The other 12 Silver tables and `silver.load_log`
 are not copied by 30a.
 
 `python gold_etl/main.py -sc all` builds all locally loaded Silver seasons.
-`--dry-run` reports Silver source counts without Gold writes;
-`--quality-only` compares Gold counts and full source-column values with
+`--dry-run` reports Silver source and derived row counts without Gold writes;
+`--quality-only` compares Gold source and derived keys and full values with
 Silver. Both read the local database only. Gold is not published to Neon yet.
 Use explicit `gold.games` or `silver.games` names because local connections
 still search `silver` by default.
@@ -153,8 +154,10 @@ when they appeared in more than half of their latest club's postseason games,
 a per-game row. Missing box-score measures propagate as NULL; percentages and
 per-game counting values round half-even to one decimal. No played postseason
 means no `PS` rows. The local `gold.app_standings` table below is also active.
-The remaining derived tables in this section preserve the historical web-app
-contract for features 30c-30f. Existing Neon tables remain in place for the
+Feature 30c builds local `gold.app_team_season_stats`,
+`gold.app_coverage_seasons` and `gold.app_coverage_games` from Silver. The
+remaining derived tables in this section preserve the historical web-app
+contract for features 30d-30f. Existing Neon tables remain in place for the
 web app and receive no updates during the pause.
 
 ### `app_standings`
@@ -230,32 +233,37 @@ metrics, source filters and tie-break order, so rows are self-contained
 
 ### `app_team_season_stats`
 
-Team-season totals, own and opponent, served by the Express
-`/teams/:clubCode/team-stats?phase=` route, which reads this table. Unlike the records tables above,
-**this table IS season-scoped** (one row set per season, like every other
-table) and fits the normal per-season load and Neon publish path.
+Built locally as `gold.app_team_season_stats` from played `silver.games` and
+`silver.game_team_stats` `total` rows. The historical Neon table serves the
+Express `/teams/:clubCode/team-stats?phase=` route; this local rebuild is not
+published yet. This table is season-scoped.
 
 | Key | One row represents |
 | --- | --- |
 | `phase_code`, `club_code` | One club's totals in one phase of one season, from played games only (`stats_kind = 'total'`). |
 
 - `club_name`, `games_played`, then `own_<measure>` and `opp_<measure>`
-  (NUMERIC) for 20 measures: `points`, `field_goals_made_2/attempted_2`,
-  `field_goals_made_3/attempted_3`, `free_throws_made/attempted`,
-  `field_goals_made_total/attempted_total`, `total_rebounds`,
+  (NUMERIC) for 20 historical output measures: `points`,
+  `field_goals_made2/attempted2`, `field_goals_made3/attempted3`,
+  `free_throws_made/attempted`, `field_goals_made_total/attempted_total`, `total_rebounds`,
   `defensive_rebounds`, `offensive_rebounds`, `assistances`, `steals`,
   `turnovers`, `blocks_favour`, `blocks_against`, `fouls_commited`,
   `fouls_received`, `valuation`.
-- "Own" sums the club's own `app_game_team_stats` row for a game; "opponent"
-  sums the other side's row in the same game.
+- "Own" sums the club's own `silver.game_team_stats` row for a game; "opponent"
+  sums the other side's row in the same game. Current Silver source columns use
+  clean names such as `two_pointers_made`, `assists` and `pir`; Gold preserves
+  the historical output names. A missing measure or opponent total makes the
+  affected aggregate NULL.
 - One row per phase actually present in that season's games (`RS`, `PI`,
   `PO`, `FF`, or older `TS`) — no synthetic "all phases" row; Express has
   none either.
 
 ### `app_coverage_seasons` and `app_coverage_games`
 
-Data-coverage counts, served by the Express `/coverage` route (with and
-without `?gameCode=`), which reads these tables. Both **are season-scoped**. `app_coverage_seasons` has
+Built locally as `gold.app_coverage_seasons` and `gold.app_coverage_games` from
+Silver. The historical Neon tables serve the Express `/coverage` route (with
+and without `?gameCode=`); the local rebuild is not published yet. Both are
+season-scoped. `app_coverage_seasons` has
 one row per season; `app_coverage_games` has one row per game (played or
 not).
 
@@ -270,14 +278,14 @@ exactly 8 objects, always in this order, each shaped
 
 | # | `key` | `availableCount` / `applicableCount` (season row) | Status rule |
 | - | --- | --- | --- |
-| 1 | `boxScores` | games with an `app_game_team_stats` `total` row / played games | gameStatus |
-| 2 | `periodScores` | games with an `app_game_period_scores` row / played games | gameStatus |
-| 3 | `officialStandings` | distinct clubs in `app_standings_basicstandings` / distinct clubs in `app_clubs` | rosterStatus |
-| 4 | `rosters` | distinct clubs with a row in `app_registrations` / distinct clubs in `app_clubs` | rosterStatus |
-| 5 | `playerPhotos` | distinct `person_key` with a headshot in `app_game_player_stats` among played games / played games | gameStatus |
-| 6 | `seasonStatistics` | distinct `person_key` in `app_season_stats_traditional` / distinct clubs in `app_clubs` | rosterStatus |
-| 7 | `shotLocations` | games with an `app_shots` row / played games | gameStatus |
-| 8 | `playByPlay` | games with an `app_play_by_play` row / played games | gameStatus |
+| 1 | `boxScores` | games with a `silver.game_team_stats` `total` row / played games | gameStatus |
+| 2 | `periodScores` | games with a `silver.game_period_scores` row / played games | gameStatus |
+| 3 | `officialStandings` | distinct clubs in `silver.standings_basic` / distinct clubs in `silver.clubs` | rosterStatus |
+| 4 | `rosters` | distinct clubs with a row in `silver.registrations` / distinct clubs in `silver.clubs` | rosterStatus |
+| 5 | `playerPhotos` | distinct `person_key` with a headshot in `silver.game_player_stats` among played games / played games | gameStatus |
+| 6 | `seasonStatistics` | distinct `person_key` in `silver.season_player_stats_traditional` / distinct clubs in `silver.clubs` | rosterStatus |
+| 7 | `shotLocations` | games with a `silver.shots` row / played games | gameStatus |
+| 8 | `playByPlay` | games with a `silver.play_by_play` row / played games | gameStatus |
 
 Items 5 and 6 compare a player count against a game/club count — an existing
 Express quirk, replicated as-is, not a design choice made here.
@@ -292,7 +300,7 @@ Express quirk, replicated as-is, not a design choice made here.
   `app_coverage_seasons` row. This mismatched scoping is Express's existing
   behavior, replicated exactly.
 - **Approved change from Express:** `shotLocations` and `playByPlay` are
-  computed from this pipeline's own `app_shots`/`app_play_by_play` data. Before
+  computed from this pipeline's own `silver.shots`/`silver.play_by_play` data. Before
   Express read these tables, it hardcoded both as `unavailable`.
 
 ### `app_postseason_series`

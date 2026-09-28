@@ -3,6 +3,8 @@
 from gold_etl.schema import TABLES, columns, count_sql, scope_predicate
 from gold_etl.postseason import TABLES as PS_TABLES, _dict_rows, read_rows as read_postseason_rows
 from gold_etl.standings import KEY as STANDINGS_KEY, read_rows as read_standings_rows
+from gold_etl.schema import AGGREGATE_NAMES, GOLD_TABLES
+from gold_etl.loader import read_aggregate_rows
 
 
 def check_scope(cursor, name, competition_code, season_code):
@@ -81,4 +83,32 @@ def check_standings_scope(cursor, competition_code, season_code):
                 f"({len(actual)} Gold, {len(expected)} Silver)"]
     if by_key(actual) != by_key(expected):
         return [f"gold.app_standings {season_code}: feed fields or lists differ from Silver"]
+    return []
+
+
+def check_aggregate_scope(cursor, name, competition_code, season_code):
+    """Compare every derived key and value with a fresh Silver calculation."""
+    if name not in AGGREGATE_NAMES:
+        raise ValueError(f"Unknown Gold aggregate table: {name}")
+    cursor.execute("SELECT to_regclass(%s)", (f"gold.{name}",))
+    if cursor.fetchone()[0] is None:
+        return [f"gold.{name} is missing"]
+    expected = read_aggregate_rows(cursor, name, competition_code, season_code)
+    for row in expected:
+        row["competition_code"] = competition_code
+        row["season_code"] = season_code
+    fields = ", ".join(f'"{field}"' for field in columns(name))
+    cursor.execute(
+        f'SELECT {fields} FROM gold."{name}" '
+        'WHERE competition_code = %s AND season_code = %s',
+        (competition_code, season_code),
+    )
+    actual = _dict_rows(cursor)
+    key = GOLD_TABLES[name].key
+    by_key = lambda rows: {tuple(row[column] for column in key): row for row in rows}
+    if len(actual) != len(expected) or by_key(actual).keys() != by_key(expected).keys():
+        return [f"gold.{name} {season_code}: keys differ from Silver derivation "
+                f"({len(actual)} Gold, {len(expected)} expected)"]
+    if by_key(actual) != by_key(expected):
+        return [f"gold.{name} {season_code}: derived values differ from Silver"]
     return []

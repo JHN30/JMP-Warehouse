@@ -1,4 +1,4 @@
-"""Build the local Gold source layer from already-loaded Silver seasons."""
+"""Build local Gold source and derived tables from already-loaded Silver."""
 
 import argparse
 import sys
@@ -11,26 +11,27 @@ from common.seasons import COMPETITION_CODES, select_seasons  # noqa: E402
 from gold_etl.loader import replace_scope  # noqa: E402
 from gold_etl.loader import replace_postseason_scope  # noqa: E402
 from gold_etl.loader import replace_standings_scope  # noqa: E402
+from gold_etl.loader import read_aggregate_rows, replace_aggregate_scope  # noqa: E402
 from gold_etl.postseason import TABLES as PS_TABLES, read_rows as read_postseason_rows  # noqa: E402
 from gold_etl.standings import read_rows as read_standings_rows  # noqa: E402
 from gold_etl.quality import (check_scope, check_postseason_scope,
-                              check_standings_scope)  # noqa: E402
-from gold_etl.schema import SOURCE_NAMES, count_sql  # noqa: E402
+                              check_standings_scope, check_aggregate_scope)  # noqa: E402
+from gold_etl.schema import AGGREGATE_NAMES, DERIVED_NAMES, SOURCE_NAMES, count_sql  # noqa: E402
 
 
 def build_parser():
-    parser = argparse.ArgumentParser(description="Build local Gold source tables from Silver.")
+    parser = argparse.ArgumentParser(description="Build local Gold tables from Silver.")
     parser.add_argument("-cp", "--competition", choices=COMPETITION_CODES,
                         default="euroleague")
     parser.add_argument("-sc", "--season-code", nargs="+", default=["latest"],
                         help="Years, codes, ranges, current, latest, or all in local Silver.")
     parser.add_argument("-tb", "--table", nargs="+", default=["all"],
-                        help="Gold source tables; default all.")
+                        help="Gold tables; default all.")
     parser.add_argument("--list-tables", action="store_true")
     parser.add_argument("--dry-run", action="store_true",
-                        help="Show source row counts without Gold writes.")
+                        help="Show source and derived row counts without Gold writes.")
     parser.add_argument("--quality-only", action="store_true",
-                        help="Compare Gold source rows with Silver without writes.")
+                        help="Compare Gold rows with Silver without writes.")
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     return parser
 
@@ -46,16 +47,16 @@ def main(argv=None):
     parser = build_parser()
     args = parser.parse_args(argv)
     if args.list_tables:
-        print("\n".join((*SOURCE_NAMES, "app_standings")))
+        print("\n".join((*SOURCE_NAMES, *DERIVED_NAMES)))
         return 0
     if args.dry_run and args.quality_only:
         parser.error("--dry-run and --quality-only cannot be combined")
-    unknown = set(args.table) - {"all", *SOURCE_NAMES, "app_standings"}
+    unknown = set(args.table) - {"all", *SOURCE_NAMES, *DERIVED_NAMES}
     if unknown:
         parser.error("Unknown table(s): " + ", ".join(sorted(unknown)))
     if "all" in args.table and len(args.table) != 1:
         parser.error("'all' must be used alone with --table")
-    tables = (*SOURCE_NAMES, "app_standings") if args.table == ["all"] else tuple(dict.fromkeys(args.table))
+    tables = (*SOURCE_NAMES, *DERIVED_NAMES) if args.table == ["all"] else tuple(dict.fromkeys(args.table))
     connection = None
     try:
         connection = connect(args.config)
@@ -90,6 +91,21 @@ def main(argv=None):
                     else:
                         count = replace_standings_scope(connection, *scope)
                         print(f"gold.app_standings {season}: {count} rows", flush=True)
+                    continue
+                if name in AGGREGATE_NAMES:
+                    if args.dry_run:
+                        with connection.cursor() as cursor:
+                            count = len(read_aggregate_rows(cursor, name, *scope))
+                        print(f"gold.{name} {season}: {count} derived rows", flush=True)
+                    elif args.quality_only:
+                        with connection.cursor() as cursor:
+                            issues = check_aggregate_scope(cursor, name, *scope)
+                        for issue in issues:
+                            print(issue, file=sys.stderr, flush=True)
+                        passed &= not issues
+                    else:
+                        count = replace_aggregate_scope(connection, name, *scope)
+                        print(f"gold.{name} {season}: {count} rows", flush=True)
                     continue
                 if args.dry_run:
                     with connection.cursor() as cursor:

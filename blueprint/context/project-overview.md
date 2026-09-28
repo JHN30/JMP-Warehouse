@@ -1,6 +1,6 @@
 # EuroLeague Data ETL - Project Overview
 
-<!-- blueprint:source-hash cb742faa79e0798da1d464b440ec076bd5ec4b1e14e1bb42cf9ad87e32e5798e -->
+<!-- blueprint:source-hash ec2be1d293d44cae29820fef2217f73aae531ec1b78d93945d2ae44a12aa0154 -->
 
 > The data pipeline behind the JMP EuroLeague web app: EuroLeague API data into
 > exact bronze files, typed tables in local PostgreSQL, advanced statistics, and

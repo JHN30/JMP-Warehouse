@@ -1,7 +1,8 @@
 """The 16 source projections owned by the first Gold build."""
 
-from postgres_etl.flat_schema import (Field, SCOPE, STANDINGS_IDENTITY,
-                                       TABLES as SILVER_TABLES, Table)
+from postgres_etl.flat_schema import (COLUMN_NAMES, Field, SCOPE,
+                                       STANDINGS_IDENTITY, TABLES as SILVER_TABLES,
+                                       Table, snake)
 
 
 SOURCE_NAMES = (
@@ -61,7 +62,43 @@ STANDINGS_TABLE = Table(
     ("competition_code", "season_code", "phase_code", "round_number", "club_code"),
     STANDINGS_FIELDS,
 )
-GOLD_TABLES = {**TABLES, "app_standings": STANDINGS_TABLE}
+TEAM_MEASURES = (
+    "points", "fieldGoalsMade2", "fieldGoalsAttempted2", "fieldGoalsMade3",
+    "fieldGoalsAttempted3", "freeThrowsMade", "freeThrowsAttempted",
+    "fieldGoalsMadeTotal", "fieldGoalsAttemptedTotal", "totalRebounds",
+    "defensiveRebounds", "offensiveRebounds", "assistances", "steals",
+    "turnovers", "blocksFavour", "blocksAgainst", "foulsCommited",
+    "foulsReceived", "valuation",
+)
+TEAM_MEASURE_COLUMNS = tuple((snake(name), COLUMN_NAMES.get(snake(name), snake(name)))
+                             for name in TEAM_MEASURES)
+TEAM_FIELDS = SCOPE + (
+    Field("phase_code", "TEXT NOT NULL", "games.phase_code"),
+    Field("club_code", "TEXT NOT NULL", "games.club_code"),
+    Field("club_name", "TEXT", "clubs.name"),
+    Field("games_played", "INTEGER NOT NULL", "game_team_stats"),
+) + tuple(Field(f"{side}_{name}", "NUMERIC", f"game_team_stats.{source}")
+          for side in ("own", "opp") for name, source in TEAM_MEASURE_COLUMNS)
+TEAM_SEASON_TABLE = Table(
+    "team_season_stats", ("competition_code", "season_code", "phase_code", "club_code"),
+    TEAM_FIELDS,
+)
+COVERAGE_SEASON_TABLE = Table(
+    "coverage_seasons", ("competition_code", "season_code"),
+    SCOPE + (Field("items", "JSONB NOT NULL", "silver"),),
+)
+COVERAGE_GAME_TABLE = Table(
+    "coverage_games", ("competition_code", "season_code", "game_code"),
+    SCOPE + (Field("game_code", "INTEGER NOT NULL", "games.game_code"),
+             Field("items", "JSONB NOT NULL", "silver")),
+)
+AGGREGATE_NAMES = ("app_team_season_stats", "app_coverage_seasons",
+                   "app_coverage_games")
+DERIVED_NAMES = ("app_standings", *AGGREGATE_NAMES)
+GOLD_TABLES = {**TABLES, "app_standings": STANDINGS_TABLE,
+               "app_team_season_stats": TEAM_SEASON_TABLE,
+               "app_coverage_seasons": COVERAGE_SEASON_TABLE,
+               "app_coverage_games": COVERAGE_GAME_TABLE}
 
 
 def columns(name):

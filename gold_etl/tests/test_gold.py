@@ -9,7 +9,7 @@ from unittest.mock import patch
 from gold_etl import main
 from gold_etl.loader import replace_scope
 from gold_etl.quality import check_scope
-from gold_etl.schema import (PLAYER_STATS, SOURCE_NAMES, TABLES, columns,
+from gold_etl.schema import (DERIVED_NAMES, PLAYER_STATS, SOURCE_NAMES, TABLES, columns,
                              count_sql, create_table_sql)
 from postgres_etl.flat_schema import TABLES as SILVER_TABLES
 
@@ -186,7 +186,7 @@ class CliTests(unittest.TestCase):
                 contextlib.redirect_stdout(io.StringIO()) as output:
             self.assertEqual(main.main(["--list-tables"]), 0)
         connect.assert_not_called()
-        self.assertEqual(output.getvalue().splitlines(), [*SOURCE_NAMES, "app_standings"])
+        self.assertEqual(output.getvalue().splitlines(), [*SOURCE_NAMES, *DERIVED_NAMES])
 
     def test_dry_run_is_read_only_and_reports_counts(self):
         code, out, _, db = self.run_cli(["-sc", "2025", "-tb", "games", "--dry-run"])
@@ -265,6 +265,7 @@ class CliTests(unittest.TestCase):
             code, out, _, db = self.run_cli(["-sc", "2025", "-tb", "app_standings",
                                              "--dry-run"])
         self.assertEqual(code, 0)
+
         self.assertTrue(db.readonly)
         self.assertIn("gold.app_standings E2025: 2 derived rows", out)
         self.assertFalse(any(q.startswith(("CREATE", "DELETE", "INSERT"))
@@ -280,6 +281,28 @@ class CliTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn("gold.app_standings E2025: 2 rows", out)
         replace.assert_called_once_with(db, "E", "E2025")
+
+    def test_aggregate_selection_and_read_only_modes(self):
+        for name in DERIVED_NAMES[1:]:
+            with self.subTest(name=name):
+                with patch.object(main, "read_aggregate_rows", return_value=[{}]):
+                    code, out, _, db = self.run_cli(["-sc", "2025", "-tb", name,
+                                                     "--dry-run"])
+                self.assertEqual(code, 0)
+                self.assertTrue(db.readonly)
+                self.assertIn(f"gold.{name} E2025: 1 derived rows", out)
+                self.assertFalse(any(q.startswith(("CREATE", "DELETE", "INSERT"))
+                                     for q, _ in db.statements))
+                with patch.object(main, "check_aggregate_scope", return_value=["bad"]):
+                    code, _, err, db = self.run_cli(["-sc", "2025", "-tb", name,
+                                                     "--quality-only"])
+                self.assertEqual(code, 1)
+                self.assertTrue(db.readonly)
+                self.assertIn("bad", err)
+                with patch.object(main, "replace_aggregate_scope", return_value=1) as load:
+                    code, out, _, db = self.run_cli(["-sc", "2025", "-tb", name])
+                self.assertEqual(code, 0)
+                load.assert_called_once_with(db, name, "E", "E2025")
 
 
 if __name__ == "__main__":

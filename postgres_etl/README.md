@@ -21,6 +21,7 @@ python postgres_etl/score_flow.py -sc 2025 --dry-run
 python postgres_etl/shot_splits.py -sc 2025 --dry-run
 python postgres_etl/shot_zones.py -sc 2025 --dry-run
 python postgres_etl/on_court.py -sc 2025 --dry-run
+python postgres_etl/lineups.py -sc 2025 --dry-run
 ```
 
 `advanced.py` derives two more `silver` tables, `game_team_advanced` and
@@ -51,6 +52,10 @@ play-by-play feeds. `main.py` runs both after a load that includes `games`,
 on the floor per game, rebuilt from the box-score starters and the `IN`/`OUT` events, with
 elapsed-second start and end. `main.py` runs it after a load that includes `games`,
 `game_player_stats` or `play_by_play`.
+
+`lineups.py` (feature 29b) adds `game_team_lineup_stints`: stretches with the same five
+players on court for both teams, with their possessions and points per team, built from
+the same substitution walk as `on_court.py` and run right after it.
 
 The dry run checks parsing, types, required fields, and duplicate keys without
 a database. A real load needs `psycopg2` and the credentials in

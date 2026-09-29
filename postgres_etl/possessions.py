@@ -77,17 +77,21 @@ def _clock(event):
     return start + length - left if 0 <= left <= length else None
 
 
-def _count(events, clubs):
-    """Possessions and measured lengths per club for one game's ordered events."""
+def _count(events, clubs, ends=None):
+    """Possessions and measured lengths per club for one game's ordered events. With `ends`
+    given, each counted possession appends (club, event that closed it)."""
     result = {club: {"count": 0, "seconds": Decimal(0), "measured": 0} for club in clubs}
     plays = [e for e in events if e["play_type"] in PLAYS or e["play_type"] in TECHNICAL]
-    state = {"owner": None, "start": None, "closed_by": None, "technical": False}
+    state = {"owner": None, "start": None, "closed_by": None, "technical": False,
+             "event": None}
 
     def end(club, at):
         if club not in result:
             return
         entry = result[club]
         entry["count"] += 1
+        if ends is not None:
+            ends.append((club, state["event"]))
         if at is not None and state["start"] is not None and at >= state["start"]:
             entry["seconds"] += Decimal(at - state["start"])
             entry["measured"] += 1
@@ -109,6 +113,7 @@ def _count(events, clubs):
             period_end = None if bounds is None else bounds[0] + bounds[1]
             state.update(owner=None, closed_by=None, technical=False,
                          start=None if bounds is None else bounds[0])
+        state["event"] = event
         if kind in TECHNICAL:
             state["technical"] = True
             continue

@@ -1,5 +1,7 @@
 """Read-only, scope-specific equality checks for Gold source projections."""
 
+from collections import defaultdict
+
 from gold_etl.schema import TABLES, columns, count_sql, scope_predicate
 from gold_etl.postseason import TABLES as PS_TABLES, _dict_rows, read_rows as read_postseason_rows
 from gold_etl.standings import KEY as STANDINGS_KEY, read_rows as read_standings_rows
@@ -379,6 +381,30 @@ def check_pbp_partition(cursor, name, competition_code, season_code):
                 break
     for ident in sorted(set(parts) - set(whole)):
         issues.append(f"gold.{name} {season_code} {ident}: phase rows without an all row")
+    return issues
+
+
+def check_on_off_totals(cursor, competition_code, season_code):
+    """Errors where a club's on and off values do not add up to one team total per measure,
+    or where its players' on-court seconds are not five times the team's seconds."""
+    measures = ("seconds", "possessions_for", "possessions_against", "points_for",
+                "points_against")
+    columns = [f"{state}_{measure}" for state in ("on", "off") for measure in measures]
+    cursor.execute(f'SELECT scope, club_code, person_key, {", ".join(columns)} '
+                   'FROM gold."player_on_off" WHERE competition_code = %s '
+                   'AND season_code = %s', (competition_code, season_code))
+    totals, on_seconds, issues = {}, defaultdict(int), []
+    for row in _dict_rows(cursor):
+        ident = (row["scope"], row["club_code"])
+        team = tuple(row[f"on_{m}"] + row[f"off_{m}"] for m in measures)
+        if totals.setdefault(ident, team) != team:
+            issues.append(f"gold.player_on_off {season_code} {ident}: on plus off differs "
+                          f"between players (first seen at {row['person_key']})")
+        on_seconds[ident] += row["on_seconds"]
+    for ident, team in sorted(totals.items()):
+        if on_seconds[ident] != 5 * team[0]:
+            issues.append(f"gold.player_on_off {season_code} {ident}: on-court seconds are "
+                          "not five times the team seconds")
     return issues
 
 

@@ -44,6 +44,7 @@ python postgres_etl/score_flow.py -sc 2007-2026 --dry-run
 python postgres_etl/shot_splits.py -sc 2007-2026 --dry-run
 python postgres_etl/shot_zones.py -sc 2007-2026 --dry-run
 python postgres_etl/on_court.py -sc 2007-2026 --dry-run
+python postgres_etl/lineups.py -sc 2007-2026 --dry-run
 ```
 
 Build or inspect local Gold from already loaded Silver rows:
@@ -55,7 +56,7 @@ python gold_etl/main.py -sc all
 python gold_etl/main.py -sc all --quality-only
 python gold_etl/main.py -sc E2025 -tb app_records_player_seasons app_records_single_games app_records_team_seasons app_postseason_series
 python gold_etl/main.py -sc all -tb app_players app_club_identities
-python gold_etl/main.py -sc all -tb team_round_stats team_round_ratings team_round_splits player_round_stats player_round_ratings player_round_win_shares app_standings_stats team_pbp_stats team_shot_zone_stats
+python gold_etl/main.py -sc all -tb team_round_stats team_round_ratings team_round_splits player_round_stats player_round_ratings player_round_win_shares app_standings_stats team_pbp_stats team_shot_zone_stats player_on_off
 ```
 
 The dry run and quality check read the local database without changing Gold.

@@ -330,6 +330,8 @@ committed; copy the `.example`). Publishing reads the direct non-pooled
 - On-court intervals per player from starters and substitutions (also run after a load of
   `games`, `game_player_stats` or `play_by_play`):
   `python postgres_etl/on_court.py -sc <seasons>` (E2007+); same options.
+- Lineup stints (five-man stretches with possessions and points; same triggers):
+  `python postgres_etl/lineups.py -sc <seasons>` (E2007+); same options.
 - Build local Gold from Silver: `python gold_etl/main.py -sc <seasons>`
   (`-sc all` uses every locally loaded Silver season).
 - Build only local standings: `python gold_etl/main.py -sc <seasons> -tb app_standings`
@@ -362,6 +364,9 @@ committed; copy the `.example`). Publishing reads the direct non-pooled
   `possessions.py`, `score_flow.py`, `shot_splits.py`, `shot_zones.py`; local only):
   `python gold_etl/main.py -sc <seasons> -tb team_pbp_stats team_shot_zone_stats`.
   `--quality-only` checks that the `all` scope equals the sum of the phase scopes.
+- Build local player on/off ratings per club and scope (from `lineups.py`; local only):
+  `python gold_etl/main.py -sc <seasons> -tb player_on_off`. `--quality-only` checks that
+  on plus off is one team total per club and scope.
 - Traditional or misc table selections also rebuild their derived `PS` rows.
 - Gold read-only source and derived counts: `python gold_etl/main.py -sc <seasons> --dry-run`
 - Gold read-only equality checks: `python gold_etl/main.py -sc <seasons> --quality-only`

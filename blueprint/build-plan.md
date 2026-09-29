@@ -63,7 +63,7 @@ Items 1-8 were already shipped when the Blueprint was adopted (2026-09-24).
   - [x] 19d. **Play-by-play aggregates** - per-season team (and player where it fits) aggregates of 19a-19c by phase; `gold`, local only
 - [ ] 29. **Lineups and on/off** - on-court lineups rebuilt from play-by-play substitutions: on/off ratings, lineup, 2/3/5-man ratings and RAPM (E2007+), build in `gold`, publish in 30g
   - [x] 29a. **On-court reconstruction** - per-game player on-court intervals rebuilt from starters and play-by-play substitutions, validated against box-score minutes (E2007+); `silver`, local only
-  - [ ] 29b. **Lineup stints and on/off** - five-man stints with time, possessions and points per team and game, plus per-player on/off ratings per season and scope; `silver` stints, `gold` on/off, local only
+  - [x] 29b. **Lineup stints and on/off** - five-man stints with time, possessions and points per team and game, plus per-player on/off ratings per season and scope; `silver` stints, `gold` on/off, local only
   - [ ] 29c. **Lineup ratings** - 2, 3 and 5-man lineup ratings per club, season and scope with possessions stored; `gold`, local only
   - [ ] 29d. **RAPM** - regularized adjusted plus-minus (ridge, offense and defense, penalty by cross-validation) per player and season; `gold`, local only
 - [ ] 30g. **Publish completed Gold tables** - after 25-29, publish their new and updated Gold tables to Neon, update the refresh and quality paths and coordinate their web-app contracts; confirm the exact table list and Neon storage scope in its feature spec

@@ -254,7 +254,8 @@ class MainWiringTests(unittest.TestCase):
                 patch.object(main, "run_shot_splits", return_value=True), \
                 patch.object(main, "run_shot_zones", return_value=True), \
                 patch.object(main, "run_score_flow", return_value=True), \
-                patch.object(main, "run_on_court", return_value=True):
+                patch.object(main, "run_on_court", return_value=True), \
+                patch.object(main, "run_lineups", return_value=True):
             return main.main(argv), run
 
     def test_runs_after_a_load_that_includes_game_tables(self):

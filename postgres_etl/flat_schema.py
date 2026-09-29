@@ -512,6 +512,15 @@ ADVANCED_TABLES = {
             f("person_key", "TEXT NOT NULL"), f("interval_ordinal", "INTEGER NOT NULL"),
             f("club_code", "TEXT"), f("start_seconds", "INTEGER"), f("end_seconds", "INTEGER"),
         ), indexes=(("person_key",), ("club_code",))),
+    "game_team_lineup_stints": table(
+        "game_team_lineup_stints", ("game_code", "side", "stint_ordinal"), (
+            f("game_code", "INTEGER NOT NULL"), f("side", "TEXT NOT NULL"),
+            f("stint_ordinal", "INTEGER NOT NULL"), f("club_code", "TEXT"),
+            f("opponent_club_code", "TEXT"), f("start_seconds", "INTEGER"),
+            f("end_seconds", "INTEGER"), f("players", "TEXT"), f("opponent_players", "TEXT"),
+            f("possessions_for", "INTEGER"), f("possessions_against", "INTEGER"),
+            f("points_for", "INTEGER"), f("points_against", "INTEGER"),
+        ), indexes=(("club_code",),)),
     "game_player_advanced": table("game_player_advanced", ("game_code", "side", "person_key"), (
         f("game_code", "INTEGER NOT NULL"), f("side", "TEXT NOT NULL"),
         f("person_key", "TEXT NOT NULL"), f("club_code", "TEXT"),

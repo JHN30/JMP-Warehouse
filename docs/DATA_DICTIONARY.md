@@ -290,6 +290,65 @@ game 31, player 004866 (started; out at 03:04 of the first quarter, back at 00:3
 out at 08:01 of the fourth) has stretches 0-416, 569-1462 and 1584-1919, 1,644 seconds in total,
 the box score's `seconds_played`.
 
+### `game_team_lineup_stints`
+
+Built by `python postgres_etl/lineups.py -sc <seasons>` from `games`, `game_player_stats` and
+`play_by_play` (E2007 onward), right after `game_player_on_court`. Key `game_code`, `side`,
+`stint_ordinal` (counted from 1 over the stored stints of the game); two rows per stint, one
+from each team's side.
+
+| Column | Meaning |
+| --- | --- |
+| `club_code`, `opponent_club_code` | The team and its opponent |
+| `start_seconds`, `end_seconds` | Elapsed game seconds; a stint runs from the substitution that formed the lineups to the next one |
+| `players`, `opponent_players` | The five `person_key`s on court for the team and for the opponent, sorted and joined by commas |
+| `possessions_for`, `possessions_against` | Counted possessions (19a) that ended while the lineups were on court, for the team and for the opponent |
+| `points_for`, `points_against` | Points scored by the team and by the opponent in the stint (from the running score) |
+
+A stint is a stretch with the same five players on court for both teams. The walk is the one
+of `game_player_on_court`, with a stint boundary at each substitution group that changes a
+lineup; lineups carry across periods. Events are attributed by event order, not by clock: a
+substitution between two free throws at one clock time splits them, and the free throw made
+while a team is a player short belongs to an incomplete stint. Only stints where both teams
+have exactly five players are stored, and a zero-length stint with no event is dropped.
+Possessions come from 19a's state machine (a counted possession belongs to the stint on court at
+the event that closes it; the possession that ends a period belongs to the last stint of that
+period).
+
+Validation over E2007-E2026 (5,049 games, 346,894 rows, 34.4 stints per team-game): a team's
+stint points equal its final score in 10,061 of 10,098 team-games (99.6%) and its stint
+possessions equal `game_team_possessions.counted_possessions` in 10,046 (99.5%; 323 possessions
+apart in total). A player's stint seconds differ from `game_player_on_court` by 0.13 seconds on
+average in E2025. `--quality-only` checks the stored rows against a fresh derivation and warns
+for team-games whose stints cover less than 95% of the game's minutes: 12 team-games (6 games) in
+E2008, E2010, E2013, E2014 and E2017 have stored stints for less than that; every other
+team-game is covered above 95%. Hand check: E2025 game 31's
+first stint runs 0-226 seconds (the first substitution is at 06:14 of the first quarter) with the
+five starters of each team.
+
+### `player_on_off` (local only)
+
+Built as `gold.player_on_off` by `python gold_etl/main.py -sc <seasons> -tb player_on_off`
+from `game_team_lineup_stints` (phase from `silver.games`) and `game_player_stats` (name), for
+E2007 onward; a missing stint table stops the build with the command that creates it. Key
+`competition_code`, `season_code`, `scope` (`all`, each phase, `PS`), `club_code`, `person_key`;
+a player traded during a season has one row per club. Not published to Neon (30g).
+
+Columns: `player_name`; `games` (games with the player on court in a stored stint); the on sums
+`on_seconds`, `on_possessions_for`, `on_possessions_against`, `on_points_for`,
+`on_points_against` (the club's stints with the player on court) and the same five `off_` sums (the
+club's other stored stints in the scope, including games the player missed); `on_ortg`,
+`on_drtg`, `on_net_rating` and the `off_` versions (points per 100 possessions; NULL without
+possessions); `ortg_diff`, `drtg_diff` and `net_rating_diff` (on minus off; a positive
+`drtg_diff` is a worse defense). A player who never sat has NULL off ratings and differences.
+`--quality-only` checks the fresh derivation and, per club and scope, that every player's on
+plus off is the same team total and the players' on-court seconds are five times the team's.
+E2025: 990 rows (all scopes); 18,670 rows over E2007-E2026, 6,225 in the `all` scope.
+
+Cross-check against the box score: a player's summed on-court point difference equals the summed
+`plus_minus` of `game_player_stats` exactly in 73% of player-club-seasons of E2012-E2026 (3,297
+of 4,507), within 3 points in 83%, and differs by 1.9 points on average.
+
 ### `team_pbp_stats` and `team_shot_zone_stats` (local only)
 
 Built as `gold.team_pbp_stats` and `gold.team_shot_zone_stats` by `python gold_etl/main.py

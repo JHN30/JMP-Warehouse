@@ -75,6 +75,60 @@ Publish preview: `python neon_publish/main.py -sc E2025 --dry-run`.
 See the [publisher guide](neon_publish/README.md) for all 26 targets, the
 one-time migration, the 90% shrink guard, and live cutover approval.
 
+## Running everything
+
+The commands below build every layer from scratch for EuroLeague (`-cp euroleague`
+is the default), in order. Run them from the repository root.
+
+**Setup, once.** Install `psycopg2`, `numpy` and `pandas` in Python 3.13 (numpy is
+used only by the RAPM table). Copy `postgres_etl/config_connection.example.json` to
+`postgres_etl/config_connection.json` and set the local PostgreSQL credentials. Put
+the direct, non-pooled `NEON_DATABASE_URL` in `.env`; only the publish steps need it.
+
+```powershell
+# 1. Fetch API responses into bronze (exact, versioned).
+python api_requests/main.py -sc 2000-2026
+
+# 2. Load Silver: 28 typed tables plus quality checks. A load that includes the
+#    game, box-score or play-by-play tables also rebuilds the derived Silver tables.
+python postgres_etl/main.py -sc all
+
+# 3. Optional: rebuild one derived Silver table on its own, in this order
+#    (lineups needs possessions; on_court and lineups need E2007+ play-by-play).
+python postgres_etl/advanced.py -sc all                  # per-game team and player advanced stats
+python postgres_etl/possessions.py -sc 2007-2026         # counted possessions per team and game
+python postgres_etl/score_flow.py -sc 2007-2026          # lead changes, time leading, runs, clutch
+python postgres_etl/shot_splits.py -sc 2007-2026         # fast-break, second-chance, off-turnover points
+python postgres_etl/shot_zones.py -sc 2007-2026          # attempts and makes per shot zone
+python postgres_etl/on_court.py -sc 2007-2026            # each player's on-court stretches
+python postgres_etl/lineups.py -sc 2007-2026             # five-man stints with possessions and points
+
+# 4. Build Gold from Silver: 16 source tables, the derived app tables and every
+#    local-only table (round stats, ratings, Win Shares, play-by-play aggregates,
+#    on/off, lineup ratings, RAPM).
+python gold_etl/main.py -sc all
+
+# 5. Check everything without changing data. Expect "Gold quality: passed";
+#    WARN lines are documented gaps in docs/DATA_DICTIONARY.md.
+python postgres_etl/main.py -sc all --quality-only
+python gold_etl/main.py -sc all --quality-only
+
+# 6. Run the test suites (see Tests below).
+
+# 7. Preview a Neon publish. Read-only.
+python neon_publish/main.py --list-tables
+python neon_publish/main.py -sc E2026 --dry-run
+
+# 8. Publish one season to Neon. Only with the owner's explicit approval.
+python neon_publish/main.py -sc E2026
+```
+
+Only the 26 tables listed by `--list-tables` reach Neon. The play-by-play,
+lineup, on/off, RAPM and round-stat tables stay local until build-plan item 30g.
+For the current season, `python pipeline.py --dry-run-publish` runs fetch, load,
+Gold and checks and previews the publish; plain `python pipeline.py` also
+publishes to Neon.
+
 ## Layout
 
 | Path | Purpose |

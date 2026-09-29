@@ -384,7 +384,8 @@ committed; copy the `.example`). Publishing reads the direct non-pooled
   2026-09-28. The publisher refuses incompatible schemas and
   scopes shrinking below 90% unless `--allow-shrink` is explicit. Failures roll
   back all selected scopes. `-tb` selects registered tables.
-- CSV export: `python tables_to_csv/main.py -sc <seasons>`
+- CSV export of every silver and gold table, one file per table for SSMS import:
+  `python tables_to_csv/main.py` (`--dry-run`, `--layer silver|gold`, `-tb`, `-sc`).
 - Test:
   - `cd api_requests && python -m unittest tests.test_scrapper`
   - `python -m unittest discover -s postgres_etl/tests`

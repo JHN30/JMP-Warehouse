@@ -66,6 +66,7 @@ Items 1-8 were already shipped when the Blueprint was adopted (2026-09-24).
   - [x] 29b. **Lineup stints and on/off** - five-man stints with time, possessions and points per team and game, plus per-player on/off ratings per season and scope; `silver` stints, `gold` on/off, local only
   - [x] 29c. **Lineup ratings** - 2, 3 and 5-man lineup ratings per club, season and scope with possessions stored; `gold`, local only
   - [x] 29d. **RAPM** - regularized adjusted plus-minus (ridge, offense and defense, penalty by cross-validation) per player and season; `gold`, local only
+- [x] 31. **CSV export of every table** - export every `silver` and `gold` table to one CSV file per table (all seasons) for import into SSMS; `tables_to_csv`, local only
 - [ ] 30g. **Publish completed Gold tables** - after 25-29, publish their new and updated Gold tables to Neon, update the refresh and quality paths and coordinate their web-app contracts; confirm the exact table list and Neon storage scope in its feature spec
 - [ ] 15. **Historical seasons in Neon** - publish older seasons once Neon storage allows (app tables for all seasons are about 237 MB)
 - [ ] 17. **Dependencies and CI** - `requirements.txt` and an automatic test run so the project installs and verifies anywhere

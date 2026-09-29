@@ -121,6 +121,10 @@ python neon_publish/main.py -sc E2026 --dry-run
 
 # 8. Publish one season to Neon. Only with the owner's explicit approval.
 python neon_publish/main.py -sc E2026
+
+# 9. Optional: export every silver and gold table to CSV (one file per table,
+#    data/csv_export/euroleague/) for import into SSMS.
+python tables_to_csv/main.py
 ```
 
 Only the 26 tables listed by `--list-tables` reach Neon. The play-by-play,
@@ -137,7 +141,7 @@ publishes to Neon.
 | [postgres_etl/](postgres_etl/README.md) | Load and check the local silver tables. |
 | [gold_etl/](gold_etl/README.md) | Build and check local Gold source and derived tables. |
 | [neon_publish/](neon_publish/README.md) | Gold-to-Neon preflight and guarded atomic publisher. |
-| [tables_to_csv/](tables_to_csv/README.md) | Export silver tables to CSV. |
+| [tables_to_csv/](tables_to_csv/README.md) | Export every silver and gold table to one CSV file each, for SSMS. |
 | [docs/DATA_DICTIONARY.md](docs/DATA_DICTIONARY.md) | Silver, Gold, and Neon app-table contracts. |
 | `data/bronze/` | Exact source responses; the loader's only input. |
 | `data/state/` | Refresh bookkeeping. |

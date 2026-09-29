@@ -1,84 +1,72 @@
 # PostgreSQL tables to CSV
 
-This tool exports the **current column-first PostgreSQL ETL tables**. It reads
-the database; it does not call the EuroLeague APIs or change database rows.
-Run it after loading data with `postgres_etl/main.py`.
+This tool exports **every table in the local `silver` and `gold` schemas** as one
+CSV file per table, so the data can be imported into SQL Server Management Studio
+(SSMS) and analysed there. It reads the database; it does not call the EuroLeague
+APIs or change database rows. Run it after loading Silver and building Gold.
 
-The default export covers every available table in the `silver` schema.
-Table names come from
-`postgres_etl/flat_schema.py`, so they stay aligned with the loader. The
-previous seven `euroleague_header`/`euroleague_box_score`-style tables are not
-used by this command.
+Tables are discovered from the database itself, so new derived tables (possessions,
+lineups, RAPM and so on) are included without a code change. That is currently 75
+tables, about 10.8 million rows for EuroLeague; `play_by_play`, `shots` and the lineup
+tables are the large files.
 
 ## Run from the repository root
 
 ```powershell
 python tables_to_csv/main.py --list-tables
-python tables_to_csv/main.py -sc 2025 --dry-run
-python tables_to_csv/main.py -sc 2025
+python tables_to_csv/main.py --dry-run
+python tables_to_csv/main.py
 ```
 
-`--dry-run` connects to PostgreSQL and counts rows but writes no CSV files.
-To test only a couple of tables first:
-
-```powershell
-python tables_to_csv/main.py -sc 2025 -tb games clubs
-```
+`--list-tables` lists the tables found. `--dry-run` counts rows and writes no
+files. The plain command writes every table.
 
 Other selections:
 
 ```powershell
-python tables_to_csv/main.py -sc all
+python tables_to_csv/main.py --layer gold
+python tables_to_csv/main.py -tb games player_rapm
 python tables_to_csv/main.py -sc 2020-2025 -tb games shots
-python tables_to_csv/main.py -cp eurocup -sc all
-python tables_to_csv/main.py -sc current -tb games game_player_stats
+python tables_to_csv/main.py -cp eurocup
 ```
 
-`-cp/--competition` defaults to `euroleague`; `eurocup` is also accepted.
-`-sc/--season-code` accepts a year (`2025`), full code (`E2025` or `U2025`),
-inclusive range, `current`, `latest`, or `all`. The default is `latest` **in
-the database**, not the newest season in the raw JSON cache. `current` uses
-the same September season boundary as `postgres_etl`. `-tb/--table` accepts
-names from `--list-tables`. It defaults
-to all flat tables that exist in the connected database. Missing explicitly
-selected tables are an error; missing tables in an `all` run are reported and
-skipped. Seasons not yet loaded into the selected tables are also reported and
-skipped. If no requested season is available, the command fails.
-
-`--config` selects a connection JSON file (default:
-`postgres_etl/config_connection.json`). `--output-root` selects the parent
-output directory (default: repository `data/`). The exporter uses the same
-PostgreSQL search path as the connection and sets the session to read-only.
+- `--layer silver|gold|all` (default `all`) selects the schema.
+- `-tb/--table` takes table names; a name that exists in both layers (for example
+  `games`) exports both. Unknown names are an error.
+- `-sc/--season-code` defaults to `all` and accepts a year, full code, inclusive
+  range, `current`, `latest` or `all`. It filters tables that have a `season_code`
+  column; other tables are exported whole. Seasons come from `silver.seasons`.
+- `-cp/--competition` defaults to `euroleague` and filters tables that have a
+  `competition_code` column.
+- `--config` selects a connection JSON file (default
+  `postgres_etl/config_connection.json`); `--output-root` the parent of the output
+  folder (default: repository `data/`, which Git ignores).
 
 ## Output
 
-Files are separated by competition and season, for example:
-
 ```text
-data/euroleague_csv/E2025/games.csv
-data/euroleague_csv/E2025/game_player_stats.csv
-data/euroleague_csv/E2025/play_by_play.csv
-data/euroleague_csv/E2025/game_stat_gaps.csv
+data/csv_export/euroleague/silver/games.csv
+data/csv_export/euroleague/silver/play_by_play.csv
+data/csv_export/euroleague/gold/team_round_stats.csv
+data/csv_export/euroleague/gold/player_rapm.csv
 ```
 
-Files take the silver table's name. Earlier exports with old names are not
-removed automatically.
+Each file has a header row, all database columns (Silver tables include `load_id`
+and `loaded_at`) and rows ordered by the table's primary key. A table with no
+matching rows produces a header-only file. A rerun replaces only its own files,
+through a temporary file, so a failed export never replaces a finished CSV.
+Progress and row counts are printed and saved under `logs/tables_to_csv/`.
 
-Each file contains all database columns, a header row, and only rows matching
-its competition and season. Rows are ordered by the table's primary key. A
-silver source table's CSV therefore includes `load_id` and `loaded_at`; the
-append-only `load_log` metadata table is not part of the default export. A
-selected table with zero rows for that season produces a header-only CSV.
-Rerunning a table replaces only its corresponding CSV, leaving other season
-files untouched. A temporary file is used so a failed export does not replace
-an existing completed CSV.
+Format choices for SQL Server:
 
-PostgreSQL streams the CSV directly to disk, avoiding a large pandas DataFrame
-for tables such as play-by-play. CSV is a text format: PostgreSQL NULL becomes an empty
-field, while a real empty string is quoted.
+- Comma-delimited, UTF-8 **with a byte-order mark**, which SSMS uses to detect the
+  encoding of player and club names.
+- Booleans are written as `1` and `0` (SQL Server's `bit` does not read `t` and `f`).
+- NULL is an empty field; a real empty string is quoted. Text with commas, quotes or
+  line breaks is quoted, including the JSON columns in Gold.
+- Timestamps such as `loaded_at` end in `+00` (UTC); import those columns as text or
+  `datetimeoffset`.
 
-Progress, per-table row counts, and elapsed times are printed to the console
-and saved under `logs/tables_to_csv/`. The final report shows the total
-number of exported rows and output root. The database is never written by this
-tool, but a CSV export can reflect a different snapshot than a later run if
-the database has been refreshed in between.
+Import in SSMS: right-click the database, **Tasks, Import Flat File**, pick a CSV and
+check the proposed column types (the wizard guesses them; keep IDs such as
+`person_key` as text). The tool writes no SQL scripts.

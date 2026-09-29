@@ -349,6 +349,30 @@ Cross-check against the box score: a player's summed on-court point difference e
 `plus_minus` of `game_player_stats` exactly in 73% of player-club-seasons of E2012-E2026 (3,297
 of 4,507), within 3 points in 83%, and differs by 1.9 points on average.
 
+### `lineup_ratings` (local only)
+
+Built as `gold.lineup_ratings` by `python gold_etl/main.py -sc <seasons> -tb lineup_ratings`
+from `game_team_lineup_stints` (phase from `silver.games`) and `game_player_stats` (names), for
+E2007 onward; a missing stint table stops the build with the command that creates it. Key
+`competition_code`, `season_code`, `scope` (`all`, each phase, `PS`), `club_code`, `lineup_size`
+(2, 3 or 5) and `lineup` (the sorted `person_key`s joined by commas). Not published to Neon
+(30g).
+
+Every stored stint holds ten pairs, ten triples and one five of the club's players, and each group
+sums the stints it was on court for. Columns: `lineup_names` (player names in lineup order joined
+by `; `, the key where a name is missing); `games` (games in which the group shared the floor);
+`seconds`, `possessions_for`, `possessions_against`, `points_for`, `points_against` (sums over
+those stints); `ortg`, `drtg`, `net_rating` (points per 100 possessions; NULL without
+possessions). Small samples are kept with their possessions; consumers filter. The 4-man groups
+are not built. `--quality-only` checks the fresh derivation and, per club and scope, that the 2-man
+and 3-man rows each sum to ten times the 5-man rows for every summed column.
+
+Over E2007-E2026 the table has 107,595 pair rows, 310,996 triple rows and 195,109 five-man rows
+(38,890, 121,767 and 87,544 in the `all` scope); E2025 has 6,296, 20,388 and 15,783. Hand check:
+E2025's most-used five-man lineup (club HTA) has 28 games, 16,079 seconds, 483
+possessions for and 596 points in the table, the same as the sums of its `game_team_lineup_stints`
+rows.
+
 ### `team_pbp_stats` and `team_shot_zone_stats` (local only)
 
 Built as `gold.team_pbp_stats` and `gold.team_shot_zone_stats` by `python gold_etl/main.py

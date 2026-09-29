@@ -183,7 +183,7 @@ ROUND_MEASURES = (
 ROUND_NAMES = ("team_round_stats", "team_round_ratings", "team_round_splits",
                "player_round_stats", "player_round_ratings", "player_round_win_shares",
                "app_standings_stats", "team_pbp_stats", "team_shot_zone_stats",
-               "player_on_off")
+               "player_on_off", "lineup_ratings")
 PBP_NAMES = ("team_pbp_stats", "team_shot_zone_stats")
 WINDOWS = (5, 10)
 SPLIT_GROUPS = ("home", "away", *(f"last{size}" for size in WINDOWS))
@@ -375,6 +375,24 @@ PLAYER_ON_OFF_TABLE = Table(
       + tuple(Field(name, "NUMERIC", "derived") for name in ON_OFF_RATINGS),
 )
 
+# Lineup ratings (feature 29c): 2, 3 and 5-man groups per club and scope from the same stints.
+LINEUP_MEASURES = ("seconds", "possessions_for", "possessions_against", "points_for",
+                   "points_against")
+LINEUP_SIZES = (2, 3, 5)
+LINEUP_RATINGS_TABLE = Table(
+    "lineup_ratings",
+    ("competition_code", "season_code", "scope", "club_code", "lineup_size", "lineup"),
+    SCOPE + (
+        Field("scope", "TEXT NOT NULL", "games.phase_code"),
+        Field("club_code", "TEXT NOT NULL", "game_team_lineup_stints.club_code"),
+        Field("lineup_size", "INTEGER NOT NULL", "derived"),
+        Field("lineup", "TEXT NOT NULL", "game_team_lineup_stints.players"),
+        Field("lineup_names", "TEXT", "game_player_stats.person_name"),
+        Field("games", "INTEGER NOT NULL", "game_team_lineup_stints"),
+    ) + tuple(Field(name, "INTEGER", "game_team_lineup_stints") for name in LINEUP_MEASURES)
+      + tuple(Field(name, "NUMERIC", "derived") for name in ("ortg", "drtg", "net_rating")),
+)
+
 DERIVED_NAMES = ("app_standings", *AGGREGATE_NAMES,
                  *RECORDS_TABLES, "app_postseason_series", *IDENTITY_TABLES)
 GOLD_TABLES = {**TABLES, "app_standings": STANDINGS_TABLE,
@@ -390,7 +408,8 @@ GOLD_TABLES = {**TABLES, "app_standings": STANDINGS_TABLE,
                "player_round_win_shares": PLAYER_WIN_SHARES_TABLE,
                "app_standings_stats": STANDINGS_STATS_TABLE,
                "team_pbp_stats": TEAM_PBP_TABLE, "team_shot_zone_stats": TEAM_ZONE_TABLE,
-               "player_on_off": PLAYER_ON_OFF_TABLE}
+               "player_on_off": PLAYER_ON_OFF_TABLE,
+               "lineup_ratings": LINEUP_RATINGS_TABLE}
 
 
 def columns(name):

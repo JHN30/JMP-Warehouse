@@ -408,6 +408,32 @@ def check_on_off_totals(cursor, competition_code, season_code):
     return issues
 
 
+def check_lineup_totals(cursor, competition_code, season_code):
+    """Errors where a club's lineup groups do not add up: per club and scope the 2-man and
+    3-man rows each sum to ten times the 5-man rows for every summed column."""
+    columns = ("seconds", "possessions_for", "possessions_against", "points_for",
+               "points_against")
+    cursor.execute(f'SELECT scope, club_code, lineup_size, {", ".join(columns)} '
+                   'FROM gold."lineup_ratings" WHERE competition_code = %s '
+                   'AND season_code = %s', (competition_code, season_code))
+    sums = {}
+    for row in _dict_rows(cursor):
+        entry = sums.setdefault((row["scope"], row["club_code"]), {}).setdefault(
+            row["lineup_size"], [0] * len(columns))
+        for index, column in enumerate(columns):
+            entry[index] += row[column] or 0
+    issues = []
+    for ident, sizes in sorted(sums.items()):
+        for size in (2, 3):
+            for index, column in enumerate(columns):
+                if sizes.get(size, [0] * len(columns))[index] != 10 * sizes.get(
+                        5, [0] * len(columns))[index]:
+                    issues.append(f"gold.lineup_ratings {season_code} {ident}: {column} of the "
+                                  f"{size}-man rows is not ten times the 5-man rows")
+                    break
+    return issues
+
+
 def check_round_split_invariants(cursor, competition_code, season_code):
     """Errors where splits disagree with the cumulative `team_round_stats` rows."""
     scope = (competition_code, season_code)

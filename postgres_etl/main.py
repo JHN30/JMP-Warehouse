@@ -7,6 +7,7 @@ from pathlib import Path
 
 from advanced import SOURCE_TABLES as ADVANCED_SOURCES, run_seasons as run_advanced
 from possessions import TRIGGER_TABLES as POSSESSION_SOURCES, run_seasons as run_possessions
+from on_court import TRIGGER_TABLES as ON_COURT_SOURCES, run_seasons as run_on_court
 from score_flow import run_seasons as run_score_flow
 from shot_splits import TRIGGER_TABLES as SHOT_SOURCES, run_seasons as run_shot_splits
 from shot_zones import run_seasons as run_shot_zones
@@ -139,6 +140,12 @@ def main(argv=None):
             print("\nScore flow", flush=True)
             if not run_score_flow(args.config, args.competition, seasons):
                 print("Score flow checks failed; inspect the reported issues.",
+                      file=sys.stderr, flush=True)
+                return 1
+        if not (args.quality_only or args.dry_run) and set(tables) & set(ON_COURT_SOURCES):
+            print("\nOn-court intervals", flush=True)
+            if not run_on_court(args.config, args.competition, seasons):
+                print("On-court checks failed; inspect the reported issues.",
                       file=sys.stderr, flush=True)
                 return 1
         if not (args.quality_only or args.dry_run) and set(tables) & set(SHOT_SOURCES):

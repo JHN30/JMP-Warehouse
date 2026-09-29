@@ -38,6 +38,16 @@ def _overtime(event):
     return 1 if minute is None or minute <= 40 else (minute - 41) // 5 + 1
 
 
+def _game_end(events):
+    """Elapsed seconds at the end of a game. Overtimes are counted from events that carry a
+    clock: the trailing end-of-game events (`EG`, `EP`) have none and sit one minute past the
+    last overtime."""
+    overtimes = max((_overtime(e) for e in events
+                     if PERIOD_RANK.get(e["period"]) == 5 and e.get("marker_time")),
+                    default=0)
+    return 4 * QUARTER_SECONDS + overtimes * OVERTIME_SECONDS
+
+
 def _sort_key(event):
     period = PERIOD_RANK.get(event["period"], 9)
     return (period, _overtime(event) if period == 5 else 0, event["event_ordinal"])
@@ -300,11 +310,11 @@ def run_seasons(config_path, competition, season_codes, dry_run=False, quality_o
                     rows = read(cursor, code, season_code)
                 connection.rollback()
                 if dry_run:
-                    print(f"  {season_code}: {len(rows):,} team rows (dry run; "
+                    print(f"  {season_code}: {len(rows):,} rows (dry run; "
                           "database unchanged)", flush=True)
                     continue
                 replace(connection, code, season_code, rows)
-                print(f"  {season_code}: {len(rows):,} team rows | elapsed "
+                print(f"  {season_code}: {len(rows):,} rows | elapsed "
                       f"{elapsed(started)}", flush=True)
             if dry_run:
                 continue

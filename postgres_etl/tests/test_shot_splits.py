@@ -194,6 +194,7 @@ class MainWiringTests(unittest.TestCase):
                 patch.object(main, "run_advanced", return_value=True), \
                 patch.object(main, "run_possessions", return_value=True), \
                 patch.object(main, "run_score_flow", return_value=True), \
+                patch.object(main, "run_on_court", return_value=True), \
                 patch.object(main, "run_shot_splits", return_value=results[0]) as splits, \
                 patch.object(main, "run_shot_zones", return_value=results[1]) as zones:
             return main.main(argv), splits, zones

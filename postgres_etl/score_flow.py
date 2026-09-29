@@ -7,7 +7,7 @@ storage and season runner. Nothing reads Gold or Neon.
 import sys
 from decimal import Decimal
 
-from possessions import (PERIOD_RANK, _clock, _dict_rows, _overtime, _sort_key,
+from possessions import (_clock, _dict_rows, _game_end, _sort_key,
                          differences_from_derivation, main as _main, replace_season as _replace,
                          run_seasons as _run, stored_rows)
 
@@ -17,7 +17,6 @@ TRIGGER_TABLES = ("games", "play_by_play")
 RUN_MINIMUM = 6
 CLUTCH_MARGIN = 5
 CLUTCH_START = 2100
-REGULATION_SECONDS, OVERTIME_SECONDS = 2400, 300
 
 
 def _walk(events):
@@ -81,9 +80,7 @@ def _walk(events):
         largest["a"], largest["b"] = max(largest["a"], margin), max(largest["b"], -margin)
     if not scored:
         return None
-    overtimes = max((_overtime(e) for e in events if PERIOD_RANK.get(e["period"]) == 5),
-                    default=0)
-    interval(a - b, previous, REGULATION_SECONDS + OVERTIME_SECONDS * overtimes)
+    interval(a - b, previous, _game_end(events))
     close_run()
     return {"points": {"a": a, "b": b}, "seconds": seconds, "counts": counts,
             "largest": largest, "runs": runs, "clutch": clutch, "clock_ok": clock_ok}

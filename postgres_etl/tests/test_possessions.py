@@ -308,7 +308,8 @@ class MainWiringTests(unittest.TestCase):
         with patch.object(main, "available_seasons", return_value=["E2025"]),                 patch.object(main, "FlatDatabaseLoader"),                 patch.object(main, "validate_loaded", return_value=True),                 patch.object(main, "run_advanced", return_value=True),                 patch.object(main, "run_possessions", return_value=result) as run, \
                 patch.object(main, "run_shot_splits", return_value=True), \
                 patch.object(main, "run_shot_zones", return_value=True), \
-                patch.object(main, "run_score_flow", return_value=True):
+                patch.object(main, "run_score_flow", return_value=True), \
+                patch.object(main, "run_on_court", return_value=True):
             return main.main(argv), run
 
     def test_runs_after_a_load_that_includes_play_by_play(self):

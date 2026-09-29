@@ -60,6 +60,13 @@ class FlowTests(unittest.TestCase):
         self.assertEqual(total, 2700)
         self.assertEqual(walk(SIMPLE)["seconds"]["a"] + 60 + 80, 2400)
 
+    def test_trailing_end_of_game_events_without_a_clock_do_not_add_an_overtime(self):
+        end = {"game_code": 1, "period": "ExtraTime", "event_ordinal": 9, "club_code": None,
+               "play_type": "EG", "marker_time": None, "minute": 46,
+               "points_a": None, "points_b": None}
+        flow = walk([sc("09:00", 1, 2, 0), sc("04:30", 2, 2, 3, "ExtraTime", 41), end])
+        self.assertEqual(sum(flow["seconds"][key] for key in ("a", "b", "tied")), 2700)
+
     def test_runs_break_on_an_opponent_score_and_cross_periods(self):
         flow = walk([sc("01:00", 1, 3, 0), sc("09:00", 1, 5, 0, "SecondQuarter", 11),
                      sc("08:00", 2, 7, 0, "SecondQuarter", 11),
@@ -234,6 +241,7 @@ class MainWiringTests(unittest.TestCase):
                 patch.object(main, "run_advanced", return_value=True), \
                 patch.object(main, "run_possessions", return_value=True), \
                 patch.object(main, "run_shot_splits", return_value=True), \
+                patch.object(main, "run_on_court", return_value=True), \
                 patch.object(main, "run_shot_zones", return_value=True), \
                 patch.object(main, "run_score_flow", return_value=result) as run:
             return main.main(argv), run

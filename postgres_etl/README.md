@@ -20,6 +20,7 @@ python postgres_etl/possessions.py -sc 2025 --dry-run
 python postgres_etl/score_flow.py -sc 2025 --dry-run
 python postgres_etl/shot_splits.py -sc 2025 --dry-run
 python postgres_etl/shot_zones.py -sc 2025 --dry-run
+python postgres_etl/on_court.py -sc 2025 --dry-run
 ```
 
 `advanced.py` derives two more `silver` tables, `game_team_advanced` and
@@ -45,6 +46,11 @@ second-chance and off-turnover points, assisted field goals) and `game_team_shot
 (attempts, makes and points per shot zone) per team and game from the shots and
 play-by-play feeds. `main.py` runs both after a load that includes `games`,
 `play_by_play` or `shots`.
+
+`on_court.py` (feature 29a) adds `game_player_on_court`: each player's continuous stretches
+on the floor per game, rebuilt from the box-score starters and the `IN`/`OUT` events, with
+elapsed-second start and end. `main.py` runs it after a load that includes `games`,
+`game_player_stats` or `play_by_play`.
 
 The dry run checks parsing, types, required fields, and duplicate keys without
 a database. A real load needs `psycopg2` and the credentials in

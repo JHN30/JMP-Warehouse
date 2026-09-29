@@ -256,6 +256,40 @@ The feed's zone codes are letters; what the data shows for each, over E2007-E202
 The codes are the feed's own; no names are assumed. The table has 87,037 rows over 5,049
 games.
 
+### `game_player_on_court`
+
+Built by `python postgres_etl/on_court.py -sc <seasons>` from `games`, `game_player_stats` and
+`play_by_play` (E2007 onward). Key `game_code`, `side`, `person_key`, `interval_ordinal`
+(the player's stretches counted from 1 in time order); columns `club_code`, `start_seconds` and
+`end_seconds` (elapsed game seconds). It is the base of the lineup features 29b-29d.
+
+A side starts with the players whose `started` flag is set. An `IN` adds a player, an `OUT`
+removes one, in event order (period, overtime, `event_ordinal`); players carry across periods;
+everyone still on the floor closes at the game end. Older seasons log period-start
+substitutions at times outside the period (`11:00`, or `06:00` in overtime); these are placed
+at the period start. An `IN` for a player already on court, an `OUT` for one who is not, and
+events without a person code are ignored. A player's `OUT` and `IN` at the same second join
+into one stretch; zero-length stretches are dropped. The play-by-play `person_code` equals the
+box score's `person_key`.
+
+The game end is 2,400 seconds plus 300 per overtime, counting overtimes from events that carry
+a clock. Every game's play-by-play ends with `EG`/`EP` events with no clock and a minute one
+past the last overtime; counting them added a phantom overtime to the 236 overtime games.
+Feature 29a fixed this in `game_team_score_flow` too (it had added 300 seconds to the final
+leader's time leading in those games) and rebuilt the season slices.
+
+Validation against the box score, over E2007-E2026 (5,049 games, 322,528 stretches, 119,331
+player-games): the summed on-court seconds differ from `seconds_played` by 7.2 seconds on
+average; 85.0% of player-games are within 5 seconds, 96.9% within 60 and 99.6% within 120.
+E2007-E2010 box scores have minute precision (mean difference 35-38 seconds, 79-84% within 60
+seconds); E2011-E2025 have a mean difference of 0.3-4.3 seconds and 93-99.5% of player-games
+within 5. 246 games (458 player-games) have a player more than 120 seconds off, 400 of those
+player-games in E2007-E2010; `--quality-only` reports the player-game count per season as a
+`WARN` and fails only when the stored rows differ from a fresh derivation. Hand check: E2025
+game 31, player 004866 (started; out at 03:04 of the first quarter, back at 00:31 of it, and
+out at 08:01 of the fourth) has stretches 0-416, 569-1462 and 1584-1919, 1,644 seconds in total,
+the box score's `seconds_played`.
+
 ### `team_pbp_stats` and `team_shot_zone_stats` (local only)
 
 Built as `gold.team_pbp_stats` and `gold.team_shot_zone_stats` by `python gold_etl/main.py

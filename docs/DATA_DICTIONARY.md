@@ -373,6 +373,39 @@ E2025's most-used five-man lineup (club HTA) has 28 games, 16,079 seconds, 483
 possessions for and 596 points in the table, the same as the sums of its `game_team_lineup_stints`
 rows.
 
+### `player_rapm` (local only)
+
+Built as `gold.player_rapm` by `python gold_etl/main.py -sc <seasons> -tb player_rapm` from
+`game_team_lineup_stints` (both teams' lineups per stint), `game_player_stats` (names) and the
+played games of `silver.games`, for E2007 onward. It needs numpy in the Python environment
+(imported only by this table; a missing numpy stops the build with a message). Key
+`competition_code`, `season_code`, `scope` (always `all`: every game of the season) and
+`person_key`; a traded player has one row. Not published to Neon (30g).
+
+Method: every stint row with possessions is one observation, the team's points per 100
+possessions, weighted by its counted possessions. The prediction is an intercept plus the
+`offense` coefficients of the five players on offense minus the `defense` coefficients of the
+five on defense, so a positive `defense` means fewer points allowed. Coefficients are ridge
+penalized (the intercept is not); the penalty is chosen per season by 5-fold cross-validation over
+the grid 250, 500, 1000, 2000, 4000, 8000, 16000, 32000 and 64000, with the folds made of whole
+games, taking the strongest penalty whose error is within 0.01% of the no-player error of the
+best. Small samples are not filtered: the penalty shrinks them toward zero and their possessions
+are stored.
+
+Columns: `player_name`; `seconds` (on-court seconds in stored stints); `possessions_offense` and
+`possessions_defense` (counted possessions on court on each side); `penalty` (the chosen penalty,
+the same on every row of a season); `offense`, `defense`, `rapm` (= offense + defense), in points
+per 100 possessions relative to an average player, rounded to four decimals.
+
+Observed over E2007-E2026 (6,164 rows; the full build takes about 25 seconds): stint outcomes
+are noisy, so the best penalty improves the held-out error over a model without players by only
+a few tenths of a percent (0.40% in E2015, 0.10% in E2025); the chosen penalty is 1,000-8,000
+for the 19 seasons before E2026 and 64,000 for E2026 (10 games, where cross-validation shows no
+improvement over the no-player model). RAPM correlates 0.87 with the on-court point margin per
+100 possessions across the 3,052 player-seasons with more than 500 on-court possessions.
+`--quality-only` checks the stored rows against a fresh derivation (a rerun
+reproduces the rows exactly).
+
 ### `team_pbp_stats` and `team_shot_zone_stats` (local only)
 
 Built as `gold.team_pbp_stats` and `gold.team_shot_zone_stats` by `python gold_etl/main.py

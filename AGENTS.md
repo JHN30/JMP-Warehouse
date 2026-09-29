@@ -370,6 +370,9 @@ committed; copy the `.example`). Publishing reads the direct non-pooled
 - Build local 2, 3 and 5-man lineup ratings per club and scope (from `lineups.py`; local
   only): `python gold_etl/main.py -sc <seasons> -tb lineup_ratings`. `--quality-only` checks
   that the 2-man and 3-man rows each sum to ten times the 5-man rows.
+- Build local RAPM per player and season (ridge fit over `lineups.py` stints; needs numpy
+  in the Python environment; local only):
+  `python gold_etl/main.py -sc <seasons> -tb player_rapm`.
 - Traditional or misc table selections also rebuild their derived `PS` rows.
 - Gold read-only source and derived counts: `python gold_etl/main.py -sc <seasons> --dry-run`
 - Gold read-only equality checks: `python gold_etl/main.py -sc <seasons> --quality-only`

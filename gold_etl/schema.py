@@ -183,7 +183,7 @@ ROUND_MEASURES = (
 ROUND_NAMES = ("team_round_stats", "team_round_ratings", "team_round_splits",
                "player_round_stats", "player_round_ratings", "player_round_win_shares",
                "app_standings_stats", "team_pbp_stats", "team_shot_zone_stats",
-               "player_on_off", "lineup_ratings")
+               "player_on_off", "lineup_ratings", "player_rapm")
 PBP_NAMES = ("team_pbp_stats", "team_shot_zone_stats")
 WINDOWS = (5, 10)
 SPLIT_GROUPS = ("home", "away", *(f"last{size}" for size in WINDOWS))
@@ -393,6 +393,21 @@ LINEUP_RATINGS_TABLE = Table(
       + tuple(Field(name, "NUMERIC", "derived") for name in ("ortg", "drtg", "net_rating")),
 )
 
+# RAPM (feature 29d): one row per player and season from a ridge fit over the lineup stints.
+PLAYER_RAPM_TABLE = Table(
+    "player_rapm",
+    ("competition_code", "season_code", "scope", "person_key"),
+    SCOPE + (
+        Field("scope", "TEXT NOT NULL", "derived"),
+        Field("person_key", "TEXT NOT NULL", "game_team_lineup_stints.players"),
+        Field("player_name", "TEXT", "game_player_stats.person_name"),
+        Field("seconds", "INTEGER", "game_team_lineup_stints"),
+        Field("possessions_offense", "INTEGER", "game_team_lineup_stints"),
+        Field("possessions_defense", "INTEGER", "game_team_lineup_stints"),
+    ) + tuple(Field(name, "NUMERIC", "derived")
+              for name in ("penalty", "offense", "defense", "rapm")),
+)
+
 DERIVED_NAMES = ("app_standings", *AGGREGATE_NAMES,
                  *RECORDS_TABLES, "app_postseason_series", *IDENTITY_TABLES)
 GOLD_TABLES = {**TABLES, "app_standings": STANDINGS_TABLE,
@@ -409,7 +424,8 @@ GOLD_TABLES = {**TABLES, "app_standings": STANDINGS_TABLE,
                "app_standings_stats": STANDINGS_STATS_TABLE,
                "team_pbp_stats": TEAM_PBP_TABLE, "team_shot_zone_stats": TEAM_ZONE_TABLE,
                "player_on_off": PLAYER_ON_OFF_TABLE,
-               "lineup_ratings": LINEUP_RATINGS_TABLE}
+               "lineup_ratings": LINEUP_RATINGS_TABLE,
+               "player_rapm": PLAYER_RAPM_TABLE}
 
 
 def columns(name):

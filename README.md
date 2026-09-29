@@ -72,7 +72,7 @@ data or publish to Neon. Use `-cp` for the competition and `-tb` for selected
 table names.
 
 Publish preview: `python neon_publish/main.py -sc E2025 --dry-run`.
-See the [publisher guide](neon_publish/README.md) for all 26 targets, the
+See the [publisher guide](neon_publish/README.md) for all 38 targets, the
 one-time migration, the 90% shrink guard, and live cutover approval.
 
 ## Running everything
@@ -127,8 +127,9 @@ python neon_publish/main.py -sc E2026
 python tables_to_csv/main.py
 ```
 
-Only the 26 tables listed by `--list-tables` reach Neon. The play-by-play,
-lineup, on/off, RAPM and round-stat tables stay local until build-plan item 30g.
+The 38 tables listed by `--list-tables` reach Neon (the 12 added in 30g need the
+reviewed one-time migration from `--print-migration` first, applied only with the owner's
+approval). The Silver-derived tables (possessions, stints and so on) stay local.
 For the current season, `python pipeline.py --dry-run-publish` runs fetch, load,
 Gold and checks and previews the publish; plain `python pipeline.py` also
 publishes to Neon.

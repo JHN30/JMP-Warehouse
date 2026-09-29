@@ -340,43 +340,45 @@ committed; copy the `.example`). Publishing reads the direct non-pooled
   Records use all loaded EuroLeague seasons regardless of `-sc`; series uses the selected seasons.
 - Build local player and club identities: `python gold_etl/main.py -sc all -tb app_players app_club_identities`.
   Identities use every loaded Silver season for the selected competition, regardless of `-sc`.
-- Build local cumulative team-round stats (local only, not published):
+- Build local cumulative team-round stats (published to Neon by 30g):
   `python gold_etl/main.py -sc <seasons> -tb team_round_stats`. `--quality-only` also
   prints `WARN` lines where final-round rows differ from the API team feeds.
-- Build local team-round ratings (relative, SRS/SOS/SOV, adjusted; local only):
+- Build local team-round ratings (relative, SRS/SOS/SOV, adjusted; published to Neon by 30g):
   `python gold_etl/main.py -sc <seasons> -tb team_round_ratings`.
-- Build local team-round splits (home/away, last 5 and 10 games; local only):
+- Build local team-round splits (home/away, last 5 and 10 games; published to Neon by 30g):
   `python gold_etl/main.py -sc <seasons> -tb team_round_splits`.
-- Build local player round stats (cumulative rates, per-100, Game Score, PIE; local only):
+- Build local player round stats (cumulative rates, per-100, Game Score, PIE; published to Neon by 30g):
   `python gold_etl/main.py -sc <seasons> -tb player_round_stats`. `--quality-only` prints
   `WARN` lines where final-round rows differ from the API player feeds.
-- Build local player PER (Hollinger PER per round, league mean 15; local only):
+- Build local player PER (Hollinger PER per round, league mean 15; published to Neon by 30g):
   `python gold_etl/main.py -sc <seasons> -tb player_round_ratings`. `--quality-only` checks
   the league-mean invariant.
-- Build local player Win Shares (offensive, defensive, total and per 48; local only):
+- Build local player Win Shares (offensive, defensive, total and per 48; published to Neon by 30g):
   `python gold_etl/main.py -sc <seasons> -tb player_round_win_shares`. `--quality-only`
   prints `WARN` lines where a scope round's total Win Shares is far from its games.
 - Build local page-shaped team advanced stats (`app_standings_stats`, a per-round projection of
-  the three team round tables; local only until 30g):
+  the three team round tables; published to Neon by 30g):
   `python gold_etl/main.py -sc <seasons> -tb app_standings_stats`. `--quality-only` ties each
   row to the stored team round tables.
 - Build local play-by-play aggregates per club and scope (from the Silver tables of
-  `possessions.py`, `score_flow.py`, `shot_splits.py`, `shot_zones.py`; local only):
+  `possessions.py`, `score_flow.py`, `shot_splits.py`, `shot_zones.py`; published to Neon by 30g):
   `python gold_etl/main.py -sc <seasons> -tb team_pbp_stats team_shot_zone_stats`.
   `--quality-only` checks that the `all` scope equals the sum of the phase scopes.
-- Build local player on/off ratings per club and scope (from `lineups.py`; local only):
+- Build local player on/off ratings per club and scope (from `lineups.py`; published to Neon by 30g):
   `python gold_etl/main.py -sc <seasons> -tb player_on_off`. `--quality-only` checks that
   on plus off is one team total per club and scope.
 - Build local 2, 3 and 5-man lineup ratings per club and scope (from `lineups.py`; local
   only): `python gold_etl/main.py -sc <seasons> -tb lineup_ratings`. `--quality-only` checks
   that the 2-man and 3-man rows each sum to ten times the 5-man rows.
 - Build local RAPM per player and season (ridge fit over `lineups.py` stints; needs numpy
-  in the Python environment; local only):
+  in the Python environment; published to Neon by 30g):
   `python gold_etl/main.py -sc <seasons> -tb player_rapm`.
 - Traditional or misc table selections also rebuild their derived `PS` rows.
 - Gold read-only source and derived counts: `python gold_etl/main.py -sc <seasons> --dry-run`
 - Gold read-only equality checks: `python gold_etl/main.py -sc <seasons> --quality-only`
-- List the 26 fixed Gold-to-Neon mappings: `python neon_publish/main.py --list-tables`
+- List the 38 fixed Gold-to-Neon mappings: `python neon_publish/main.py --list-tables`;
+  print the reviewed DDL for the 12 tables added in 30g (no database):
+  `python neon_publish/main.py --print-migration`. Applying it on Neon needs owner approval.
 - Read-only Neon preflight and count preview: `python neon_publish/main.py -sc E2025 --dry-run`
 - Publish one EuroLeague season and competition-wide Gold tables: `python neon_publish/main.py -sc E2026`
   after separate owner approval. The one-time

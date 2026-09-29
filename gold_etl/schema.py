@@ -173,8 +173,8 @@ IDENTITY_TABLES = {
 }
 AGGREGATE_NAMES = ("app_team_season_stats", "app_coverage_seasons",
                    "app_coverage_games")
-# Local-only Gold tables (not app tables): excluded from DERIVED_NAMES, so the Neon
-# allowlist in neon_publish/contract.py stays unchanged until they are published.
+# The Gold tables of features 26-29: excluded from DERIVED_NAMES, added to the Neon
+# allowlist in neon_publish/contract.py as NEW_TABLES (feature 30g).
 ROUND_MEASURES = (
     "field_goals_made", "field_goals_attempted", "three_pointers_made",
     "free_throws_made", "free_throws_attempted", "offensive_rebounds",
@@ -297,7 +297,7 @@ PLAYER_WIN_SHARES_TABLE = Table(
 )
 
 # app_standings_stats projects the three team round tables (no new formulas); its final
-# Neon name is app_standings_stats, but it stays outside the allowlist until 30g.
+# Neon name is app_standings_stats.
 STANDINGS_STATS_SOURCES = (
     ("team_round_stats", TEAM_ROUND_TABLE, (
         "club_name", "games_played", "wins", "losses", "points_for", "points_against",

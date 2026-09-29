@@ -10,20 +10,19 @@ from unittest import mock
 
 from gold_etl.schema import DERIVED_NAMES, GOLD_TABLES, ROUND_NAMES, SOURCE_NAMES
 from neon_publish import publish
-from neon_publish.contract import (APP_TABLES, GLOBAL_TABLES, inspect_target,
-                                   predicate, scope, target_name)
+from neon_publish.contract import (APP_TABLES, GLOBAL_TABLES, NEW_TABLES, inspect_target,
+                                   migration_sql, predicate, scope, target_name)
 from neon_publish.main import main as publish_main
 from pipeline import StageFacts, build_parser, build_summary, read_state, redactor, refresh
 
 
 class ContractTests(unittest.TestCase):
     def test_every_gold_table_has_a_fixed_target_and_scope(self):
-        self.assertEqual(APP_TABLES, SOURCE_NAMES + DERIVED_NAMES)
-        self.assertEqual(len(APP_TABLES), 26)
-        self.assertEqual(len({target_name(name) for name in APP_TABLES}), 26)
+        self.assertEqual(APP_TABLES, SOURCE_NAMES + DERIVED_NAMES + ROUND_NAMES)
+        self.assertEqual(len(APP_TABLES), 38)
+        self.assertEqual(len({target_name(name) for name in APP_TABLES}), 38)
         self.assertEqual(len(GLOBAL_TABLES), 5)
-        # Local-only round tables are Gold tables but never published.
-        self.assertEqual(set(APP_TABLES), set(GOLD_TABLES) - set(ROUND_NAMES))
+        self.assertEqual(set(APP_TABLES), set(GOLD_TABLES))
         for name in APP_TABLES:
             self.assertEqual(target_name(name), name if name.startswith("app_")
                              else "app_" + name)
@@ -65,6 +64,126 @@ class ContractTests(unittest.TestCase):
         self.assertTrue(any("missing column" in issue for issue in issues))
         self.assertTrue(any("extra required column" in issue for issue in issues))
         self.assertTrue(any("primary key differs" in issue for issue in issues))
+
+
+class NewTableTests(unittest.TestCase):
+    """The twelve tables added in 30g: targets, migration, preflight and publishing."""
+
+    TYPES = {"TEXT": "text", "INTEGER": "integer", "NUMERIC": "numeric", "BOOLEAN": "boolean",
+             "JSONB": "jsonb", "TIMESTAMP": "timestamp without time zone",
+             "TIMESTAMPTZ": "timestamp with time zone"}
+
+    def test_targets_and_scopes(self):
+        self.assertEqual(len(NEW_TABLES), 12)
+        self.assertEqual(target_name("team_round_stats"), "app_team_round_stats")
+        self.assertEqual(target_name("app_standings_stats"), "app_standings_stats")
+        self.assertEqual(target_name("player_rapm"), "app_player_rapm")
+        for name in NEW_TABLES:
+            self.assertEqual(scope(name, "E", "E2026"), ("E", "E2026"))
+            self.assertEqual(predicate(name), "competition_code = %s AND season_code = %s")
+            self.assertEqual(publish._relation(name, "public").strings,
+                             ("public", target_name(name)))
+            self.assertEqual(publish._relation(name, "gold").strings, ("gold", name))
+
+    def test_the_migration_file_equals_the_generated_ddl(self):
+        path = Path(__file__).resolve().parents[1] / "migrations" / "30g_new_tables.sql"
+        self.assertEqual(path.read_text(encoding="utf-8"), migration_sql())
+
+    def test_the_ddl_creates_every_new_table_with_its_columns_and_key(self):
+        ddl = migration_sql()
+        self.assertTrue(ddl.startswith("-- Neon migration for feature 30g"))
+        self.assertTrue(ddl.rstrip().endswith("COMMIT;"))
+        self.assertEqual(ddl.count("CREATE TABLE"), 12)
+        for name in NEW_TABLES:
+            spec = GOLD_TABLES[name]
+            self.assertIn(f"CREATE TABLE public.{target_name(name)} (", ddl)
+            self.assertIn(f"PRIMARY KEY ({', '.join(spec.key)})", ddl)
+            for field in spec.fields:
+                self.assertIn(f'"{field.name}" {field.kind}', ddl)
+        self.assertNotIn("DROP", ddl)
+        self.assertNotIn("ALTER", ddl)
+
+    def test_preflight_reports_missing_and_accepts_the_generated_shape(self):
+        for name in NEW_TABLES:
+            missing = mock.MagicMock()
+            missing.fetchone.return_value = (None,)
+            self.assertEqual(inspect_target(missing, name),
+                             [f"public.{target_name(name)}: missing table"])
+            spec = GOLD_TABLES[name]
+            columns = [(field.name, self.TYPES[field.kind.split()[0]],
+                        "NO" if "NOT NULL" in field.kind or field.name in spec.key else "YES",
+                        None) for field in spec.fields]
+            present = mock.MagicMock()
+            present.fetchone.return_value = (target_name(name),)
+            present.fetchall.side_effect = [
+                columns, [("p", f"PRIMARY KEY ({', '.join(spec.key)})")]]
+            self.assertEqual(inspect_target(present, name), [], name)
+
+    def test_a_wrong_type_in_a_new_table_is_reported(self):
+        spec = GOLD_TABLES["player_rapm"]
+        columns = [(field.name, "text" if field.name == "rapm"
+                    else self.TYPES[field.kind.split()[0]],
+                    "NO" if "NOT NULL" in field.kind else "YES", None)
+                   for field in spec.fields]
+        cursor = mock.MagicMock()
+        cursor.fetchone.return_value = ("app_player_rapm",)
+        cursor.fetchall.side_effect = [columns, [("p", f"PRIMARY KEY ({', '.join(spec.key)})")]]
+        issues = inspect_target(cursor, "player_rapm")
+        self.assertEqual(issues, ["public.app_player_rapm.rapm: text, expected numeric"])
+
+    def test_print_migration_needs_no_connection(self):
+        with (mock.patch("neon_publish.main.connect") as local,
+              mock.patch("neon_publish.main.neon_connect") as remote,
+              mock.patch("sys.stdout", new_callable=io.StringIO) as output):
+            self.assertEqual(publish_main(["--print-migration"]), 0)
+        self.assertEqual(output.getvalue(), migration_sql())
+        local.assert_not_called()
+        remote.assert_not_called()
+
+    def test_quality_runs_for_the_new_tables_before_a_live_publish(self):
+        local = mock.MagicMock()
+        local.cursor.return_value.__enter__.return_value.fetchone.return_value = (1,)
+        with (mock.patch("neon_publish.main.connect", return_value=local),
+              mock.patch("neon_publish.main.gold_main", return_value=1) as quality,
+              mock.patch("neon_publish.main.neon_connect") as remote,
+              mock.patch("sys.stderr", new_callable=io.StringIO)):
+            self.assertEqual(publish_main(["-sc", "E2026", "-tb", "player_rapm",
+                                           "lineup_ratings"]), 1)
+        self.assertEqual(quality.call_args.args[0],
+                         ["-sc", "E2026", "-tb", "player_rapm", "lineup_ratings",
+                          "--quality-only"])
+        remote.assert_not_called()
+
+    def test_a_publish_of_new_tables_replaces_their_season_slice(self):
+        names = ("app_standings_stats", "player_rapm")
+        before = {"app_standings_stats": None, "player_rapm": 10}
+        after = {"app_standings_stats": 1874, "player_rapm": 560}
+        neon = FakeNeon(before)
+        spools = {name: io.BytesIO(b"row\n") for name in names}
+
+        def replace(cursor, name, *_):
+            cursor.counts[name] = after[name]
+
+        with (mock.patch.object(publish, "preflight", return_value={}),
+              mock.patch.object(publish, "_remote_state", return_value=(before, {})),
+              mock.patch.object(publish, "_snapshot", return_value=(after, spools, {})),
+              mock.patch.object(publish, "_replace", side_effect=replace),
+              mock.patch.object(publish, "_count", side_effect=lambda cursor, name, *_:
+                                cursor.counts[name])):
+            result = publish.publish_season(None, neon, "euroleague", "E2026", names,
+                                            log=lambda _: None)
+        self.assertEqual(result, {"app_standings_stats": (None, 1874),
+                                  "player_rapm": (10, 560)})
+        self.assertEqual(neon.commits, 1)
+
+    def test_delete_and_copy_target_the_public_table_and_the_season(self):
+        cursor = mock.MagicMock()
+        cursor.connection = mock.MagicMock()
+        with mock.patch("neon_publish.publish.sql.Composed.as_string",
+                        return_value="COPY"):
+            publish._replace(cursor, "player_rapm", "E", "E2026", io.BytesIO(), None)
+        self.assertEqual(cursor.execute.call_args.args[1], ["E", "E2026"])
+        cursor.copy_expert.assert_called_once()
 
 
 class NullabilityTests(unittest.TestCase):
@@ -322,7 +441,7 @@ class CliTests(unittest.TestCase):
               mock.patch("neon_publish.main.neon_connect") as remote,
               mock.patch("sys.stdout", new_callable=io.StringIO) as output):
             self.assertEqual(publish_main(["--list-tables"]), 0)
-        self.assertEqual(len(output.getvalue().splitlines()), 26)
+        self.assertEqual(len(output.getvalue().splitlines()), 38)
         local.assert_not_called()
         remote.assert_not_called()
 

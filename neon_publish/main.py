@@ -8,7 +8,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from common.db import connect  # noqa: E402
 from gold_etl.main import main as gold_main  # noqa: E402
-from neon_publish.contract import APP_TABLES, GLOBAL_TABLES, target_name  # noqa: E402
+from neon_publish.contract import (APP_TABLES, GLOBAL_TABLES, migration_sql,  # noqa: E402
+                                    target_name)
 from neon_publish.publish import neon_connect, publish_season  # noqa: E402
 from pipeline import season_code_for  # noqa: E402
 
@@ -18,6 +19,8 @@ def build_parser():
     parser.add_argument("-sc", "--season-code", default="current")
     parser.add_argument("-tb", "--table", nargs="+", default=["all"])
     parser.add_argument("--list-tables", action="store_true")
+    parser.add_argument("--print-migration", action="store_true",
+                        help="Print the reviewed DDL for the tables added in 30g; no database.")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--allow-shrink", action="store_true")
     return parser
@@ -30,6 +33,9 @@ def main(argv=None):
         for name in APP_TABLES:
             print(f"gold.{name} -> public.{target_name(name)} "
                   f"({'competition' if name in GLOBAL_TABLES else 'season'})")
+        return 0
+    if args.print_migration:
+        print(migration_sql(), end="")
         return 0
     if args.table == ["all"]:
         names = APP_TABLES

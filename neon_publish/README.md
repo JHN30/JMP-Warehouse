@@ -2,12 +2,14 @@
 
 `python neon_publish/main.py` publishes one EuroLeague season from local
 `gold` to Neon's `public.app_*` tables. The 16 source tables use the target
-name `app_<source>`; the ten derived tables already begin with `app_`.
+name `app_<source>`; the ten derived tables already begin with `app_`; the twelve
+tables of features 26-29 added in 30g use `app_<name>` (`app_standings_stats` keeps its
+name), 38 targets in all.
 `--list-tables` prints every fixed mapping and scope without a database connection.
 
 The three record tables and `app_players` and `app_club_identities` replace all
 rows for competition `E` once per run. The other 21 tables replace only the
-selected season. All selected scopes commit in one Neon transaction. A failed
+selected season (the 12 tables added in 30g are season-scoped too). All selected scopes commit in one Neon transaction. A failed
 preflight, shrink guard, COPY, or post-copy count check rolls the transaction
 back. `play_by_play` and `shots` copy only games whose Gold rows differ, and
 remove games no longer present locally.
@@ -18,6 +20,14 @@ python gold_etl/main.py -sc E2025 --quality-only
 python neon_publish/main.py -sc E2025 --dry-run
 python neon_publish/main.py -sc E2025
 ```
+
+The twelve tables added in 30g need a one-time reviewed migration first:
+`python neon_publish/main.py --print-migration` prints it and
+[30g_new_tables.sql](migrations/30g_new_tables.sql) is the same text (a test keeps them
+equal). Apply it on the direct Neon connection only with the owner's approval and after
+the web app agrees the contract. Until then a live publish stops at the schema preflight
+("missing table") and rolls back, leaving Neon unchanged. Publish them for E2025 and E2026
+only; all seasons would be about 1.5 GB.
 
 Use `-tb games app_standings` to select registered tables. `-sc` accepts
 `current`, a four-digit year, or an `EYYYY` code; it never publishes multiple

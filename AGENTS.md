@@ -367,8 +367,8 @@ committed; copy the `.example`). Publishing reads the direct non-pooled
 - Build local player on/off ratings per club and scope (from `lineups.py`; published to Neon by 30g):
   `python gold_etl/main.py -sc <seasons> -tb player_on_off`. `--quality-only` checks that
   on plus off is one team total per club and scope.
-- Build local 2, 3 and 5-man lineup ratings per club and scope (from `lineups.py`; local
-  only): `python gold_etl/main.py -sc <seasons> -tb lineup_ratings`. `--quality-only` checks
+- Build local 2, 3 and 5-man lineup ratings per club and scope (from `lineups.py`; published to
+  Neon by 30g): `python gold_etl/main.py -sc <seasons> -tb lineup_ratings`. `--quality-only` checks
   that the 2-man and 3-man rows each sum to ten times the 5-man rows.
 - Build local RAPM per player and season (ridge fit over `lineups.py` stints; needs numpy
   in the Python environment; published to Neon by 30g):

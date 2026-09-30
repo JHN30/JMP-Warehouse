@@ -5,7 +5,7 @@ from collections import defaultdict
 from gold_etl.schema import TABLES, columns, count_sql, scope_predicate
 from gold_etl.postseason import TABLES as PS_TABLES, _dict_rows, read_rows as read_postseason_rows
 from gold_etl.standings import KEY as STANDINGS_KEY, read_rows as read_standings_rows
-from gold_etl.schema import STANDINGS_STATS_SOURCES, TEAM_PBP_ADDITIVE, ZONE_ADDITIVE
+from gold_etl.schema import STANDINGS_FEEDS, STANDINGS_STATS_SOURCES, TEAM_PBP_ADDITIVE, ZONE_ADDITIVE
 from gold_etl.schema import GOLD_TABLES, SEASON_DERIVED_NAMES, WINDOWS, IDENTITY_TABLES, RECORDS_TABLES
 from gold_etl.loader import read_aggregate_rows
 from gold_etl.records import read_rows as read_record_rows
@@ -90,6 +90,38 @@ def check_standings_scope(cursor, competition_code, season_code):
     if by_key(actual) != by_key(expected):
         return [f"gold.app_standings {season_code}: feed fields or lists differ from Silver"]
     return []
+
+
+def standings_feed_lag(rows, season_code):
+    """Warnings where the standings feeds of one round disagree on games played or won.
+
+    The API caches each feed on its own clock, so one can answer a game behind the
+    others. The most advanced value in the round is the current one; the feeds
+    below it are named with an example club.
+    """
+    prefixes = [prefix for _, prefix in STANDINGS_FEEDS]
+    lags = {}
+    for row in rows:
+        for measure in ("games_played", "games_won"):
+            values = {prefix: row.get(f"{prefix}_{measure}") for prefix in prefixes}
+            values = {prefix: value for prefix, value in values.items() if value is not None}
+            if not values:
+                continue
+            current = max(values.values())
+            for prefix, value in values.items():
+                if value < current:
+                    lags.setdefault((row["phase_code"], row["round_number"], measure, prefix),
+                                    []).append(f'{row["club_code"]}: {value} vs {current}')
+    return [f"gold.app_standings {season_code} {phase} round {round_number}: {prefix}_{measure} "
+            f"is behind the other feeds for {len(examples)} club(s) (e.g. {examples[0]}); "
+            "the API answered a stale feed, refresh again later"
+            for (phase, round_number, measure, prefix), examples in sorted(lags.items())]
+
+
+def check_standings_feeds(cursor, competition_code, season_code):
+    """Warnings for standings feeds that lag each other, derived from Silver."""
+    return standings_feed_lag(read_standings_rows(cursor, competition_code, season_code),
+                              season_code)
 
 
 def check_aggregate_scope(cursor, name, competition_code, season_code):

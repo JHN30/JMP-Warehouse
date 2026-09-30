@@ -19,7 +19,8 @@ from gold_etl.series import read_rows as read_series_rows  # noqa: E402
 from gold_etl.postseason import TABLES as PS_TABLES, read_rows as read_postseason_rows  # noqa: E402
 from gold_etl.standings import read_rows as read_standings_rows  # noqa: E402
 from gold_etl.quality import (check_scope, check_postseason_scope,
-                              check_standings_scope, check_aggregate_scope,
+                              check_standings_scope, check_standings_feeds,
+                              check_aggregate_scope,
                               check_records_scope, check_round_api_scope,
                               check_round_player_api_scope, check_round_rating_invariants,
                               check_round_player_rating_invariants,
@@ -124,6 +125,8 @@ def main(argv=None):
                     elif args.quality_only:
                         with connection.cursor() as cursor:
                             issues = check_standings_scope(cursor, *scope)
+                            for warning in check_standings_feeds(cursor, *scope):
+                                print("WARN " + warning, flush=True)
                         for issue in issues:
                             print(issue, file=sys.stderr, flush=True)
                         passed &= not issues

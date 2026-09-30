@@ -379,6 +379,7 @@ class EuroScrapas:
                     ),
                     resource=f"v3/standings/{phase_code}_{round_number}_{standing_type}",
                     force=round_force,
+                    keep_if_worse=True,
                 )
 
     def extract_v3_season_stats(self, season_code, played_games):
@@ -503,13 +504,35 @@ class EuroScrapas:
             return f"API answered {new_clubs} clubs{games}"
         return None
 
+    @staticmethod
+    def worse_standings_answer(stored, answer):
+        """Why a round-standings ``answer`` is worse than the ``stored`` version, or None.
+
+        A round's standings are cumulative: clubs and games played only grow. Each
+        of the five feeds is cached upstream on its own clock and can answer a
+        game behind, also after a newer answer was already stored.
+        """
+        def size(payload):
+            rows = (payload or {}).get("teams") or []
+            clubs = {(row.get("club") or {}).get("code") for row in rows}
+            clubs.discard(None)
+            return len(clubs), sum(row.get("gamesPlayed") or 0 for row in rows)
+
+        old_clubs, old_games = size(stored)
+        new_clubs, new_games = size(answer)
+        if new_clubs < old_clubs or new_games < old_games:
+            return (f"API answered {new_clubs} clubs / {new_games:g} games, "
+                    f"stored version has {old_clubs} / {old_games:g}")
+        return None
+
     def fetch_to_cache(self, source, url, resource, params=None, force=False,
                        keep_if_worse=False):
         """Return the latest bronze payload when permitted, otherwise fetch and store it.
 
-        With ``keep_if_worse`` (v3 season statistics), an answer smaller than the
-        stored version is only logged in the manifest and the stored version is
-        kept, because the API sometimes answers stale lists on game days.
+        With ``keep_if_worse`` (v3 season statistics and round standings), an answer
+        smaller than the stored version is only logged in the manifest and the
+        stored version is kept, because the API sometimes answers stale lists on
+        game days.
         """
         if not force and self.store.exists(resource):
             print(
@@ -537,7 +560,10 @@ class EuroScrapas:
 
         if keep_if_worse and self.store.exists(resource):
             stored = self.store.read_json(resource)
-            problem = self.worse_stats_answer(stored, payload, resource)
+            if resource.startswith("v3/standings/"):
+                problem = self.worse_standings_answer(stored, payload)
+            else:
+                problem = self.worse_stats_answer(stored, payload, resource)
             if problem:
                 self.store.log({
                     "resource": resource, "url": final_url, "params": params,

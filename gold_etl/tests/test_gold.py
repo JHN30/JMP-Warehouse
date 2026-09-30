@@ -373,12 +373,20 @@ class CliTests(unittest.TestCase):
         self.assertIn("gold.app_standings E2025: 2 derived rows", out)
         self.assertFalse(any(q.startswith(("CREATE", "DELETE", "INSERT"))
                              for q, _ in db.statements))
-        with patch.object(main, "check_standings_scope", return_value=["bad standings"]):
-            code, _, err, db = self.run_cli(["-sc", "2025", "-tb", "app_standings",
-                                             "--quality-only"])
+        with patch.object(main, "check_standings_scope", return_value=["bad standings"]), \
+                patch.object(main, "check_standings_feeds", return_value=["streaks lags"]):
+            code, out, err, db = self.run_cli(["-sc", "2025", "-tb", "app_standings",
+                                               "--quality-only"])
         self.assertEqual(code, 1)
         self.assertTrue(db.readonly)
         self.assertIn("bad standings", err)
+        self.assertIn("WARN streaks lags", out)
+        with patch.object(main, "check_standings_scope", return_value=[]), \
+                patch.object(main, "check_standings_feeds", return_value=["streaks lags"]):
+            code, out, _, _ = self.run_cli(["-sc", "2025", "-tb", "app_standings",
+                                            "--quality-only"])
+        self.assertEqual(code, 0)  # a lagging feed warns; it does not block the publish
+        self.assertIn("WARN streaks lags", out)
         with patch.object(main, "replace_standings_scope", return_value=2) as replace:
             code, out, _, db = self.run_cli(["-sc", "2025", "-tb", "app_standings"])
         self.assertEqual(code, 0)

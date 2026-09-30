@@ -477,6 +477,31 @@ class EuroScrapasTests(unittest.TestCase):
             self.assertEqual(scrapper.kept_resources, [f"E2026/{resource}"])
             self.assertIn("API answered 0 clubs, stored version has 2", out.getvalue())
 
+    @staticmethod
+    def standings(*games):
+        return {"teams": [{"club": {"code": code}, "gamesPlayed": played}
+                          for code, played in games]}
+
+    def test_a_standings_answer_a_game_behind_keeps_the_stored_version(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            answers = [self.standings(("MAD", 2), ("BAR", 2)),
+                       self.standings(("MAD", 1), ("BAR", 2)),
+                       self.standings(("MAD", 2), ("BAR", 2)),
+                       self.standings(("MAD", 3), ("BAR", 3))]
+            scrapper = self.stats_scrapper(Path(temporary_directory), answers)
+            resource = "v3/standings/RS_2_basicstandings"
+            self.fetch_stats(scrapper, resource)
+            with patch("sys.stdout", io.StringIO()) as out:
+                self.fetch_stats(scrapper, resource)
+            self.assertEqual(scrapper.store.read_json(resource)["teams"][0]["gamesPlayed"], 2)
+            self.assertEqual(scrapper.kept_resources, [f"E2026/{resource}"])
+            self.assertIn("API answered 2 clubs / 3 games, stored version has 2 / 4",
+                          out.getvalue())
+            self.fetch_stats(scrapper, resource)  # equal: stored as usual
+            self.fetch_stats(scrapper, resource)  # newer: replaces
+            self.assertEqual(scrapper.store.read_json(resource)["teams"][0]["gamesPlayed"], 3)
+            self.assertEqual(len(scrapper.kept_resources), 1)
+
     def test_an_empty_first_stats_answer_is_stored(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             scrapper = self.stats_scrapper(Path(temporary_directory), [{"teams": []}])

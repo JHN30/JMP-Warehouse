@@ -471,7 +471,10 @@ removed. A player stats row is one entry in a category, phase, and mode feed,
 not a unique person for the season. `accumulated` and `perGame` feeds may have
 different populations. The API can return stale or partial feeds; the downloader
 keeps the stronger stored response and the load quality report flags missing or
-partial phase/mode feeds. Live `player_code` is the upstream ID while
+partial phase/mode feeds. The same holds for round standings: an answer with fewer
+clubs or games played than the stored one is kept out, and Gold `--quality-only`
+warns when the five standings feeds of a round disagree on games played or won
+(the API caches each feed on its own clock). Live `player_code` is the upstream ID while
 `person_code` is the matched person key; join on `person_code`.
 
 ## Local Gold source tables

@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 
 from gold_etl.schema import (STANDINGS_FEEDS, STANDINGS_TABLE, columns,
                              create_table_sql, feed_fields)
+from gold_etl.quality import standings_feed_lag
 from gold_etl.standings import derive_rows, iso_milliseconds
 
 
@@ -90,6 +91,30 @@ class StandingsTests(unittest.TestCase):
         self.assertEqual(iso_milliseconds("2025-09-01T02:30:00+02:00"),
                          "2025-09-01T00:30:00.000Z")
         self.assertIsNone(iso_milliseconds(None))
+
+    def test_lagging_feeds_of_a_round_are_named_against_the_most_advanced(self):
+        rows = derive_rows({
+            "standings_basic": [item("ULK", games_played=2, games_won=2),
+                                item("DUB", games_played=2, games_won=2)],
+            "standings_streaks": [item("ULK", games_played=1, games_won=1),
+                                  item("DUB", games_played=2, games_won=2)],
+            "standings_margins": [item("ULK", games_played=1, games_won=1)],
+        }, [])
+        warnings = standings_feed_lag(rows, "E2025")
+        self.assertEqual(len(warnings), 4)
+        self.assertIn("RS round 3: margins_games_played is behind the other feeds "
+                      "for 1 club(s) (e.g. ULK: 1 vs 2)", warnings[0])
+        self.assertIn("streaks_games_won", warnings[3])
+        self.assertFalse(any("basic_" in warning for warning in warnings))
+
+    def test_consistent_or_absent_feeds_give_no_lag_warning(self):
+        rows = derive_rows({
+            "standings_basic": [item("ULK", games_played=2, games_won=2)],
+            "standings_calendar": [item("ULK", games_played=2, games_won=2)],
+        }, [])
+        self.assertEqual(standings_feed_lag(rows, "E2025"), [])
+        self.assertEqual(standings_feed_lag(derive_rows({"standings_basic": [item()]}, []),
+                                            "E2025"), [])
 
 
 if __name__ == "__main__":

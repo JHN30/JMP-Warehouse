@@ -177,16 +177,21 @@ pre-season), so for the current season they are re-checked at least every 20
 hours even when no game is hot. The last check is recorded in
 `refresh_state.json`.
 
-On game days the v3 statistics endpoints sometimes answer an older, shorter list
-or nothing. When a season-statistics feed that is already stored is fetched
-again, a worse answer is not stored and the stored version stays in use. For a
+On game days the v3 statistics and standings endpoints answer an older, shorter
+list or nothing for roughly half of all requests (several upstream instances with
+different freshness), and a CDN in front keeps whichever answer came first for 2
+hours per URL. So these requests carry an unused `_=<timestamp>` parameter, which
+forces a cache miss and is not written to the manifest. When a feed that is
+already stored gets a worse answer, it is asked again up to `STALE_RETRIES` (8)
+times (`[stale]` lines) and the first complete answer is stored. Only if every
+attempt is worse is it not stored and the stored version stays in use. For a
 totals (`accumulated`) feed, worse means fewer clubs or fewer total games
 played; for a `perGame` feed, an empty answer (per-game feeds list only clubs
 with more than half of the phase's games, so they may shrink). The run prints,
 for example:
 
 ```text
-[kept]    v3/season_stats/teams_traditional_all_accumulated: API answered 0 clubs / 0 games, stored version has 20 / 20; kept the stored version, refresh again later
+[kept]    v3/season_stats/teams_traditional_all_accumulated: API answered 0 clubs / 0 games, stored version has 20 / 20 in all 9 attempt(s); kept the stored version, refresh again later
 ```
 
 The summary line counts them ("Stats feeds kept from an earlier fetch"), the

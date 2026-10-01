@@ -3,7 +3,7 @@ import hashlib
 import json
 from pathlib import Path
 import sys
-from time import monotonic
+from time import monotonic, time_ns
 
 import requests
 
@@ -25,6 +25,9 @@ class EuroScrapas:
     V2_PEOPLE_PAGE_SIZE = 1000
     # Just under a day, so a nightly run always re-checks season-level data.
     SEASON_LEVEL_REFRESH_HOURS = 20
+    # Extra asks when a stored statistics or standings feed gets a worse answer.
+    # About half of the answers to a fresh request are empty or a game behind.
+    STALE_RETRIES = 8
 
     # name: (entity, statistic type, sort statistic). The team endpoints reject
     # the player sort statistics (400) and have no scoring or misc feed (404).
@@ -84,6 +87,7 @@ class EuroScrapas:
         self.hot = self.empty_hot_scope()
         self.changed_resources = []
         self.kept_resources = []
+        self.stale_retries = self.STALE_RETRIES
         self.season_started_at = monotonic()
         self.run_started_at = self.season_started_at
         self.client = RateLimitedJsonClient(
@@ -394,6 +398,15 @@ class EuroScrapas:
             for phase_code in (self.get_phase_code(game) for game in played_games)
             if phase_code
         })
+        played_clubs = {
+            phase_code: {
+                ((game.get(side) or {}).get("club") or {}).get("code")
+                for game in played_games
+                if phase_code == "all" or self.get_phase_code(game) == phase_code
+                for side in ("local", "road")
+            } - {None}
+            for phase_code in phase_codes
+        }
 
         for name, (entity, statistic_type, sort_statistic) in self.V3_STATISTIC_SPECS.items():
             for statistic_mode in self.V3_STATISTIC_MODES:
@@ -427,6 +440,7 @@ class EuroScrapas:
                         resource=f"v3/season_stats/{name}_{phase_code}_{statistic_mode}",
                         force=phase_force,
                         keep_if_worse=True,
+                        min_clubs=len(played_clubs[phase_code]),
                     )
 
     def extract_game_stats(self, season_code, played_games):
@@ -526,13 +540,16 @@ class EuroScrapas:
         return None
 
     def fetch_to_cache(self, source, url, resource, params=None, force=False,
-                       keep_if_worse=False):
+                       keep_if_worse=False, min_clubs=0):
         """Return the latest bronze payload when permitted, otherwise fetch and store it.
 
         With ``keep_if_worse`` (v3 season statistics and round standings), an answer
         smaller than the stored version is only logged in the manifest and the
         stored version is kept, because the API sometimes answers stale lists on
-        game days.
+        game days. ``min_clubs`` is how many clubs have played in the scope: an
+        answer listing fewer is stale too, which catches a per-game feed that is
+        an older snapshot but not smaller than the stored version. Without a
+        stored version, the last answer is stored anyway.
         """
         if not force and self.store.exists(resource):
             print(
@@ -541,43 +558,77 @@ class EuroScrapas:
             )
             return self.store.read_json(resource)
 
-        print(
-            f"[request] {source} -> {resource}"
-            f"  ---  {self.get_time_counter()}"
+        stored = (
+            self.store.read_json(resource)
+            if keep_if_worse and self.store.exists(resource) else None
         )
-        try:
-            payload, status_code, final_url, content = self.client.get_json(url, params=params)
-        except (requests.RequestException, ValueError) as error:
-            response = getattr(error, "response", None)
-            self.store.log({
-                "resource": resource, "url": url, "params": params,
-                "status_code": getattr(response, "status_code", None),
-                "fetched_at_utc": datetime.now(timezone.utc).isoformat(),
-                "error": str(error), "stored_as": None,
-            })
-            self.record_failure(source, url, params, error)
-            return None
-
-        if keep_if_worse and self.store.exists(resource):
-            stored = self.store.read_json(resource)
-            if resource.startswith("v3/standings/"):
-                problem = self.worse_standings_answer(stored, payload)
-            else:
-                problem = self.worse_stats_answer(stored, payload, resource)
-            if problem:
+        checked = stored is not None or bool(min_clubs)
+        attempts = 1 + (self.stale_retries if checked else 0)
+        for attempt in range(1, attempts + 1):
+            request_params = params
+            if keep_if_worse:
+                # The API sits behind a 2 hour CDN cache keyed on the full URL;
+                # an unused parameter makes every request a cache miss.
+                request_params = {**(params or {}), "_": time_ns()}
+            print(
+                f"[request] {source} -> {resource}"
+                f"{f' (retry {attempt - 1}/{self.stale_retries})' if attempt > 1 else ''}"
+                f"  ---  {self.get_time_counter()}"
+            )
+            try:
+                payload, status_code, final_url, content = self.client.get_json(
+                    url, params=request_params)
+            except (requests.RequestException, ValueError) as error:
+                response = getattr(error, "response", None)
                 self.store.log({
-                    "resource": resource, "url": final_url, "params": params,
-                    "status_code": status_code,
+                    "resource": resource, "url": url, "params": params,
+                    "status_code": getattr(response, "status_code", None),
                     "fetched_at_utc": datetime.now(timezone.utc).isoformat(),
-                    "sha256": hashlib.sha256(content).hexdigest(), "bytes": len(content),
-                    "stored_as": None, "rejected": problem,
+                    "error": str(error), "stored_as": None,
                 })
-                self.kept_resources.append(f"{self.active_season_code}/{resource}")
-                print(
-                    f"[kept]    {resource}: {problem}; kept the stored version, "
-                    f"refresh again later  ---  {self.get_time_counter()}"
-                )
-                return stored
+                self.record_failure(source, url, params, error)
+                return None
+
+            problem = None
+            if stored is not None:
+                if resource.startswith("v3/standings/"):
+                    problem = self.worse_standings_answer(stored, payload)
+                else:
+                    problem = self.worse_stats_answer(stored, payload, resource)
+            if not problem and min_clubs:
+                clubs, _ = self.stats_feed_size(payload, False)
+                if clubs < min_clubs:
+                    problem = f"API answered {clubs} clubs, {min_clubs} have played"
+            if not problem:
+                break
+            # Answers differ from request to request (several upstream
+            # instances with different freshness), so asking again usually
+            # reaches a complete one.
+            print(
+                f"[stale]   {resource}: {problem}"
+                f"  ---  {self.get_time_counter()}"
+            )
+
+        if problem and stored is None:
+            print(
+                f"[stale]   {resource}: no stored version to keep, storing the last answer"
+                f"  ---  {self.get_time_counter()}"
+            )
+        elif problem:
+            self.store.log({
+                "resource": resource, "url": final_url, "params": params,
+                "status_code": status_code,
+                "fetched_at_utc": datetime.now(timezone.utc).isoformat(),
+                "sha256": hashlib.sha256(content).hexdigest(), "bytes": len(content),
+                "stored_as": None, "rejected": problem,
+            })
+            self.kept_resources.append(f"{self.active_season_code}/{resource}")
+            print(
+                f"[kept]    {resource}: {problem} in all {attempts} attempt(s); "
+                f"kept the stored version, refresh again later"
+                f"  ---  {self.get_time_counter()}"
+            )
+            return stored
 
         changed = self.store.write(
             resource, content, url=final_url, params=params, status_code=status_code,

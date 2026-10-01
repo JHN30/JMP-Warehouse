@@ -188,7 +188,9 @@ PBP_NAMES = ("team_pbp_stats", "team_shot_zone_stats")
 WINDOWS = (5, 10)
 SPLIT_GROUPS = ("home", "away", *(f"last{size}" for size in WINDOWS))
 SPLIT_MEASURES = ("mov", "offensive_rating", "defensive_rating", "net_rating", "pace")
-SEASON_DERIVED_NAMES = AGGREGATE_NAMES + ROUND_NAMES
+# Feature 30h: per-game advanced tables, published to Neon as app_game_*_advanced.
+GAME_ADVANCED_NAMES = ("game_player_advanced", "game_team_advanced")
+SEASON_DERIVED_NAMES = AGGREGATE_NAMES + ROUND_NAMES + GAME_ADVANCED_NAMES
 TEAM_ROUND_TABLE = Table(
     "team_round_stats",
     ("competition_code", "season_code", "scope", "round_number", "club_code"),
@@ -408,6 +410,39 @@ PLAYER_RAPM_TABLE = Table(
               for name in ("penalty", "offense", "defense", "rapm")),
 )
 
+GAME_PLAYER_MEASURES = (
+    "game_score", "usage_pct", "assist_pct", "orb_pct", "drb_pct", "trb_pct",
+    "steal_pct", "block_pct", "tov_pct", "efg_pct", "true_shooting_pct",
+    "game_uper", "game_aper", "game_per",
+)
+GAME_PLAYER_ADVANCED_TABLE = Table(
+    "game_player_advanced",
+    ("competition_code", "season_code", "game_code", "side", "person_key"),
+    SCOPE + (
+        Field("game_code", "INTEGER NOT NULL", "game_player_advanced.game_code"),
+        Field("side", "TEXT NOT NULL", "game_player_advanced.side"),
+        Field("person_key", "TEXT NOT NULL", "game_player_advanced.person_key"),
+        Field("club_code", "TEXT NOT NULL", "game_player_advanced.club_code"),
+        Field("seconds_played", "NUMERIC", "game_player_advanced.seconds_played"),
+    ) + tuple(Field(name, "NUMERIC", "derived" if name in ("game_uper", "game_aper", "game_per")
+                    else "game_player_advanced")
+              for name in GAME_PLAYER_MEASURES),
+)
+GAME_TEAM_MEASURES = (
+    "game_minutes", "own_possessions_estimate", "possessions", "pace", "offensive_rating",
+    "defensive_rating", "net_rating", "efg_pct", "opp_efg_pct", "tov_pct", "opp_tov_pct",
+    "orb_pct", "drb_pct", "ft_rate", "opp_ft_rate", "true_shooting_pct", "assist_ratio",
+)
+GAME_TEAM_ADVANCED_TABLE = Table(
+    "game_team_advanced",
+    ("competition_code", "season_code", "game_code", "side"),
+    SCOPE + (
+        Field("game_code", "INTEGER NOT NULL", "game_team_advanced.game_code"),
+        Field("side", "TEXT NOT NULL", "game_team_advanced.side"),
+        Field("club_code", "TEXT NOT NULL", "game_team_advanced.club_code"),
+    ) + tuple(Field(name, "NUMERIC", "game_team_advanced") for name in GAME_TEAM_MEASURES),
+)
+
 DERIVED_NAMES = ("app_standings", *AGGREGATE_NAMES,
                  *RECORDS_TABLES, "app_postseason_series", *IDENTITY_TABLES)
 GOLD_TABLES = {**TABLES, "app_standings": STANDINGS_TABLE,
@@ -425,7 +460,9 @@ GOLD_TABLES = {**TABLES, "app_standings": STANDINGS_TABLE,
                "team_pbp_stats": TEAM_PBP_TABLE, "team_shot_zone_stats": TEAM_ZONE_TABLE,
                "player_on_off": PLAYER_ON_OFF_TABLE,
                "lineup_ratings": LINEUP_RATINGS_TABLE,
-               "player_rapm": PLAYER_RAPM_TABLE}
+               "player_rapm": PLAYER_RAPM_TABLE,
+               "game_player_advanced": GAME_PLAYER_ADVANCED_TABLE,
+               "game_team_advanced": GAME_TEAM_ADVANCED_TABLE}
 
 
 def columns(name):

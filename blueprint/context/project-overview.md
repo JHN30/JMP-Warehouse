@@ -1,6 +1,6 @@
 # EuroLeague Data ETL - Project Overview
 
-<!-- blueprint:source-hash 145dc08ac6a788284a4682e231709216c1239438af08d8cfa032b9600a9397a3 -->
+<!-- blueprint:source-hash 39d0b99a2fa9710b81be8e4a7649e750c7706c61aef48eeddfa04811f66b6c9d -->
 
 > The data pipeline behind the JMP EuroLeague web app: EuroLeague API data into
 > exact bronze files, typed tables in local PostgreSQL, advanced statistics, and
@@ -66,6 +66,9 @@ Next, in build-plan order (IDs are stable, so order is not numeric):
 19. **Play-by-play analytics** - actual possessions, clutch, runs, lead changes, time leading, second-chance/fast-break/points off turnovers, assisted FG%, shot zones, possession length (E2007+); local only (per-game in `silver`, aggregates in `gold`).
 29. **Lineups and on/off** - lineups from substitutions: on/off, lineup and 2/3/5-man ratings, RAPM (E2007+); build in `gold`, publish in 30g.
 30g. **Publish completed Gold tables** - after 25-29, publish their new and updated Gold tables to Neon with coordinated web-app contracts; choose exact targets and storage scope in its feature spec.
+30h. **Publish per-game advanced tables** - `app_game_player_advanced` and `app_game_team_advanced` built in `gold` from item 25 Silver tables, with game PER (`game_uper`, `game_aper`, `game_per`) matching round-level PER at round 1; E2025 and E2026; live Neon migration and publish need owner approval.
+30i. **Publish per-game play-by-play tables** - `app_game_team_possessions`, `app_game_team_score_flow`, `app_game_team_shot_splits`, `app_game_team_shot_zones` from item 19 Silver tables; E2025 and E2026.
+30j. **Publish on-court, stints and stat gaps** - `app_game_player_on_court`, `app_game_team_lineup_stints`, `app_game_stat_gaps`; E2025 and E2026. 30h-30j add about 25 MB to Neon.
 15. **Historical seasons in Neon** - when Neon storage allows (about 237 MB for all seasons).
 17. **Dependencies and CI** - `requirements.txt` and automatic tests.
 18. **EuroCup** - download, load and publish.

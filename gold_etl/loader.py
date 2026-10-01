@@ -1,7 +1,8 @@
 """Replace one Gold table/season slice using registered Silver source columns."""
 
-from gold_etl.schema import (IDENTITY_TABLES, RECORDS_TABLES, SEASON_DERIVED_NAMES, TABLES,
-                             columns, create_table_sql, scope_predicate)
+from gold_etl.schema import (GAME_ADVANCED_NAMES, IDENTITY_TABLES, RECORDS_TABLES,
+                             SEASON_DERIVED_NAMES, TABLES, columns, create_table_sql, scope_predicate)
+from gold_etl.game_advanced import read_rows as read_game_advanced_rows
 from gold_etl.player_rounds import read_rows as read_player_rows
 from gold_etl.player_ratings import read_rows as read_player_rating_rows
 from gold_etl.player_win_shares import read_rows as read_win_share_rows
@@ -98,6 +99,8 @@ def replace_standings_scope(connection, competition_code, season_code):
 def read_aggregate_rows(cursor, name, competition_code, season_code):
     if name not in SEASON_DERIVED_NAMES:
         raise ValueError(f"Unknown Gold aggregate table: {name}")
+    if name in GAME_ADVANCED_NAMES:
+        return read_game_advanced_rows(cursor, competition_code, season_code, name)
     if name == "player_rapm":
         return read_rapm_rows(cursor, competition_code, season_code)
     if name == "lineup_ratings":

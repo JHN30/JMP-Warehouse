@@ -25,10 +25,11 @@ The 16 Gold source tables publish to `public.app_<source>`:
 `app_coverage_seasons`, `app_coverage_games`,
 `app_records_player_seasons`, `app_records_single_games`,
 `app_records_team_seasons`, `app_postseason_series`, `app_players`, and
-`app_club_identities`.
+`app_club_identities`. The 12 tables of features 26-29 (30g) and the two per-game tables
+`app_game_player_advanced` and `app_game_team_advanced` (30h) make 40 targets.
 
 The three record tables and two identity tables replace all rows for the
-selected competition. The other 21 tables replace one selected season. One
+selected competition. The other 35 tables replace one selected season. One
 Neon transaction covers all selected tables. The publisher verifies exact
 post-copy counts and refuses a scope below 90% of its previous row count unless
 `--allow-shrink` is explicit. `app_play_by_play` and `app_shots` copy only changed
@@ -116,7 +117,8 @@ completes the primary key.
 game with a full box score) and `game_player_advanced` (`game_code`, `side`,
 `person_key`; one row per player box score) are computed by
 `postgres_etl/advanced.py` from Silver only. They are not loaded from Bronze,
-not part of Gold or Neon, and carry the same `load_id` and `loaded_at` columns.
+carry the same `load_id` and `loaded_at` columns. Gold projects both as
+`gold.game_team_advanced` and `gold.game_player_advanced` (see below).
 Ratios are fractions (0.512); NULL means a needed measure was missing or a
 denominator was zero. Forfeits (`game_stat_gaps` `*`) and unplayed games have
 no rows.
@@ -137,6 +139,28 @@ no rows.
 | `game_score` (player) | Hollinger: `points + 0.4 FGM - 0.7 FGA - 0.4 (FTA - FTM) + 0.7 OREB + 0.3 DREB + steals + 0.7 assists + 0.7 blocks - 0.4 fouls_committed - turnovers` |
 | `usage_pct`, `assist_pct`, `orb_pct`, `drb_pct`, `trb_pct`, `steal_pct`, `block_pct` (player) | Basketball-Reference forms using `seconds_played` and the club's official `total` row; NULL for zero minutes. `steal_pct` uses the game's possessions, `block_pct` the opponent's two-point attempts |
 | `tov_pct`, `efg_pct`, `true_shooting_pct` (player) | Same forms as the club columns, from the player's own line |
+
+Published to Neon as `public.app_game_player_advanced` / `public.app_game_team_advanced`
+(E2025 and E2026) once the reviewed 30h migration is applied. Build:
+`python gold_etl/main.py -sc <seasons> -tb game_team_advanced game_player_advanced`.
+The Gold tables drop `load_id` and `loaded_at`; the team table also drops
+`opponent_club_code`, `phase_code` and `round_number`. Keys: `competition_code`,
+`season_code`, `game_code`, `side` (plus `person_key` for players). The player table adds
+`club_code`, `seconds_played` and three game PER columns:
+
+| Column | Meaning |
+| --- | --- |
+| `game_uper` | Hollinger's unadjusted PER per minute from that game's box-score line only, with the team's assist ratio for that game and league constants (factor, VOP, DRB%) summed over every counted game of the game's phase scope (`RS`, `PI`, `PO`, `FF`, ...) through the game's round, exactly as `player_round_ratings` |
+| `game_aper` | `game_uper` x league pace (same scope, through the round) / the game's own team pace |
+| `game_per` | `game_aper` x 15 / the seconds-weighted mean `game_aper` of the games in the same scope and round, so the league mean is 15 per scope and round |
+
+NULL when `seconds_played` is 0 or missing, an input is missing or a denominator is zero;
+there is no minutes cutoff, so a few minutes can give an extreme value. Zero-minute rows keep
+Silver's `game_score` but have NULL rates and PER. Season PER is not an average of game PER:
+use `player_round_ratings` (last round of the season). A player's first game ties `player_round_ratings.per`
+(scope `RS`, round 1) exactly; `--quality-only` checks the round-1 ties against the round tables
+(to 0.00001, since those divide rounded sums), the league mean, row shape and null handling, and
+warns where a percentage is below 0 or above 2.
 
 These are box-score estimates. Counted play-by-play possessions sit next to them in
 `game_team_possessions` (below) and never replace them.

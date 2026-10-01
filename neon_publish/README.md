@@ -4,12 +4,13 @@
 `gold` to Neon's `public.app_*` tables. The 16 source tables use the target
 name `app_<source>`; the ten derived tables already begin with `app_`; the twelve
 tables of features 26-29 added in 30g use `app_<name>` (`app_standings_stats` keeps its
-name), 38 targets in all.
+name), plus the two per-game tables of 30h (`app_game_player_advanced`,
+`app_game_team_advanced`), 40 targets in all.
 `--list-tables` prints every fixed mapping and scope without a database connection.
 
 The three record tables and `app_players` and `app_club_identities` replace all
-rows for competition `E` once per run. The other 21 tables replace only the
-selected season (the 12 tables added in 30g are season-scoped too). All selected scopes commit in one Neon transaction. A failed
+rows for competition `E` once per run. The other 35 tables replace only the
+selected season (the 14 tables added in 30g and 30h are season-scoped too). All selected scopes commit in one Neon transaction. A failed
 preflight, shrink guard, COPY, or post-copy count check rolls the transaction
 back. `play_by_play` and `shots` copy only games whose Gold rows differ, and
 remove games no longer present locally.
@@ -28,6 +29,12 @@ equal). Apply it on the direct Neon connection only with the owner's approval an
 the web app agrees the contract. Until then a live publish stops at the schema preflight
 ("missing table") and rolls back, leaving Neon unchanged. Publish them for E2025 and E2026
 only; all seasons would be about 1.5 GB.
+
+The two tables added in 30h need their own one-time migration:
+`python neon_publish/main.py --print-migration 30h` prints it and
+[30h_game_advanced.sql](migrations/30h_game_advanced.sql) is the same text. The same approval
+rule and the same "missing table" stop apply. Neon has only the owner role, so the migration
+writes no `GRANT`; a read-only role added later needs its grants for every `app_*` table.
 
 Use `-tb games app_standings` to select registered tables. `-sc` accepts
 `current`, a four-digit year, or an `EYYYY` code; it never publishes multiple

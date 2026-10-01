@@ -561,3 +561,102 @@ def check_round_player_api_scope(cursor, competition_code, season_code):
     return [f"gold.player_round_stats {season_code} {scope_name}: {metric} differs from the "
             f"API feed for {len(examples)} player(s) (e.g. {examples[0]})"
             for (scope_name, metric), examples in sorted(differences.items())]
+
+
+# The cumulative round tables divide already rounded sums, so a player with a couple of
+# minutes can differ from the exact single-game value by a few millionths.
+TIE_TOLERANCE = 0.00001
+GAME_PLAYER_RATES = ("usage_pct", "assist_pct", "orb_pct", "drb_pct", "trb_pct", "steal_pct",
+                     "block_pct", "tov_pct", "efg_pct", "true_shooting_pct",
+                     "game_uper", "game_aper", "game_per")
+
+
+def _one(cursor, sql, params):
+    cursor.execute(sql, params)
+    return cursor.fetchall()
+
+
+def check_game_advanced_ranges(cursor, competition_code, season_code):
+    """Warnings for percent columns below 0 or above 2 (a few seconds of play can do it)."""
+    warnings = []
+    for column in GAME_PLAYER_RATES[:10]:
+        count = _one(cursor, f'SELECT count(*) FROM gold."game_player_advanced" WHERE '
+                     f'competition_code = %s AND season_code = %s AND ("{column}" < 0 '
+                     f'OR "{column}" > 2)', (competition_code, season_code))[0][0]
+        if count:
+            warnings.append(f"gold.game_player_advanced {season_code}: {count} rows have "
+                            f"{column} below 0 or above 2")
+    return warnings
+
+
+def check_game_advanced_invariants(cursor, name, competition_code, season_code):
+    """Row shape, null handling, league-mean PER and round-1 ties for the 30h tables."""
+    scope = (competition_code, season_code)
+    prefix = f"gold.{name} {season_code}: "
+    issues = []
+    if name == "game_team_advanced":
+        for code, rows, distinct in _one(
+                cursor, 'SELECT game_code, count(*), count(DISTINCT possessions) FROM '
+                'gold."game_team_advanced" WHERE competition_code = %s AND season_code = %s '
+                'GROUP BY game_code HAVING count(*) <> 2 OR count(DISTINCT possessions) > 1',
+                scope):
+            issues.append(prefix + f"game {code} has {rows} rows and {distinct} possession values")
+        for tie in ("possessions", "pace", "offensive_rating", "defensive_rating"):
+            bad = _one(cursor,
+                       f'SELECT count(*) FROM gold."game_team_advanced" a JOIN gold."games" g '
+                       'USING (competition_code, season_code, game_code) '
+                       'JOIN gold."team_round_stats" t ON t.competition_code = a.competition_code '
+                       "AND t.season_code = a.season_code AND t.scope = 'all' AND t.round_number = 1 "
+                       'AND t.club_code = a.club_code AND t.games_played = 1 '
+                       f'WHERE a.competition_code = %s AND a.season_code = %s AND g.round_number = 1 '
+                       f'AND abs(a."{tie}" - t."{tie}") > {TIE_TOLERANCE}', scope)[0][0]
+            if bad:
+                issues.append(prefix + f"{bad} round-1 rows differ from team_round_stats.{tie}")
+        return issues
+    missing = _one(
+        cursor, 'SELECT count(*) FROM (SELECT game_code, side, person_key FROM gold."game_player_stats" '
+        'WHERE competition_code = %s AND season_code = %s AND game_code IN (SELECT game_code FROM '
+        'gold."game_team_advanced" WHERE competition_code = %s AND season_code = %s) '
+        'EXCEPT SELECT game_code, side, person_key FROM gold."game_player_advanced" '
+        'WHERE competition_code = %s AND season_code = %s) d', scope * 3)[0][0]
+    extra = _one(
+        cursor, 'SELECT count(*) FROM (SELECT game_code, side, person_key FROM gold."game_player_advanced" '
+        'WHERE competition_code = %s AND season_code = %s EXCEPT SELECT game_code, side, person_key '
+        'FROM gold."game_player_stats" WHERE competition_code = %s AND season_code = %s) d',
+        scope * 2)[0][0]
+    if missing or extra:
+        issues.append(prefix + f"{missing} box-score rows missing, {extra} not in game_player_stats")
+    for column in GAME_PLAYER_RATES:
+        bad = _one(cursor, f'SELECT count(*) FROM gold."game_player_advanced" WHERE '
+                   'competition_code = %s AND season_code = %s AND (seconds_played IS NULL '
+                   f'OR seconds_played = 0) AND "{column}" IS NOT NULL', scope)[0][0]
+        if bad:
+            issues.append(prefix + f"{bad} zero-minute rows have a {column} value")
+    groups = _one(cursor,
+                  'SELECT g.phase_code, g.round_number, sum(a.game_per * a.seconds_played) / '
+                  'sum(a.seconds_played) FROM gold."game_player_advanced" a JOIN gold."games" g '
+                  'USING (competition_code, season_code, game_code) WHERE a.competition_code = %s '
+                  'AND a.season_code = %s AND a.game_per IS NOT NULL '
+                  'GROUP BY g.phase_code, g.round_number', scope)
+    for phase, number, mean in groups:
+        if abs(float(mean) - 15) > 1e-4:
+            issues.append(prefix + f"{phase} round {number}: seconds-weighted mean game_per "
+                          f"is {float(mean):g}, not 15")
+    ties = (("usage_pct", "player_round_stats", "all", "usg_pct"),
+            ("true_shooting_pct", "player_round_stats", "all", "ts_pct"),
+            ("efg_pct", "player_round_stats", "all", "efg_pct"),
+            ("game_score", "player_round_stats", "all", "game_score_total"),
+            ("game_per", "player_round_ratings", "RS", "per"))
+    for column, table, round_scope, other in ties:
+        extra_filter = " AND t.games_played = 1" if table == "player_round_stats" else ""
+        bad = _one(cursor,
+                   f'SELECT count(*) FROM gold."game_player_advanced" a JOIN gold."games" g '
+                   'USING (competition_code, season_code, game_code) '
+                   f'JOIN gold."{table}" t ON t.competition_code = a.competition_code '
+                   "AND t.season_code = a.season_code AND t.round_number = 1 "
+                   f"AND t.scope = '{round_scope}' AND t.person_key = a.person_key{extra_filter} "
+                   'WHERE a.competition_code = %s AND a.season_code = %s AND g.round_number = 1 '
+                   f'AND abs(a."{column}" - t."{other}") > {TIE_TOLERANCE}', scope)[0][0]
+        if bad:
+            issues.append(prefix + f"{bad} round-1 rows differ from {table}.{other}")
+    return issues

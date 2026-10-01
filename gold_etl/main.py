@@ -27,13 +27,13 @@ from gold_etl.quality import (check_scope, check_postseason_scope,
                               check_round_win_share_totals, check_standings_stats_ties,
                               check_pbp_partition, check_on_off_totals, check_lineup_totals,
                               check_round_split_invariants,
-                              check_series_scope,
+                              check_series_scope, check_game_advanced_invariants, check_game_advanced_ranges,
                               check_identity_scope)  # noqa: E402
-from gold_etl.schema import (PBP_NAMES, DERIVED_NAMES, IDENTITY_TABLES, RECORDS_TABLES, ROUND_NAMES,
+from gold_etl.schema import (GAME_ADVANCED_NAMES, PBP_NAMES, DERIVED_NAMES, IDENTITY_TABLES, RECORDS_TABLES, ROUND_NAMES,
                              SEASON_DERIVED_NAMES, SOURCE_NAMES, count_sql)  # noqa: E402
 
 
-BUILD_NAMES = (*SOURCE_NAMES, *DERIVED_NAMES, *ROUND_NAMES)
+BUILD_NAMES = (*SOURCE_NAMES, *DERIVED_NAMES, *ROUND_NAMES, *GAME_ADVANCED_NAMES)
 
 
 def build_parser():
@@ -162,6 +162,11 @@ def main(argv=None):
                                 issues = check_round_player_rating_invariants(cursor, *scope)
                             if name == "team_round_splits" and not issues:
                                 issues = check_round_split_invariants(cursor, *scope)
+                            if name in GAME_ADVANCED_NAMES and not issues:
+                                issues = check_game_advanced_invariants(cursor, name, *scope)
+                                if name == "game_player_advanced":
+                                    for warning in check_game_advanced_ranges(cursor, *scope):
+                                        print("WARN " + warning, flush=True)
                             if name == "player_round_stats" and not issues:
                                 for warning in check_round_player_api_scope(cursor, *scope):
                                     print("WARN " + warning, flush=True)

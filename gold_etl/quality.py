@@ -2,7 +2,7 @@
 
 from collections import defaultdict
 
-from gold_etl.schema import TABLES, columns, count_sql, scope_predicate
+from gold_etl.schema import COPIED_TABLES, columns, count_sql, scope_predicate
 from gold_etl.postseason import TABLES as PS_TABLES, _dict_rows, read_rows as read_postseason_rows
 from gold_etl.standings import KEY as STANDINGS_KEY, read_rows as read_standings_rows
 from gold_etl.schema import STANDINGS_FEEDS, STANDINGS_STATS_SOURCES, TEAM_PBP_ADDITIVE, ZONE_ADDITIVE
@@ -15,7 +15,7 @@ from gold_etl.series import read_rows as read_series_rows
 
 def check_scope(cursor, name, competition_code, season_code):
     """Return actionable issues; PKs and equal row counts make one-way EXCEPT sufficient."""
-    if name not in TABLES:
+    if name not in COPIED_TABLES:
         raise ValueError(f"Unknown Gold source table: {name}")
     cursor.execute("SELECT to_regclass(%s)", (f"gold.{name}",))
     if cursor.fetchone()[0] is None:

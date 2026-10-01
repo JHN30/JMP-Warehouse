@@ -1,7 +1,7 @@
 """Replace one Gold table/season slice using registered Silver source columns."""
 
-from gold_etl.schema import (GAME_ADVANCED_NAMES, IDENTITY_TABLES, RECORDS_TABLES,
-                             SEASON_DERIVED_NAMES, TABLES, columns, create_table_sql, scope_predicate)
+from gold_etl.schema import (COPIED_TABLES, GAME_ADVANCED_NAMES, IDENTITY_TABLES, RECORDS_TABLES,
+                             SEASON_DERIVED_NAMES, columns, create_table_sql, scope_predicate)
 from gold_etl.game_advanced import read_rows as read_game_advanced_rows
 from gold_etl.player_rounds import read_rows as read_player_rows
 from gold_etl.player_ratings import read_rows as read_player_rating_rows
@@ -26,7 +26,7 @@ from gold_etl.series import read_rows as read_series_rows
 
 def replace_scope(connection, name, competition_code, season_code):
     """DDL, delete, and copy commit together; a failure restores old Gold rows."""
-    if name not in TABLES:
+    if name not in COPIED_TABLES:
         raise ValueError(f"Unknown Gold source table: {name}")
     with connection:
         with connection.cursor() as cursor:

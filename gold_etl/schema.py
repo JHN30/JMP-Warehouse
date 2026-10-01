@@ -1,6 +1,6 @@
 """The 16 source projections owned by the first Gold build."""
 
-from postgres_etl.flat_schema import (COLUMN_NAMES, Field, SCOPE,
+from postgres_etl.flat_schema import (ADVANCED_TABLES, COLUMN_NAMES, Field, SCOPE,
                                        STANDINGS_IDENTITY, TABLES as SILVER_TABLES,
                                        Table, snake)
 
@@ -15,6 +15,11 @@ SOURCE_NAMES = (
 PLAYER_STATS = frozenset(name for name in SOURCE_NAMES
                          if name.startswith("season_player_stats_"))
 TABLES = {name: SILVER_TABLES[name] for name in SOURCE_NAMES}
+# Feature 30i: the per-game play-by-play Silver tables, copied to Gold unchanged.
+GAME_PBP_NAMES = ("game_team_possessions", "game_team_score_flow",
+                  "game_team_shot_splits", "game_team_shot_zones")
+GAME_PBP_TABLES = {name: ADVANCED_TABLES[name] for name in GAME_PBP_NAMES}
+COPIED_TABLES = {**TABLES, **GAME_PBP_TABLES}
 
 STANDINGS_FEEDS = (
     ("standings_basic", "basic"), ("standings_calendar", "calendar"),
@@ -445,7 +450,7 @@ GAME_TEAM_ADVANCED_TABLE = Table(
 
 DERIVED_NAMES = ("app_standings", *AGGREGATE_NAMES,
                  *RECORDS_TABLES, "app_postseason_series", *IDENTITY_TABLES)
-GOLD_TABLES = {**TABLES, "app_standings": STANDINGS_TABLE,
+GOLD_TABLES = {**COPIED_TABLES, "app_standings": STANDINGS_TABLE,
                "app_team_season_stats": TEAM_SEASON_TABLE,
                "app_coverage_seasons": COVERAGE_SEASON_TABLE,
                "app_coverage_games": COVERAGE_GAME_TABLE,

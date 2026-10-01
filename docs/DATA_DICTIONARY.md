@@ -26,10 +26,11 @@ The 16 Gold source tables publish to `public.app_<source>`:
 `app_records_player_seasons`, `app_records_single_games`,
 `app_records_team_seasons`, `app_postseason_series`, `app_players`, and
 `app_club_identities`. The 12 tables of features 26-29 (30g) and the two per-game tables
-`app_game_player_advanced` and `app_game_team_advanced` (30h) make 40 targets.
+`app_game_player_advanced` and `app_game_team_advanced` (30h) and the four `app_game_team_*`
+per-game play-by-play tables (30i) make 44 targets.
 
 The three record tables and two identity tables replace all rows for the
-selected competition. The other 35 tables replace one selected season. One
+selected competition. The other 39 tables replace one selected season. One
 Neon transaction covers all selected tables. The publisher verifies exact
 post-copy counts and refuses a scope below 90% of its previous row count unless
 `--allow-shrink` is explicit. `app_play_by_play` and `app_shots` copy only changed
@@ -170,7 +171,7 @@ These are box-score estimates. Counted play-by-play possessions sit next to them
 Built by `python postgres_etl/possessions.py -sc <seasons>` from `play_by_play`, `games`
 and `game_team_advanced` (E2007 onward; earlier seasons have no play-by-play and no
 rows). Extra key `game_code`, `side`; one row per club per played game with events and a
-`game_team_advanced` row. Same provenance columns; not in Gold or Neon.
+`game_team_advanced` row. Same provenance columns. Gold copy `gold.game_team_possessions` (without the provenance columns) is published to Neon as `public.app_game_team_possessions` (E2025 and E2026) once the reviewed 30i migration is applied.
 
 | Column | Meaning |
 | --- | --- |
@@ -208,8 +209,7 @@ estimate by more than 10% (16 rows across E2007-E2026: 7 in E2007 and 9 in E2009
 
 Built by `python postgres_etl/score_flow.py -sc <seasons>` from `play_by_play` and `games`
 (E2007 onward; same rows as `game_team_possessions`). Extra key `game_code`, `side`; one row
-per club per played game whose events carry a running score. Same provenance columns; not in
-Gold or Neon.
+per club per played game whose events carry a running score. Same provenance columns. Gold copy `gold.game_team_score_flow` (without the provenance columns) is published to Neon as `public.app_game_team_score_flow` (E2025 and E2026) once the reviewed 30i migration is applied.
 
 | Column | Meaning |
 | --- | --- |
@@ -235,7 +235,7 @@ a fresh derivation and warns when a final score differs from `games` (none found
 
 Built by `python postgres_etl/shot_splits.py -sc <seasons>` from `games`, `shots` and
 `play_by_play` (E2007 onward; same rows as `game_team_possessions`). Extra key `game_code`,
-`side`. Same provenance columns; not in Gold or Neon.
+`side`. Same provenance columns. Gold copy `gold.game_team_shot_splits` (without the provenance columns) is published to Neon as `public.app_game_team_shot_splits` (E2025 and E2026) once the reviewed 30i migration is applied.
 
 | Column | Meaning |
 | --- | --- |
@@ -257,7 +257,7 @@ points differ from `games` (none found).
 
 Built by `python postgres_etl/shot_zones.py -sc <seasons>` from `games` and `shots`
 (E2007 onward). Extra key `game_code`, `side`, `zone`; columns `club_code`, `attempts`,
-`made`, `points`. Field goals only: `2FGM`, `3FGM`, `LAYUPMD`, `DUNK` made and `2FGA`, `3FGA`,
+`made`, `points`. Gold copy `gold.game_team_shot_zones` (without the provenance columns) is published to Neon as `public.app_game_team_shot_zones` (E2025 and E2026) once the reviewed 30i migration is applied. Field goals only: `2FGM`, `3FGM`, `LAYUPMD`, `DUNK` made and `2FGA`, `3FGA`,
 `LAYUPATT`, `2FGAB`, `3FGAB` missed (E2008-E2014 use the layup, dunk and blocked types; 19a
 has the same list). Free throws and shots without a zone code are left out, and a team has a
 row only for zones it shot from. Zone totals equal the box score's field goals made in every

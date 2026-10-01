@@ -1,6 +1,6 @@
 """Fixed Gold source and Neon target contract."""
 
-from gold_etl.schema import (DERIVED_NAMES, GAME_ADVANCED_NAMES, GOLD_TABLES,
+from gold_etl.schema import (DERIVED_NAMES, GAME_ADVANCED_NAMES, GAME_PBP_NAMES, GOLD_TABLES,
                              IDENTITY_TABLES, RECORDS_TABLES, ROUND_NAMES, SOURCE_NAMES)
 
 
@@ -8,8 +8,10 @@ from gold_etl.schema import (DERIVED_NAMES, GAME_ADVANCED_NAMES, GOLD_TABLES,
 NEW_TABLES = ROUND_NAMES
 # Feature 30h added the two per-game advanced tables after those.
 GAME_TABLES = GAME_ADVANCED_NAMES
-MIGRATIONS = {"30g": NEW_TABLES, "30h": GAME_TABLES}
-APP_TABLES = SOURCE_NAMES + DERIVED_NAMES + NEW_TABLES + GAME_TABLES
+# Feature 30i added the four per-game play-by-play tables after those.
+GAME_PBP_TABLES = GAME_PBP_NAMES
+MIGRATIONS = {"30g": NEW_TABLES, "30h": GAME_TABLES, "30i": GAME_PBP_TABLES}
+APP_TABLES = SOURCE_NAMES + DERIVED_NAMES + NEW_TABLES + GAME_TABLES + GAME_PBP_TABLES
 GLOBAL_TABLES = frozenset((*RECORDS_TABLES, *IDENTITY_TABLES))
 GAME_DIFF_TABLES = frozenset(("play_by_play", "shots"))
 

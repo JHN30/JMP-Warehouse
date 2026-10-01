@@ -359,6 +359,9 @@ committed; copy the `.example`). Publishing reads the direct non-pooled
 - Build local per-game advanced tables with single-game PER (published to Neon by 30h):
   `python gold_etl/main.py -sc <seasons> -tb game_team_advanced game_player_advanced`.
   `--quality-only` checks row shape, nulls, the league mean and round-1 ties to the round tables.
+- Build local copies of the per-game play-by-play Silver tables (published to Neon by 30i):
+  `python gold_etl/main.py -sc <seasons> -tb game_team_possessions game_team_score_flow
+  game_team_shot_splits game_team_shot_zones`. `--quality-only` checks equality with Silver.
 - Build local page-shaped team advanced stats (`app_standings_stats`, a per-round projection of
   the three team round tables; published to Neon by 30g):
   `python gold_etl/main.py -sc <seasons> -tb app_standings_stats`. `--quality-only` ties each
@@ -379,10 +382,11 @@ committed; copy the `.example`). Publishing reads the direct non-pooled
 - Traditional or misc table selections also rebuild their derived `PS` rows.
 - Gold read-only source and derived counts: `python gold_etl/main.py -sc <seasons> --dry-run`
 - Gold read-only equality checks: `python gold_etl/main.py -sc <seasons> --quality-only`
-- List the 40 fixed Gold-to-Neon mappings: `python neon_publish/main.py --list-tables`;
+- List the 44 fixed Gold-to-Neon mappings: `python neon_publish/main.py --list-tables`;
   print the reviewed DDL for the 12 tables added in 30g (no database):
   `python neon_publish/main.py --print-migration`, and for the 2 per-game tables added in 30h:
-  `python neon_publish/main.py --print-migration 30h`. Applying either on Neon needs owner approval.
+  `python neon_publish/main.py --print-migration 30h`, and for the 4 per-game play-by-play tables
+  added in 30i: `python neon_publish/main.py --print-migration 30i`. Applying any on Neon needs owner approval.
 - Read-only Neon preflight and count preview: `python neon_publish/main.py -sc E2025 --dry-run`
 - Publish one EuroLeague season and competition-wide Gold tables: `python neon_publish/main.py -sc E2026`
   after separate owner approval. The one-time

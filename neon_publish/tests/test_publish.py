@@ -8,10 +8,11 @@ from contextlib import nullcontext
 from pathlib import Path
 from unittest import mock
 
-from gold_etl.schema import (DERIVED_NAMES, GAME_ADVANCED_NAMES, GOLD_TABLES, ROUND_NAMES,
-                             SOURCE_NAMES)
+from gold_etl.schema import (DERIVED_NAMES, GAME_ADVANCED_NAMES, GAME_PBP_NAMES, GOLD_TABLES,
+                             ROUND_NAMES, SOURCE_NAMES)
 from neon_publish import publish
-from neon_publish.contract import (APP_TABLES, GAME_TABLES, GLOBAL_TABLES, NEW_TABLES,
+from neon_publish.contract import (APP_TABLES, GAME_PBP_TABLES, GAME_TABLES, GLOBAL_TABLES,
+                                   NEW_TABLES,
                                    inspect_target,
                                    migration_sql, predicate, scope, target_name)
 from neon_publish.main import main as publish_main
@@ -21,9 +22,10 @@ from pipeline import StageFacts, build_parser, build_summary, read_state, redact
 class ContractTests(unittest.TestCase):
     def test_every_gold_table_has_a_fixed_target_and_scope(self):
         self.assertEqual(APP_TABLES,
-                         SOURCE_NAMES + DERIVED_NAMES + ROUND_NAMES + GAME_ADVANCED_NAMES)
-        self.assertEqual(len(APP_TABLES), 40)
-        self.assertEqual(len({target_name(name) for name in APP_TABLES}), 40)
+                         SOURCE_NAMES + DERIVED_NAMES + ROUND_NAMES + GAME_ADVANCED_NAMES
+                         + GAME_PBP_NAMES)
+        self.assertEqual(len(APP_TABLES), 44)
+        self.assertEqual(len({target_name(name) for name in APP_TABLES}), 44)
         self.assertEqual(len(GLOBAL_TABLES), 5)
         self.assertEqual(set(APP_TABLES), set(GOLD_TABLES))
         for name in APP_TABLES:
@@ -462,13 +464,37 @@ class GameAdvancedTests(unittest.TestCase):
         local.assert_not_called()
 
 
+class GamePbpTests(unittest.TestCase):
+    """The four per-game play-by-play tables added in 30i."""
+
+    def test_targets_scope_and_migration_file(self):
+        self.assertEqual([target_name(name) for name in GAME_PBP_TABLES],
+                         ["app_game_team_possessions", "app_game_team_score_flow",
+                          "app_game_team_shot_splits", "app_game_team_shot_zones"])
+        for name in GAME_PBP_TABLES:
+            self.assertEqual(scope(name, "E", "E2026"), ("E", "E2026"))
+        path = Path(__file__).resolve().parents[1] / "migrations" / "30i_game_play_by_play.sql"
+        ddl = migration_sql(GAME_PBP_TABLES, "30i")
+        self.assertEqual(path.read_text(encoding="utf-8"), ddl)
+        self.assertEqual(ddl.count("CREATE TABLE"), 4)
+        self.assertIn("PRIMARY KEY (competition_code, season_code, game_code, side, zone)", ddl)
+        self.assertNotIn("GRANT", ddl)
+
+    def test_print_migration_selects_the_feature(self):
+        with (mock.patch("neon_publish.main.connect") as local,
+              mock.patch("sys.stdout", new_callable=io.StringIO) as output):
+            self.assertEqual(publish_main(["--print-migration", "30i"]), 0)
+        self.assertEqual(output.getvalue(), migration_sql(GAME_PBP_TABLES, "30i"))
+        local.assert_not_called()
+
+
 class CliTests(unittest.TestCase):
     def test_list_tables_needs_no_connections(self):
         with (mock.patch("neon_publish.main.connect") as local,
               mock.patch("neon_publish.main.neon_connect") as remote,
               mock.patch("sys.stdout", new_callable=io.StringIO) as output):
             self.assertEqual(publish_main(["--list-tables"]), 0)
-        self.assertEqual(len(output.getvalue().splitlines()), 40)
+        self.assertEqual(len(output.getvalue().splitlines()), 44)
         local.assert_not_called()
         remote.assert_not_called()
 

@@ -4,9 +4,10 @@ Python 3.13 and PostgreSQL pipeline for EuroLeague and EuroCup data. The fetcher
 stores exact versioned API responses in bronze. The loader builds 28 typed
 tables in the local `silver` schema and runs quality checks, then derives two
 per-game advanced tables (team and player) from the box scores. The local Gold
-stage copies 16 source tables from Silver into `gold` and derives postseason
-player stats, a page-shaped standings table, team-season totals, coverage,
-all-time records and postseason series, plus cross-season player and club
+stage copies the 16 source tables and seven per-game tables from Silver into `gold`
+and derives postseason player stats, a page-shaped standings table, team-season
+totals, coverage, all-time records and postseason series, per-round team and
+player stats, two per-game advanced tables, plus cross-season player and club
 identities. The in-place Neon schema cutover and first E2026 publish completed
 on 2026-09-28 with owner approval and web-app coordination.
 

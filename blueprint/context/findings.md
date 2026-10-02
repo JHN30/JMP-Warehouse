@@ -32,3 +32,30 @@ published yet to confirm the real size, including primary-key index overhead.
 **Suggested fix:** after the migrations are applied and E2025 and E2026 are published,
 compare `pg_database_size` with the 153 MB baseline.
 **Resolution:**
+
+### F-09 [P3] open - The dictionary's per-game paragraph points at sections that do not exist for all nine tables
+
+**File:** docs/DATA_DICTIONARY.md:518
+**Found:** 2026-10-02 by /audit (scope: current; lenses: quality, security, performance, tests)
+**Why it matters:** the new "Nine per-game tables" paragraph says each table "is defined in its
+own section below (see 'Derived per-game advanced tables' and the `game_team_*` and
+`game_player_on_court` sections)". `game_stat_gaps` has no section of its own (it is defined in
+the Silver table list and the stat-name notes), and `game_player_on_court` is the only on-court
+section the pointer names although `game_team_lineup_stints` has one too. The same paragraph has
+one source line over 150 characters where the neighbours wrap near 90.
+**Suggested fix:** name the exact sections ("Derived per-game advanced tables", `game_team_possessions`
+through `game_team_lineup_stints`, and the Silver table list for `game_stat_gaps`) and rewrap the
+long line. No current requirement would be lost.
+**Resolution:**
+
+### F-10 [P3] open - The same paragraph says the tables are published to Neon without the migration qualifier
+
+**File:** docs/DATA_DICTIONARY.md:519
+**Found:** 2026-10-02 by /audit (scope: current; lenses: quality, security, performance, tests)
+**Why it matters:** the paragraph states the nine tables are "published to Neon as
+`public.app_<name>` for E2025 and E2026", while each per-table section (and the Neon contract
+paragraph) adds "once the reviewed migration is applied". Until the owner applies the 30h, 30i and
+30j migrations and publishes, the flat statement is untrue. It becomes accurate after publishing.
+**Suggested fix:** add "once their reviewed migrations are applied" to the sentence, or leave it
+and re-read it after the first publish.
+**Resolution:**

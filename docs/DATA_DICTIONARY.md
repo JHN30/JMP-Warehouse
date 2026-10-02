@@ -517,6 +517,15 @@ Gold tables, and a source rerun leaves those rows in place. Advanced and scoring
 have no derived `PS` rows. The other 12 Silver tables and `silver.load_log`
 are not copied by 30a.
 
+Nine per-game tables were added later, all named like their Silver sources and published to
+Neon as `public.app_<name>` for E2025 and E2026. Seven are straight copies with the same
+columns, types, NULLs and primary keys, again without `load_id` and `loaded_at`: `game_team_possessions`, `game_team_score_flow`, `game_team_shot_splits` and
+`game_team_shot_zones` (30i), and `game_player_on_court`, `game_team_lineup_stints` and
+`game_stat_gaps` (30j). Two are projections of Silver's per-game advanced tables with the
+published column set; `game_player_advanced` also adds game PER (30h): `game_player_advanced`
+and `game_team_advanced`. Each is defined in its own section below (see "Derived per-game
+advanced tables" and the `game_team_*` and `game_player_on_court` sections).
+
 `python gold_etl/main.py -sc all` builds all locally loaded Silver seasons.
 `--dry-run` reports Silver source and derived row counts without Gold writes;
 `--quality-only` compares Gold source and derived keys and full values with

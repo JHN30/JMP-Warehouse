@@ -1,8 +1,8 @@
 # Local Gold stage
 
-`gold_etl/main.py` copies 16 source tables from the local PostgreSQL `silver`
-schema into `gold`. It reads only the registered Silver columns, leaving
-`load_id` and `loaded_at` in Silver. It keeps source names, values, NULLs,
+`gold_etl/main.py` builds `gold` from the local PostgreSQL `silver` schema. It copies the 16
+source tables, plus seven per-game tables (below). It reads only the registered Silver columns,
+leaving `load_id` and `loaded_at` in Silver. It keeps source names, values, NULLs,
 types, and primary keys. It also derives traditional and misc player-season
 `PS` rows from played PI/PO/FF box scores, builds `gold.app_standings` from
 the seven Silver standings feeds, and derives team-season totals plus season
@@ -10,6 +10,14 @@ and game coverage from Silver. It also builds three full-history top-50 record
 tables and season-scoped postseason series. Cross-season player and club identity
 tables are also built from Silver. Advanced and scoring player stats
 remain API-only.
+
+Nine per-game tables came with features 30h-30j. `game_team_possessions`,
+`game_team_score_flow`, `game_team_shot_splits`, `game_team_shot_zones`,
+`game_player_on_court`, `game_team_lineup_stints` and `game_stat_gaps` are copied from Silver
+unchanged (names, values, NULLs, types and keys, without `load_id` and `loaded_at`).
+`game_player_advanced` and `game_team_advanced` project Silver's per-game advanced tables to
+the published columns, and the player table adds single-game PER (`game_uper`, `game_aper`,
+`game_per`). Their definitions are in `docs/DATA_DICTIONARY.md`.
 
 Run from the repository root with the local connection settings in
 `postgres_etl/config_connection.json`:
@@ -24,6 +32,9 @@ python gold_etl/main.py -sc E2025 -tb season_player_stats_traditional season_pla
 python gold_etl/main.py -sc E2025 -tb app_team_season_stats app_coverage_seasons app_coverage_games
 python gold_etl/main.py -sc E2025 -tb app_records_player_seasons app_records_single_games app_records_team_seasons app_postseason_series
 python gold_etl/main.py -sc all -tb app_players app_club_identities
+python gold_etl/main.py -sc E2025 -tb game_team_advanced game_player_advanced
+python gold_etl/main.py -sc E2025 -tb game_team_possessions game_team_score_flow game_team_shot_splits game_team_shot_zones
+python gold_etl/main.py -sc E2025 -tb game_player_on_court game_team_lineup_stints game_stat_gaps
 python gold_etl/main.py -sc all -tb team_round_stats team_round_ratings team_round_splits player_round_stats player_round_ratings player_round_win_shares app_standings_stats team_pbp_stats team_shot_zone_stats player_on_off lineup_ratings player_rapm
 ```
 
@@ -46,6 +57,7 @@ player registrations; `app_club_identities` stores the latest profile and season
 span for each club code. `app_postseason_series` uses the selected
 seasons and is replaced one season at a time. Its game list includes scheduled
 fixtures; only played games count as wins. The stage reads no Bronze files and
-never writes Silver or Neon. Publishing remains paused.
+never writes Silver or Neon. Publishing to Neon is a separate, owner-approved step; see
+[neon_publish/README.md](../neon_publish/README.md).
 
 Run focused tests with `python -m unittest discover -s gold_etl/tests`.

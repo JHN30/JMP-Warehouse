@@ -18,8 +18,11 @@ The data pipeline behind the JMP EuroLeague web app (`jmpeuroleague.com`, repo
 responses, loads it into 28 typed tables in the local PostgreSQL `silver`
 schema with quality checks, plus derived per-game advanced tables (box-score estimates and counted possessions). Gold builds 16 local source tables from Silver,
 postseason player statistics, a page-shaped standings table, team-season totals,
-season/game coverage, all-time records, postseason series, and cross-season
-player and club identities. The 30f Gold-to-Neon cutover and first E2026
+season/game coverage, all-time records, postseason series, cross-season
+player and club identities, per-round team and player advanced stats (ratings,
+Win Shares, on/off, lineups, RAPM), and nine per-game tables (advanced stats with
+game PER, counted possessions, score flow, shot splits, shot zones, on-court
+intervals, lineup stints and stat gaps). The 30f Gold-to-Neon cutover and first E2026
 publish completed on 2026-09-28 with owner approval. Further live publishing
 still requires explicit owner approval.
 Python 3.13 + PostgreSQL, no web framework.

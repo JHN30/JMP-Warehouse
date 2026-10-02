@@ -29,12 +29,12 @@ from gold_etl.quality import (check_scope, check_postseason_scope,
                               check_round_split_invariants,
                               check_series_scope, check_game_advanced_invariants, check_game_advanced_ranges,
                               check_identity_scope)  # noqa: E402
-from gold_etl.schema import (GAME_ADVANCED_NAMES, GAME_PBP_NAMES, PBP_NAMES, DERIVED_NAMES, IDENTITY_TABLES, RECORDS_TABLES, ROUND_NAMES,
+from gold_etl.schema import (GAME_ADVANCED_NAMES, GAME_COURT_NAMES, GAME_PBP_NAMES, PBP_NAMES, DERIVED_NAMES, IDENTITY_TABLES, RECORDS_TABLES, ROUND_NAMES,
                              SEASON_DERIVED_NAMES, SOURCE_NAMES, count_sql)  # noqa: E402
 
 
 BUILD_NAMES = (*SOURCE_NAMES, *DERIVED_NAMES, *ROUND_NAMES, *GAME_ADVANCED_NAMES,
-               *GAME_PBP_NAMES)
+               *GAME_PBP_NAMES, *GAME_COURT_NAMES)
 
 
 def build_parser():

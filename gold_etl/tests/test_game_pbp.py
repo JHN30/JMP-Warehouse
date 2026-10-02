@@ -4,7 +4,7 @@ import unittest
 
 from gold_etl.loader import replace_scope
 from gold_etl.quality import check_scope
-from gold_etl.schema import (COPIED_TABLES, GAME_PBP_NAMES, GOLD_TABLES, SOURCE_NAMES, TABLES,
+from gold_etl.schema import (COPIED_TABLES, GAME_COURT_NAMES, GAME_PBP_NAMES, GOLD_TABLES, SOURCE_NAMES, TABLES,
                              columns, count_sql, create_table_sql)
 from gold_etl.tests.test_gold import FakeConnection
 from postgres_etl.flat_schema import ALL_TABLES as SILVER_TABLES
@@ -31,7 +31,8 @@ class SchemaTests(unittest.TestCase):
 
     def test_source_projections_stay_sixteen(self):
         self.assertEqual((len(SOURCE_NAMES), len(TABLES)), (16, 16))
-        self.assertEqual(set(COPIED_TABLES), set(SOURCE_NAMES) | set(GAME_PBP_NAMES))
+        self.assertEqual(set(COPIED_TABLES),
+                         set(SOURCE_NAMES) | set(GAME_PBP_NAMES) | set(GAME_COURT_NAMES))
         self.assertFalse(set(GAME_PBP_NAMES) & set(SOURCE_NAMES))
 
     def test_known_columns(self):
@@ -64,9 +65,9 @@ class LoaderTests(unittest.TestCase):
 
     def test_unknown_tables_are_rejected(self):
         with self.assertRaisesRegex(ValueError, "Unknown Gold source table"):
-            replace_scope(FakeConnection(), "game_team_lineup_stints", "E", "E2025")
+            replace_scope(FakeConnection(), "game_team_unknown", "E", "E2025")
         with self.assertRaisesRegex(ValueError, "Unknown Gold source table"):
-            check_scope(FakeConnection().cursor(), "game_team_lineup_stints", "E", "E2025")
+            check_scope(FakeConnection().cursor(), "game_team_unknown", "E", "E2025")
 
 
 if __name__ == "__main__":

@@ -7,12 +7,13 @@ tables of features 26-29 added in 30g use `app_<name>` (`app_standings_stats` ke
 name), plus the two per-game tables of 30h (`app_game_player_advanced`,
 `app_game_team_advanced`) and the four per-game play-by-play tables of 30i
 (`app_game_team_possessions`, `app_game_team_score_flow`, `app_game_team_shot_splits`,
-`app_game_team_shot_zones`), 44 targets in all.
+`app_game_team_shot_zones`) and the three tables of 30j (`app_game_player_on_court`,
+`app_game_team_lineup_stints`, `app_game_stat_gaps`), 47 targets in all.
 `--list-tables` prints every fixed mapping and scope without a database connection.
 
 The three record tables and `app_players` and `app_club_identities` replace all
-rows for competition `E` once per run. The other 39 tables replace only the
-selected season (the 18 tables added in 30g, 30h and 30i are season-scoped too). All selected scopes commit in one Neon transaction. A failed
+rows for competition `E` once per run. The other 42 tables replace only the
+selected season (the 21 tables added in 30g, 30h, 30i and 30j are season-scoped too). All selected scopes commit in one Neon transaction. A failed
 preflight, shrink guard, COPY, or post-copy count check rolls the transaction
 back. `play_by_play` and `shots` copy only games whose Gold rows differ, and
 remove games no longer present locally.
@@ -35,7 +36,9 @@ only; all seasons would be about 1.5 GB.
 The two tables added in 30h need their own one-time migration:
 `python neon_publish/main.py --print-migration 30h` prints it and
 [30h_game_advanced.sql](migrations/30h_game_advanced.sql) is the same text. The same approval
-rule and the same "missing table" stop apply. The four tables of 30i likewise:
+rule and the same "missing table" stop apply. The tables of 30i and 30j likewise (`--print-migration 30j`,
+[30j_game_on_court_and_gaps.sql](migrations/30j_game_on_court_and_gaps.sql); `app_game_stat_gaps` stays
+empty for E2025 and E2026). The four tables of 30i:
 `python neon_publish/main.py --print-migration 30i` and
 [30i_game_play_by_play.sql](migrations/30i_game_play_by_play.sql). Neon has only the owner role, so the migration
 writes no `GRANT`; a read-only role added later needs its grants for every `app_*` table.

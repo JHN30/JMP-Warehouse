@@ -1,6 +1,6 @@
 """The 16 source projections owned by the first Gold build."""
 
-from postgres_etl.flat_schema import (ADVANCED_TABLES, COLUMN_NAMES, Field, SCOPE,
+from postgres_etl.flat_schema import (ADVANCED_TABLES, ALL_TABLES, COLUMN_NAMES, Field, SCOPE,
                                        STANDINGS_IDENTITY, TABLES as SILVER_TABLES,
                                        Table, snake)
 
@@ -19,7 +19,10 @@ TABLES = {name: SILVER_TABLES[name] for name in SOURCE_NAMES}
 GAME_PBP_NAMES = ("game_team_possessions", "game_team_score_flow",
                   "game_team_shot_splits", "game_team_shot_zones")
 GAME_PBP_TABLES = {name: ADVANCED_TABLES[name] for name in GAME_PBP_NAMES}
-COPIED_TABLES = {**TABLES, **GAME_PBP_TABLES}
+# Feature 30j: on-court intervals, lineup stints and stat gaps, copied the same way.
+GAME_COURT_NAMES = ("game_player_on_court", "game_team_lineup_stints", "game_stat_gaps")
+GAME_COURT_TABLES = {name: ALL_TABLES[name] for name in GAME_COURT_NAMES}
+COPIED_TABLES = {**TABLES, **GAME_PBP_TABLES, **GAME_COURT_TABLES}
 
 STANDINGS_FEEDS = (
     ("standings_basic", "basic"), ("standings_calendar", "calendar"),

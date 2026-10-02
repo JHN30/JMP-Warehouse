@@ -26,11 +26,12 @@ The 16 Gold source tables publish to `public.app_<source>`:
 `app_records_player_seasons`, `app_records_single_games`,
 `app_records_team_seasons`, `app_postseason_series`, `app_players`, and
 `app_club_identities`. The 12 tables of features 26-29 (30g) and the two per-game tables
-`app_game_player_advanced` and `app_game_team_advanced` (30h) and the four `app_game_team_*`
-per-game play-by-play tables (30i) make 44 targets.
+`app_game_player_advanced` and `app_game_team_advanced` (30h) the four `app_game_team_*`
+per-game play-by-play tables (30i) and `app_game_player_on_court`, `app_game_team_lineup_stints` and
+`app_game_stat_gaps` (30j) make 47 targets.
 
 The three record tables and two identity tables replace all rows for the
-selected competition. The other 39 tables replace one selected season. One
+selected competition. The other 42 tables replace one selected season. One
 Neon transaction covers all selected tables. The publisher verifies exact
 post-copy counts and refuses a scope below 90% of its previous row count unless
 `--allow-shrink` is explicit. `app_play_by_play` and `app_shots` copy only changed
@@ -93,7 +94,7 @@ completes the primary key.
 | `game_period_scores` | `game_code`, `side`, `period_number` | One quarter or overtime score. |
 | `game_player_stats` | `game_code`, `side`, `person_key` | One player's game box score. |
 | `game_team_stats` | `game_code`, `side`, `stats_kind` | One team's box score row or total. |
-| `game_stat_gaps` | `game_code`, `stat_name` | A missing or unrecorded game measure; `*` means no box score. |
+| `game_stat_gaps` | `game_code`, `stat_name` | A missing or unrecorded game measure; `*` means no box score. Gold copy published as `public.app_game_stat_gaps` (30j); it has no rows from E2012 on, so it is empty for E2025 and E2026. |
 | `play_by_play` | `game_code`, `period`, `event_ordinal` | One live event. |
 | `shots` | `game_code`, `shot_ordinal` | One shot attempt. |
 | `season_player_stats_traditional` | `phase_code`, `mode`, `entry_ordinal` | One player entry in a v3 traditional feed. |
@@ -285,7 +286,7 @@ games.
 Built by `python postgres_etl/on_court.py -sc <seasons>` from `games`, `game_player_stats` and
 `play_by_play` (E2007 onward). Key `game_code`, `side`, `person_key`, `interval_ordinal`
 (the player's stretches counted from 1 in time order); columns `club_code`, `start_seconds` and
-`end_seconds` (elapsed game seconds). It is the base of the lineup features 29b-29d.
+`end_seconds` (elapsed game seconds). It is the base of the lineup features 29b-29d. Gold copy `gold.game_player_on_court` (without the provenance columns) is published to Neon as `public.app_game_player_on_court` (E2025 and E2026) once the reviewed 30j migration is applied.
 
 A side starts with the players whose `started` flag is set. An `IN` adds a player, an `OUT`
 removes one, in event order (period, overtime, `event_ordinal`); players carry across periods;
@@ -319,7 +320,7 @@ the box score's `seconds_played`.
 Built by `python postgres_etl/lineups.py -sc <seasons>` from `games`, `game_player_stats` and
 `play_by_play` (E2007 onward), right after `game_player_on_court`. Key `game_code`, `side`,
 `stint_ordinal` (counted from 1 over the stored stints of the game); two rows per stint, one
-from each team's side.
+from each team's side. Gold copy `gold.game_team_lineup_stints` (without the provenance columns) is published to Neon as `public.app_game_team_lineup_stints` (E2025 and E2026) once the reviewed 30j migration is applied.
 
 | Column | Meaning |
 | --- | --- |

@@ -72,7 +72,7 @@ data or publish to Neon. Use `-cp` for the competition and `-tb` for selected
 table names.
 
 Publish preview: `python neon_publish/main.py -sc E2025 --dry-run`.
-See the [publisher guide](neon_publish/README.md) for all 44 targets, the
+See the [publisher guide](neon_publish/README.md) for all 47 targets, the
 one-time migration, the 90% shrink guard, and live cutover approval.
 
 ## Running everything
@@ -127,10 +127,10 @@ python neon_publish/main.py -sc E2026
 python tables_to_csv/main.py
 ```
 
-The 44 tables listed by `--list-tables` reach Neon (the 12 added in 30g, the 2 added in 30h and
-the 4 added in 30i need the reviewed one-time migrations from `--print-migration [30h|30i]` first, applied only with
-the owner's approval). The other Silver-derived tables (on-court intervals and lineup stints) stay
-local for now.
+The 47 tables listed by `--list-tables` reach Neon (the 12 added in 30g, the 2 added in 30h,
+the 4 added in 30i and the 3 added in 30j need the reviewed one-time migrations from
+`--print-migration [30h|30i|30j]` first, applied only with
+the owner's approval). Every per-game Silver-derived table now has a published Gold copy.
 For the current season, `python pipeline.py --dry-run-publish` runs fetch, load,
 Gold and checks and previews the publish; plain `python pipeline.py` also
 publishes to Neon.

@@ -362,6 +362,9 @@ committed; copy the `.example`). Publishing reads the direct non-pooled
 - Build local copies of the per-game play-by-play Silver tables (published to Neon by 30i):
   `python gold_etl/main.py -sc <seasons> -tb game_team_possessions game_team_score_flow
   game_team_shot_splits game_team_shot_zones`. `--quality-only` checks equality with Silver.
+- Build local copies of the on-court, lineup-stint and stat-gap Silver tables (published to Neon by 30j):
+  `python gold_etl/main.py -sc <seasons> -tb game_player_on_court game_team_lineup_stints
+  game_stat_gaps`. `--quality-only` checks equality with Silver.
 - Build local page-shaped team advanced stats (`app_standings_stats`, a per-round projection of
   the three team round tables; published to Neon by 30g):
   `python gold_etl/main.py -sc <seasons> -tb app_standings_stats`. `--quality-only` ties each
@@ -382,11 +385,12 @@ committed; copy the `.example`). Publishing reads the direct non-pooled
 - Traditional or misc table selections also rebuild their derived `PS` rows.
 - Gold read-only source and derived counts: `python gold_etl/main.py -sc <seasons> --dry-run`
 - Gold read-only equality checks: `python gold_etl/main.py -sc <seasons> --quality-only`
-- List the 44 fixed Gold-to-Neon mappings: `python neon_publish/main.py --list-tables`;
+- List the 47 fixed Gold-to-Neon mappings: `python neon_publish/main.py --list-tables`;
   print the reviewed DDL for the 12 tables added in 30g (no database):
   `python neon_publish/main.py --print-migration`, and for the 2 per-game tables added in 30h:
   `python neon_publish/main.py --print-migration 30h`, and for the 4 per-game play-by-play tables
-  added in 30i: `python neon_publish/main.py --print-migration 30i`. Applying any on Neon needs owner approval.
+  added in 30i: `python neon_publish/main.py --print-migration 30i`, and for the 3 on-court, stint and
+  stat-gap tables added in 30j: `python neon_publish/main.py --print-migration 30j`. Applying any on Neon needs owner approval.
 - Read-only Neon preflight and count preview: `python neon_publish/main.py -sc E2025 --dry-run`
 - Publish one EuroLeague season and competition-wide Gold tables: `python neon_publish/main.py -sc E2026`
   after separate owner approval. The one-time

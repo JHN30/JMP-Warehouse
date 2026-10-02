@@ -8,10 +8,11 @@ from contextlib import nullcontext
 from pathlib import Path
 from unittest import mock
 
-from gold_etl.schema import (DERIVED_NAMES, GAME_ADVANCED_NAMES, GAME_PBP_NAMES, GOLD_TABLES,
-                             ROUND_NAMES, SOURCE_NAMES)
+from gold_etl.schema import (DERIVED_NAMES, GAME_ADVANCED_NAMES, GAME_COURT_NAMES,
+                             GAME_PBP_NAMES, GOLD_TABLES, ROUND_NAMES, SOURCE_NAMES)
 from neon_publish import publish
-from neon_publish.contract import (APP_TABLES, GAME_PBP_TABLES, GAME_TABLES, GLOBAL_TABLES,
+from neon_publish.contract import (APP_TABLES, GAME_COURT_TABLES, GAME_PBP_TABLES,
+                                   GAME_TABLES, GLOBAL_TABLES,
                                    NEW_TABLES,
                                    inspect_target,
                                    migration_sql, predicate, scope, target_name)
@@ -23,9 +24,9 @@ class ContractTests(unittest.TestCase):
     def test_every_gold_table_has_a_fixed_target_and_scope(self):
         self.assertEqual(APP_TABLES,
                          SOURCE_NAMES + DERIVED_NAMES + ROUND_NAMES + GAME_ADVANCED_NAMES
-                         + GAME_PBP_NAMES)
-        self.assertEqual(len(APP_TABLES), 44)
-        self.assertEqual(len({target_name(name) for name in APP_TABLES}), 44)
+                         + GAME_PBP_NAMES + GAME_COURT_NAMES)
+        self.assertEqual(len(APP_TABLES), 47)
+        self.assertEqual(len({target_name(name) for name in APP_TABLES}), 47)
         self.assertEqual(len(GLOBAL_TABLES), 5)
         self.assertEqual(set(APP_TABLES), set(GOLD_TABLES))
         for name in APP_TABLES:
@@ -431,6 +432,13 @@ class TransactionTests(unittest.TestCase):
         self.assertIsInstance(result, ValueError)
         self.assertEqual((neon.rollbacks, copies), (1, 0))
 
+    def test_an_empty_scope_publishes_cleanly(self):
+        for before in (None, 0):
+            neon, result, copies = self.run_publish({"game_stat_gaps": before},
+                                                    {"game_stat_gaps": 0})
+            self.assertEqual(result, {"game_stat_gaps": (before, 0)})
+            self.assertEqual((neon.commits, neon.rollbacks, copies), (1, 0, 1))
+
     def test_failed_second_copy_rolls_back_first(self):
         neon, result, copies = self.run_publish({"games": 10, "app_players": 4},
                                                 {"games": 11, "app_players": 5},
@@ -488,13 +496,39 @@ class GamePbpTests(unittest.TestCase):
         local.assert_not_called()
 
 
+class GameCourtTests(unittest.TestCase):
+    """The three on-court, lineup-stint and stat-gap tables added in 30j."""
+
+    def test_targets_scope_and_migration_file(self):
+        self.assertEqual([target_name(name) for name in GAME_COURT_TABLES],
+                         ["app_game_player_on_court", "app_game_team_lineup_stints",
+                          "app_game_stat_gaps"])
+        for name in GAME_COURT_TABLES:
+            self.assertEqual(scope(name, "E", "E2026"), ("E", "E2026"))
+        path = Path(__file__).resolve().parents[1] / "migrations" / "30j_game_on_court_and_gaps.sql"
+        ddl = migration_sql(GAME_COURT_TABLES, "30j")
+        self.assertEqual(path.read_text(encoding="utf-8"), ddl)
+        self.assertEqual(ddl.count("CREATE TABLE"), 3)
+        self.assertIn("PRIMARY KEY (competition_code, season_code, game_code, side, person_key, "
+                      "interval_ordinal)", ddl)
+        self.assertIn("PRIMARY KEY (competition_code, season_code, game_code, stat_name)", ddl)
+        self.assertNotIn("GRANT", ddl)
+
+    def test_print_migration_selects_the_feature(self):
+        with (mock.patch("neon_publish.main.connect") as local,
+              mock.patch("sys.stdout", new_callable=io.StringIO) as output):
+            self.assertEqual(publish_main(["--print-migration", "30j"]), 0)
+        self.assertEqual(output.getvalue(), migration_sql(GAME_COURT_TABLES, "30j"))
+        local.assert_not_called()
+
+
 class CliTests(unittest.TestCase):
     def test_list_tables_needs_no_connections(self):
         with (mock.patch("neon_publish.main.connect") as local,
               mock.patch("neon_publish.main.neon_connect") as remote,
               mock.patch("sys.stdout", new_callable=io.StringIO) as output):
             self.assertEqual(publish_main(["--list-tables"]), 0)
-        self.assertEqual(len(output.getvalue().splitlines()), 44)
+        self.assertEqual(len(output.getvalue().splitlines()), 47)
         local.assert_not_called()
         remote.assert_not_called()
 

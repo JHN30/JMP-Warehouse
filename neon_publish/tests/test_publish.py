@@ -94,6 +94,7 @@ class NewTableTests(unittest.TestCase):
     def test_the_migration_file_equals_the_generated_ddl(self):
         path = Path(__file__).resolve().parents[1] / "migrations" / "30g_new_tables.sql"
         self.assertEqual(path.read_text(encoding="utf-8"), migration_sql())
+        self.assertIn("main.py --print-migration; review", migration_sql())
 
     def test_the_ddl_creates_every_new_table_with_its_columns_and_key(self):
         ddl = migration_sql()
@@ -462,6 +463,7 @@ class GameAdvancedTests(unittest.TestCase):
         self.assertEqual(ddl.count("CREATE TABLE"), 2)
         self.assertIn("PRIMARY KEY (competition_code, season_code, game_code, side, person_key)", ddl)
         self.assertIn("PRIMARY KEY (competition_code, season_code, game_code, side)", ddl)
+        self.assertIn("main.py --print-migration 30h; review", ddl)
         self.assertNotIn("GRANT", ddl)
 
     def test_print_migration_selects_the_feature(self):
@@ -486,6 +488,7 @@ class GamePbpTests(unittest.TestCase):
         self.assertEqual(path.read_text(encoding="utf-8"), ddl)
         self.assertEqual(ddl.count("CREATE TABLE"), 4)
         self.assertIn("PRIMARY KEY (competition_code, season_code, game_code, side, zone)", ddl)
+        self.assertIn("main.py --print-migration 30i; review", ddl)
         self.assertNotIn("GRANT", ddl)
 
     def test_print_migration_selects_the_feature(self):
@@ -512,6 +515,7 @@ class GameCourtTests(unittest.TestCase):
         self.assertIn("PRIMARY KEY (competition_code, season_code, game_code, side, person_key, "
                       "interval_ordinal)", ddl)
         self.assertIn("PRIMARY KEY (competition_code, season_code, game_code, stat_name)", ddl)
+        self.assertIn("main.py --print-migration 30j; review", ddl)
         self.assertNotIn("GRANT", ddl)
 
     def test_print_migration_selects_the_feature(self):

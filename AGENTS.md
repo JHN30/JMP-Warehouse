@@ -356,7 +356,7 @@ committed; copy the `.example`). Publishing reads the direct non-pooled
 - Build local player PER (Hollinger PER per round, league mean 15; published to Neon by 30g):
   `python gold_etl/main.py -sc <seasons> -tb player_round_ratings`. `--quality-only` checks
   the league-mean invariant.
-- Build local player Win Shares (offensive, defensive, total and per 48; published to Neon by 30g):
+- Build local player Win Shares (offensive, defensive, total and per 40; published to Neon by 30g):
   `python gold_etl/main.py -sc <seasons> -tb player_round_win_shares`. `--quality-only`
   prints `WARN` lines where a scope round's total Win Shares is far from its games.
 - Build local per-game advanced tables with single-game PER (published to Neon by 30h):

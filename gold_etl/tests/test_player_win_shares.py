@@ -124,7 +124,7 @@ class FormulaTests(unittest.TestCase):
         for name in ("stops1", "stops2", "stop_pct", "drtg", "def_ws"):
             self.assertAlmostEqual(float(got[name]), expected[name], places=4, msg=name)
 
-    def test_row_combines_offense_defense_and_per_48(self):
+    def test_row_combines_offense_defense_and_per_40(self):
         rows = derive(*one_game())
         star = pick(rows, "all", 1, "P1")
         expected = reference(short(STAR), 1200, short(LOCAL), short(ROAD), 70.42, 40, LEAGUE)
@@ -132,7 +132,7 @@ class FormulaTests(unittest.TestCase):
         self.assertAlmostEqual(float(star["off_win_shares"]), expected["off_ws"], places=4)
         self.assertAlmostEqual(float(star["def_win_shares"]), expected["def_ws"], places=4)
         self.assertAlmostEqual(float(star["win_shares"]), total, places=4)
-        self.assertAlmostEqual(float(star["win_shares_per_48"]), total * 48 / 20, places=4)
+        self.assertAlmostEqual(float(star["win_shares_per_40"]), total * 40 / 20, places=4)
         self.assertEqual((star["games_played"], star["seconds_played"]), (1, 1200))
 
     def test_player_with_no_free_throws_or_field_goals_is_not_null(self):
@@ -198,7 +198,7 @@ class RowTests(unittest.TestCase):
         rows = derive(games, boxes, players)
         star = pick(rows, "all", 1, "P1")
         self.assertEqual((star["off_win_shares"], star["win_shares"],
-                          star["win_shares_per_48"]), (None, None, None))
+                          star["win_shares_per_40"]), (None, None, None))
         self.assertIsNotNone(pick(rows, "all", 1, "P2")["win_shares"])
 
 

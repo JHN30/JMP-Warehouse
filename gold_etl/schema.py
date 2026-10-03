@@ -303,7 +303,7 @@ PLAYER_WIN_SHARES_TABLE = Table(
         Field("games_played", "INTEGER NOT NULL", "game_player_stats"),
         Field("seconds_played", "NUMERIC", "game_player_stats.seconds_played"),
     ) + tuple(Field(name, "NUMERIC", "derived") for name in (
-        "off_win_shares", "def_win_shares", "win_shares", "win_shares_per_48")),
+        "off_win_shares", "def_win_shares", "win_shares", "win_shares_per_40")),
 )
 
 # app_standings_stats projects the three team round tables (no new formulas); its final

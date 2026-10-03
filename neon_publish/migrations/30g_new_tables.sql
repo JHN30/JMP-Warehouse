@@ -195,7 +195,7 @@ CREATE TABLE public.app_player_round_win_shares (
     "off_win_shares" NUMERIC,
     "def_win_shares" NUMERIC,
     "win_shares" NUMERIC,
-    "win_shares_per_48" NUMERIC,
+    "win_shares_per_40" NUMERIC,
     PRIMARY KEY (competition_code, season_code, scope, round_number, person_key)
 );
 

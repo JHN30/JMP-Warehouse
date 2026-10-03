@@ -167,9 +167,9 @@ def _values(s, league):
     off = None if offense is None else offense["off_ws"]
     dfn = None if defense is None else defense["def_ws"]
     total = None if off is None or dfn is None else off + dfn
-    per_48 = None if total is None else total * 48 / (s["seconds"] / 60)
+    per_40 = None if total is None else total * 40 / (s["seconds"] / 60)
     return {"off_win_shares": off, "def_win_shares": dfn, "win_shares": total,
-            "win_shares_per_48": per_48}
+            "win_shares_per_40": per_40}
 
 
 def _fresh():

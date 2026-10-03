@@ -953,7 +953,7 @@ player_round_win_shares` from `silver.game_player_stats` and the same counted ga
 | `club_code`, `player_name`, `games_played`, `seconds_played` | Latest club and name, appearances and cumulative seconds through the round |
 | `off_win_shares` | (Points produced - 0.92 x league points per possession x individual possessions) / marginal points per win, Basketball-Reference's method |
 | `def_win_shares` | Minutes share x team possessions x (1.08 x league points per possession - individual defensive rating / 100) / marginal points per win; the defensive rating uses stops and the stop percentage |
-| `win_shares`, `win_shares_per_48` | `off_win_shares + def_win_shares`, and `win_shares` x 48 / minutes played |
+| `win_shares`, `win_shares_per_40` | `off_win_shares + def_win_shares`, and `win_shares` x 40 / minutes played. The rate is per 40 minutes, the length of a EuroLeague game (Basketball-Reference uses 48 for the NBA); the league mean is about 0.100 |
 
 Marginal points per win = 0.32 x league points per team game x (the player's team pace
 over the games the player played / league pace). Player, club and opponent totals are

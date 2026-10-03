@@ -178,27 +178,53 @@ hours even when no game is hot. The last check is recorded in
 `refresh_state.json`.
 
 On game days the v3 statistics and standings endpoints answer an older, shorter
-list or nothing for roughly half of all requests (several upstream instances with
-different freshness), and a CDN in front keeps whichever answer came first for 2
-hours per URL. So these requests carry an unused `_=<timestamp>` parameter, which
-forces a cache miss and is not written to the manifest. When a feed that is
-already stored gets a worse answer, it is asked again up to `STALE_RETRIES` (8)
-times (`[stale]` lines) and the first complete answer is stored. Only if every
-attempt is worse is it not stored and the stored version stays in use. For a
-totals (`accumulated`) feed, worse means fewer clubs or fewer total games
-played; for a `perGame` feed, an empty answer (per-game feeds list only clubs
-with more than half of the phase's games, so they may shrink). The run prints,
-for example:
+list or nothing for some requests. The origin keeps one snapshot per query key
+(several upstream instances; some keys stayed frozen for days, for example the
+E2026 `RS` player keys at the state after the first 7 games). Cloudflare in
+front caches for 60 seconds at most. These requests carry an unused
+`_=<timestamp>` parameter, which clears Cloudflare but not the origin, and it is
+not written to the manifest. Other headers or `Limit` values change nothing.
+
+A statistics answer must be **complete** against the v2 game list: every club
+that played in the scope (`all` or a phase) is present with its played games
+(team feeds: the club's `gamesPlayed`; player feeds: the highest `gamesPlayed` of
+its players). Multi-club codes such as `BAS;TEL` (a player who changed clubs) are
+ignored. An answer is also **worse** when a stored `accumulated` feed would lose
+clubs or total games, or a stored `perGame` feed would become empty (per-game
+feeds list only players with more than half of the phase's games, so they may
+shrink). A feed that is worse or incomplete is asked again up to `STALE_RETRIES`
+(4) times (`[stale]` lines) and the first good answer is stored. A stored version
+that is already complete is asked only once: a stale answer cannot improve it,
+and a complete one (a stat correction) is still stored when it arrives.
+
+If the answer is still incomplete and the stored version is too, the same feed is
+asked once under each fallback key and the first complete answer is stored under
+the usual name, with the parameters actually used in `manifest.jsonl`:
+
+1. `SeasonMode=Range` with `FromSeasonCode` and `ToSeasonCode` set to the season
+   (the sort parameters stay, because they decide `playerRanking` and row order);
+2. while every played game is in one phase (so far `RS`), the `all` feed is also
+   asked for that phase, because both scopes are then the same data.
+
+When nothing complete arrives, the answer is stored only if it is not worse and
+covers at least as many club-games as the stored version (progress is kept);
+otherwise the stored version stays in use. If that stored version is complete,
+the run prints `[current]` (the API is stale, nothing to do). Otherwise it
+prints `[kept]` and the feed is listed. The run prints, for example:
 
 ```text
-[kept]    v3/season_stats/teams_traditional_all_accumulated: API answered 0 clubs / 0 games, stored version has 20 / 20 in all 9 attempt(s); kept the stored version, refresh again later
+[current] v3/season_stats/teams_traditional_RS_perGame: stored version is complete against the v2 games; API answered stale (API covers 40 of 60 club-games played)
+[kept]    v3/season_stats/teams_traditional_all_accumulated: API answered 0 clubs / 0 games, stored version has 20 / 36 in all 5 attempt(s); kept the stored version, refresh again later
+[behind]  v3/season_stats/teams_traditional_RS_accumulated: stored version covers 48 of 60 club-games of the v2 games, refresh again later
 ```
 
-The summary line counts them ("Stats feeds kept from an earlier fetch"), the
-`--summary-file` lists them under `kept_resources`, and the rejected answer is
-recorded in `manifest.jsonl` with `stored_as: null` and a `rejected` reason.
-Every other feed in the run updates normally. A later refresh stores the
-complete answer as soon as the API returns it.
+The summary line counts both ("Stats feeds kept from an earlier fetch", "Stats
+feeds behind the v2 games"), the `--summary-file` lists them under
+`kept_resources` and `behind_resources` (a `[current]` feed is in neither), and
+a rejected answer, `[current]` ones included, is recorded in
+`manifest.jsonl` with `stored_as: null` and a `rejected` reason. `[behind]` is a
+warning, not a failure. Every other feed in the run updates normally. A later
+refresh stores the complete answer as soon as the API returns it.
 
 Use --refresh-current to force a re-fetch of all mutable current-season resources,
 including every standings round.

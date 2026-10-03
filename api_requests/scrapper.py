@@ -25,9 +25,11 @@ class EuroScrapas:
     V2_PEOPLE_PAGE_SIZE = 1000
     # Just under a day, so a nightly run always re-checks season-level data.
     SEASON_LEVEL_REFRESH_HOURS = 20
-    # Extra asks when a stored statistics or standings feed gets a worse answer.
-    # About half of the answers to a fresh request are empty or a game behind.
-    STALE_RETRIES = 8
+    # Extra asks when a statistics or standings feed answers worse than the stored
+    # version or behind the v2 games. A key whose upstream snapshot is frozen does
+    # not recover within minutes, so more asks mostly cost time; the other keys
+    # of the same feed are tried afterwards.
+    STALE_RETRIES = 4
 
     # name: (entity, statistic type, sort statistic). The team endpoints reject
     # the player sort statistics (400) and have no scoring or misc feed (404).
@@ -87,6 +89,7 @@ class EuroScrapas:
         self.hot = self.empty_hot_scope()
         self.changed_resources = []
         self.kept_resources = []
+        self.behind_resources = []
         self.stale_retries = self.STALE_RETRIES
         self.season_started_at = monotonic()
         self.run_started_at = self.season_started_at
@@ -398,33 +401,20 @@ class EuroScrapas:
             for phase_code in (self.get_phase_code(game) for game in played_games)
             if phase_code
         })
-        played_clubs = {
-            phase_code: {
-                ((game.get(side) or {}).get("club") or {}).get("code")
-                for game in played_games
+        expected_games = {
+            phase_code: self.played_games_per_club([
+                game for game in played_games
                 if phase_code == "all" or self.get_phase_code(game) == phase_code
-                for side in ("local", "road")
-            } - {None}
+            ])
             for phase_code in phase_codes
         }
+        single_phase = phase_codes[1] if len(phase_codes) == 2 else None
 
         for name, (entity, statistic_type, sort_statistic) in self.V3_STATISTIC_SPECS.items():
             for statistic_mode in self.V3_STATISTIC_MODES:
                 for phase_code in phase_codes:
-                    params = {
-                        "SeasonMode": "Single",
-                        "SeasonCode": season_code,
-                        "Statistic": sort_statistic,
-                        "Limit": 1000,
-                        "SortDirection": "descending",
-                        "StatisticMode": statistic_mode,
-                        "StatisticSortMode": statistic_mode,
-                    }
-                    if sort_statistic is None:
-                        for sort_param in ("Statistic", "SortDirection", "StatisticSortMode"):
-                            del params[sort_param]
-                    if phase_code != "all":
-                        params["PhaseTypeCode"] = phase_code
+                    params = self.v3_stats_params(
+                        season_code, sort_statistic, statistic_mode, phase_code)
                     phase_force = mutable_force or (
                         self.hot["any"] if phase_code == "all"
                         else phase_code in self.hot["phases"]
@@ -440,8 +430,48 @@ class EuroScrapas:
                         resource=f"v3/season_stats/{name}_{phase_code}_{statistic_mode}",
                         force=phase_force,
                         keep_if_worse=True,
-                        min_clubs=len(played_clubs[phase_code]),
+                        expected_games=expected_games[phase_code],
+                        fallback_params=self.fallback_stats_params(
+                            params, season_code, single_phase),
                     )
+
+    @staticmethod
+    def v3_stats_params(season_code, sort_statistic, statistic_mode, phase_code):
+        params = {
+            "SeasonMode": "Single",
+            "SeasonCode": season_code,
+            "Statistic": sort_statistic,
+            "Limit": 1000,
+            "SortDirection": "descending",
+            "StatisticMode": statistic_mode,
+            "StatisticSortMode": statistic_mode,
+        }
+        if sort_statistic is None:
+            for sort_param in ("Statistic", "SortDirection", "StatisticSortMode"):
+                del params[sort_param]
+        if phase_code != "all":
+            params["PhaseTypeCode"] = phase_code
+        return params
+
+    @staticmethod
+    def fallback_stats_params(params, season_code, single_phase):
+        """Other query keys that ask for the same data as ``params``.
+
+        The origin keeps one snapshot per query key and some are frozen while
+        others are current. Sort parameters stay as they are, because they decide
+        ``playerRanking`` and the row order. While every played game is in one
+        phase, the ``all`` scope is the same data as that phase.
+        """
+        def as_range(base):
+            ranged = {key: value for key, value in base.items() if key != "SeasonCode"}
+            return {**ranged, "SeasonMode": "Range",
+                    "FromSeasonCode": season_code, "ToSeasonCode": season_code}
+
+        keys = [as_range(params)]
+        if single_phase and "PhaseTypeCode" not in params:
+            phase_params = {**params, "PhaseTypeCode": single_phase}
+            keys += [as_range(phase_params), phase_params]
+        return keys
 
     def extract_game_stats(self, season_code, played_games):
         if "game_stats" not in self.datasets:
@@ -484,17 +514,59 @@ class EuroScrapas:
                 self.report_empty_live_payload(dataset, season_code, game_code, payload)
 
     @staticmethod
-    def stats_feed_size(payload, accumulated):
+    def stats_rows(payload):
+        return (payload or {}).get("players") or (payload or {}).get("teams") or []
+
+    @staticmethod
+    def stats_row_club(row):
+        """Club code of a statistics row; None for a missing or multi-club code.
+
+        A player who changed clubs carries both codes joined by ";" (BAS;TEL).
+        """
+        team = (row.get("player") or {}).get("team") if "player" in row else row.get("team")
+        code = (team or {}).get("code")
+        return None if not code or ";" in code else code
+
+    @classmethod
+    def stats_feed_size(cls, payload, accumulated):
         """(distinct clubs, total games played or None) of a v3 statistics list."""
-        rows = (payload or {}).get("players") or (payload or {}).get("teams") or []
-        clubs = {
-            ((row.get("player") or {}).get("team") or {}).get("code")
-            if "player" in row else (row.get("team") or {}).get("code")
-            for row in rows
-        }
+        rows = cls.stats_rows(payload)
+        clubs = {cls.stats_row_club(row) for row in rows}
         clubs.discard(None)
         games = sum(row.get("gamesPlayed") or 0 for row in rows) if accumulated else None
         return len(clubs), games
+
+    @staticmethod
+    def played_games_per_club(games):
+        """Played games per club code of the v2 ``games``."""
+        counts = {}
+        for game in games:
+            for side in ("local", "road"):
+                club = ((game.get(side) or {}).get("club") or {}).get("code")
+                if club:
+                    counts[club] = counts.get(club, 0) + 1
+        return counts
+
+    @classmethod
+    def stats_coverage(cls, payload, expected_games):
+        """Club-games a statistics answer covers out of the v2 ``expected_games``.
+
+        A club counts with its highest ``gamesPlayed``: its team row, or the
+        player who played the most games. This is exact for team feeds, and
+        someone plays every game of a club.
+        """
+        most = {}
+        for row in cls.stats_rows(payload):
+            club = cls.stats_row_club(row)
+            if club:
+                most[club] = max(most.get(club, 0), row.get("gamesPlayed") or 0)
+        return int(sum(min(most.get(club, 0), games) for club, games in expected_games.items()))
+
+    @classmethod
+    def stats_complete(cls, payload, expected_games):
+        """Whether ``payload`` covers every played game of ``expected_games``."""
+        return (payload is not None and bool(expected_games)
+                and cls.stats_coverage(payload, expected_games) >= sum(expected_games.values()))
 
     @classmethod
     def worse_stats_answer(cls, stored, answer, resource):
@@ -539,17 +611,151 @@ class EuroScrapas:
                     f"stored version has {old_clubs} / {old_games:g}")
         return None
 
+    def worse_answer(self, resource, stored, payload):
+        """Why ``payload`` is worse than the ``stored`` version, or None."""
+        if stored is None:
+            return None
+        if resource.startswith("v3/standings/"):
+            return self.worse_standings_answer(stored, payload)
+        return self.worse_stats_answer(stored, payload, resource)
+
+    def stats_problem(self, resource, stored, payload, expected_games):
+        """Why an answer cannot be stored as the latest version, or None."""
+        worse = self.worse_answer(resource, stored, payload)
+        if worse or not expected_games:
+            return worse
+        covered = self.stats_coverage(payload, expected_games)
+        total = sum(expected_games.values())
+        if covered < total:
+            return f"API covers {covered} of {total} club-games played"
+        return None
+
+    def keep_reason(self, resource, stored, payload, expected_games):
+        """Why the stored version must stay instead of ``payload``, or None.
+
+        An answer that is only behind the v2 games is still stored when it covers
+        as much as the stored version, so partial progress is not lost.
+        """
+        worse = self.worse_answer(resource, stored, payload)
+        if worse or not expected_games:
+            return worse
+        covered = self.stats_coverage(payload, expected_games)
+        before = self.stats_coverage(stored, expected_games)
+        if covered < before:
+            return (f"API covers {covered} of {sum(expected_games.values())} club-games, "
+                    f"stored version covers {before}")
+        return None
+
+    def request_answer(self, source, url, resource, params, cache_busting, note=""):
+        """One request: (payload, status code, final URL, bytes, params), None after a failure."""
+        request_params = params
+        if cache_busting:
+            # Clears Cloudflare only; the origin keeps one snapshot per query key.
+            request_params = {**(params or {}), "_": time_ns()}
+        print(
+            f"[request] {source} -> {resource}{note}"
+            f"  ---  {self.get_time_counter()}"
+        )
+        try:
+            payload, status_code, final_url, content = self.client.get_json(
+                url, params=request_params)
+        except (requests.RequestException, ValueError) as error:
+            response = getattr(error, "response", None)
+            self.store.log({
+                "resource": resource, "url": url, "params": params,
+                "status_code": getattr(response, "status_code", None),
+                "fetched_at_utc": datetime.now(timezone.utc).isoformat(),
+                "error": str(error), "stored_as": None,
+            })
+            self.record_failure(source, url, params, error)
+            return None
+        return payload, status_code, final_url, content, params
+
+    def fetch_fallback_keys(self, source, url, resource, stored, expected_games,
+                            fallback_params):
+        """The first answer under another query key that can be stored, or None."""
+        for number, params in enumerate(fallback_params, 1):
+            answer = self.request_answer(
+                source, url, resource, params, True,
+                f" (fallback key {number}/{len(fallback_params)})")
+            if answer is None:
+                continue
+            problem = self.stats_problem(resource, stored, answer[0], expected_games)
+            if problem is None:
+                return answer
+            print(
+                f"[stale]   {resource}: fallback key {number}: {problem}"
+                f"  ---  {self.get_time_counter()}"
+            )
+        return None
+
+    def store_answer(self, source, resource, answer):
+        payload, status_code, final_url, content, params = answer
+        changed = self.store.write(
+            resource, content, url=final_url, params=params, status_code=status_code,
+        )
+        if changed:
+            self.changed_resources.append(f"{self.active_season_code}/{resource}")
+        label = "[saved]  " if changed else "[same]   "
+        print(
+            f"{label} {source} ({status_code}) -> {resource}"
+            f"  ---  {self.get_time_counter()}"
+        )
+        return payload
+
+    def keep_stored(self, resource, stored, answer, reason, attempts, complete):
+        _, status_code, final_url, content, params = answer
+        self.store.log({
+            "resource": resource, "url": final_url, "params": params,
+            "status_code": status_code,
+            "fetched_at_utc": datetime.now(timezone.utc).isoformat(),
+            "sha256": hashlib.sha256(content).hexdigest(), "bytes": len(content),
+            "stored_as": None, "rejected": reason,
+        })
+        if complete:
+            print(
+                f"[current] {resource}: stored version is complete against the v2 games; "
+                f"API answered stale ({reason})"
+                f"  ---  {self.get_time_counter()}"
+            )
+            return stored
+        self.kept_resources.append(f"{self.active_season_code}/{resource}")
+        print(
+            f"[kept]    {resource}: {reason} in all {attempts} attempt(s); "
+            f"kept the stored version, refresh again later"
+            f"  ---  {self.get_time_counter()}"
+        )
+        return stored
+
+    def report_behind(self, resource, payload, expected_games):
+        """List a feed whose latest stored version still misses played games."""
+        if not expected_games:
+            return
+        covered = self.stats_coverage(payload, expected_games)
+        total = sum(expected_games.values())
+        if covered < total:
+            self.behind_resources.append(f"{self.active_season_code}/{resource}")
+            print(
+                f"[behind]  {resource}: stored version covers {covered} of {total} "
+                f"club-games of the v2 games, refresh again later"
+                f"  ---  {self.get_time_counter()}"
+            )
+
     def fetch_to_cache(self, source, url, resource, params=None, force=False,
-                       keep_if_worse=False, min_clubs=0):
+                       keep_if_worse=False, expected_games=None, fallback_params=()):
         """Return the latest bronze payload when permitted, otherwise fetch and store it.
 
         With ``keep_if_worse`` (v3 season statistics and round standings), an answer
         smaller than the stored version is only logged in the manifest and the
         stored version is kept, because the API sometimes answers stale lists on
-        game days. ``min_clubs`` is how many clubs have played in the scope: an
-        answer listing fewer is stale too, which catches a per-game feed that is
-        an older snapshot but not smaller than the stored version. Without a
-        stored version, the last answer is stored anyway.
+        game days. ``expected_games`` is the v2 count of played games per club in
+        the scope: an answer covering fewer is stale too, which catches an older
+        snapshot that is not smaller than the stored version. While the answer
+        stays behind, ``fallback_params`` (other query keys of the same feed) are
+        asked once each and the first complete answer is stored. A version that
+        stays behind the v2 games is listed in ``behind_resources``. A stored
+        version that is already complete is asked once and not listed when kept.
+        Without a stored version, the last answer is stored anyway.
         """
         if not force and self.store.exists(resource):
             print(
@@ -562,85 +768,45 @@ class EuroScrapas:
             self.store.read_json(resource)
             if keep_if_worse and self.store.exists(resource) else None
         )
-        checked = stored is not None or bool(min_clubs)
-        attempts = 1 + (self.stale_retries if checked else 0)
+        stored_complete = self.stats_complete(stored, expected_games)
+        # A complete stored version cannot be improved by a stale answer; a
+        # complete answer (a stat correction) is stored whenever one arrives.
+        retries = 0 if stored_complete else self.stale_retries
+        attempts = 1 + (retries if stored is not None or expected_games else 0)
         for attempt in range(1, attempts + 1):
-            request_params = params
-            if keep_if_worse:
-                # The API sits behind a 2 hour CDN cache keyed on the full URL;
-                # an unused parameter makes every request a cache miss.
-                request_params = {**(params or {}), "_": time_ns()}
-            print(
-                f"[request] {source} -> {resource}"
-                f"{f' (retry {attempt - 1}/{self.stale_retries})' if attempt > 1 else ''}"
-                f"  ---  {self.get_time_counter()}"
-            )
-            try:
-                payload, status_code, final_url, content = self.client.get_json(
-                    url, params=request_params)
-            except (requests.RequestException, ValueError) as error:
-                response = getattr(error, "response", None)
-                self.store.log({
-                    "resource": resource, "url": url, "params": params,
-                    "status_code": getattr(response, "status_code", None),
-                    "fetched_at_utc": datetime.now(timezone.utc).isoformat(),
-                    "error": str(error), "stored_as": None,
-                })
-                self.record_failure(source, url, params, error)
+            note = f" (retry {attempt - 1}/{self.stale_retries})" if attempt > 1 else ""
+            answer = self.request_answer(source, url, resource, params, keep_if_worse, note)
+            if answer is None:
                 return None
-
-            problem = None
-            if stored is not None:
-                if resource.startswith("v3/standings/"):
-                    problem = self.worse_standings_answer(stored, payload)
-                else:
-                    problem = self.worse_stats_answer(stored, payload, resource)
-            if not problem and min_clubs:
-                clubs, _ = self.stats_feed_size(payload, False)
-                if clubs < min_clubs:
-                    problem = f"API answered {clubs} clubs, {min_clubs} have played"
-            if not problem:
-                break
-            # Answers differ from request to request (several upstream
-            # instances with different freshness), so asking again usually
-            # reaches a complete one.
+            problem = self.stats_problem(resource, stored, answer[0], expected_games)
+            if problem is None:
+                return self.store_answer(source, resource, answer)
+            # Answers differ between upstream instances and query keys, so
+            # asking again can reach a complete one.
             print(
                 f"[stale]   {resource}: {problem}"
                 f"  ---  {self.get_time_counter()}"
             )
 
-        if problem and stored is None:
+        if fallback_params and expected_games and not stored_complete:
+            fallback = self.fetch_fallback_keys(
+                source, url, resource, stored, expected_games, fallback_params)
+            if fallback is not None:
+                return self.store_answer(source, resource, fallback)
+
+        if stored is None:
             print(
                 f"[stale]   {resource}: no stored version to keep, storing the last answer"
                 f"  ---  {self.get_time_counter()}"
             )
-        elif problem:
-            self.store.log({
-                "resource": resource, "url": final_url, "params": params,
-                "status_code": status_code,
-                "fetched_at_utc": datetime.now(timezone.utc).isoformat(),
-                "sha256": hashlib.sha256(content).hexdigest(), "bytes": len(content),
-                "stored_as": None, "rejected": problem,
-            })
-            self.kept_resources.append(f"{self.active_season_code}/{resource}")
-            print(
-                f"[kept]    {resource}: {problem} in all {attempts} attempt(s); "
-                f"kept the stored version, refresh again later"
-                f"  ---  {self.get_time_counter()}"
-            )
-            return stored
-
-        changed = self.store.write(
-            resource, content, url=final_url, params=params, status_code=status_code,
-        )
-        if changed:
-            self.changed_resources.append(f"{self.active_season_code}/{resource}")
-        label = "[saved]  " if changed else "[same]   "
-        print(
-            f"{label} {source} ({status_code}) -> {resource}"
-            f"  ---  {self.get_time_counter()}"
-        )
-        return payload
+            result = self.store_answer(source, resource, answer)
+        else:
+            reason = self.keep_reason(resource, stored, answer[0], expected_games)
+            result = (
+                self.keep_stored(resource, stored, answer, reason, attempts, stored_complete)
+                if reason else self.store_answer(source, resource, answer))
+        self.report_behind(resource, result, expected_games)
+        return result
 
     @staticmethod
     def empty_hot_scope():

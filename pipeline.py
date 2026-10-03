@@ -111,6 +111,7 @@ class StageFacts:
     changed: int | None = None
     failed_requests: int | None = None
     kept: list = field(default_factory=list)
+    behind: list = field(default_factory=list)
     load_lines: list = field(default_factory=list)
     gold_lines: list = field(default_factory=list)
     gold_status: str | None = None
@@ -160,6 +161,10 @@ def build_summary(season_code, result, facts, seconds, log_path, next_step=None)
             lines.append(f"            {len(facts.kept)} stats feed(s) kept from an earlier fetch "
                          "(the API answered worse; refresh again later):")
             lines.extend(f"              {resource}" for resource in facts.kept)
+        if facts.behind:
+            lines.append(f"            {len(facts.behind)} stats feed(s) still behind the v2 games "
+                         "(the API answered stale under every key tried; refresh again later):")
+            lines.extend(f"              {resource}" for resource in facts.behind)
     if not facts.load_lines:
         lines.append("Load:     not run")
     else:
@@ -320,9 +325,11 @@ def refresh(args, season_code, log, state_file, facts, stage_runner=run_stage,
                    if not resource.startswith("_catalog/")]
         facts.changed, facts.failed_requests = len(changed), summary["failed_requests"]
         facts.kept = summary.get("kept_resources", [])
+        facts.behind = summary.get("behind_resources", [])
         log.line(f"Fetch: {len(changed)} changed resource(s), "
                  f"{summary['failed_requests']} failed request(s), "
-                 f"{len(facts.kept)} stats feed(s) kept from an earlier fetch.")
+                 f"{len(facts.kept)} stats feed(s) kept from an earlier fetch, "
+                 f"{len(facts.behind)} behind the v2 games.")
         if changed:
             write_state(state_file, publish_pending=True, last_change_count=len(changed))
 

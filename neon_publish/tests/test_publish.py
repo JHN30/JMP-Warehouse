@@ -660,6 +660,15 @@ class PipelineTests(unittest.TestCase):
         summary = "\n".join(build_summary("E2026", "NOTHING TO DO", facts, 1, "log"))
         self.assertIn("1 stats feed(s) kept", summary)
         self.assertIn("players_scoring_all_accumulated", summary)
+        self.assertNotIn("behind the v2 games", summary)
+
+    def test_feeds_behind_the_v2_games_are_visible_only_when_there_are_any(self):
+        facts = StageFacts(changed=0, failed_requests=0,
+                           behind=["E2026/v3/season_stats/teams_traditional_RS_accumulated"])
+        summary = "\n".join(build_summary("E2026", "NOTHING TO DO", facts, 1, "log"))
+        self.assertIn("1 stats feed(s) still behind the v2 games", summary)
+        self.assertIn("teams_traditional_RS_accumulated", summary)
+        self.assertNotIn("kept from an earlier fetch", summary)
 
     def test_neon_prompt_waits_until_gold_quality_passes(self):
         args = build_parser().parse_args(["--skip-fetch"])

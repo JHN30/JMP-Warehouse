@@ -10,16 +10,19 @@ from gold_etl import main
 from gold_etl.loader import replace_scope
 from gold_etl.quality import check_records_scope, check_scope, check_series_scope
 from gold_etl.schema import (AGGREGATE_NAMES, DERIVED_NAMES, GAME_ADVANCED_NAMES, GAME_COURT_NAMES, GAME_PBP_NAMES, GOLD_TABLES,
-                             PLAYER_STATS, RECORDS_TABLES, ROUND_NAMES, SOURCE_NAMES, TABLES,
-                             columns, count_sql, create_table_sql)
+                             PLAYER_STATS, PLAYER_STATS_FLAGS, RECORDS_TABLES, ROUND_NAMES,
+                             SOURCE_NAMES, TABLES, columns, count_sql, create_table_sql,
+                             source_columns)
 from postgres_etl.flat_schema import TABLES as SILVER_TABLES
 
 
 class FakeCursor:
+    description = ()
+
     def __init__(self, connection):
         self.connection = connection
         self.rowcount = 0
-        self.answer = None
+        self.answer = []
 
     def __enter__(self):
         return self
@@ -29,6 +32,7 @@ class FakeCursor:
 
     def execute(self, query, params=None):
         self.connection.statements.append((query, params))
+        self.answer = []
         if query.startswith("INSERT INTO"):
             if self.connection.fail_insert:
                 raise RuntimeError("insert failed")
@@ -118,7 +122,10 @@ class SchemaTests(unittest.TestCase):
         self.assertEqual(len(PLAYER_STATS), 4)
         for name in SOURCE_NAMES:
             self.assertIs(TABLES[name], SILVER_TABLES[name])
-            self.assertEqual(columns(name), tuple(field.name for field in SILVER_TABLES[name].fields))
+            silver = tuple(field.name for field in SILVER_TABLES[name].fields)
+            flags = tuple(field.name for field in PLAYER_STATS_FLAGS)
+            self.assertEqual(source_columns(name), silver)
+            self.assertEqual(columns(name), silver + (flags if name in PLAYER_STATS else ()))
             self.assertNotIn("load_id", columns(name))
             self.assertNotIn("loaded_at", columns(name))
             ddl = create_table_sql(name)
@@ -170,8 +177,28 @@ class LoaderTests(unittest.TestCase):
     def test_player_replace_preserves_ps_slice(self):
         db = FakeConnection()
         replace_scope(db, "season_player_stats_misc", "E", "E2025")
-        for query, _ in db.statements[-2:]:
+        copy = [query for query, _ in db.statements
+                if query.startswith(("DELETE FROM gold", "INSERT INTO gold"))]
+        self.assertEqual(len(copy), 2)
+        for query in copy:
             self.assertIn("phase_code\" <> 'PS'", query)
+
+    def test_player_copy_adds_flag_columns_and_defaults_them(self):
+        db = FakeConnection()
+        replace_scope(db, "season_player_stats_misc", "E", "E2025")
+        sql = [query for query, _ in db.statements]
+        alters = [query for query in sql if query.startswith("ALTER TABLE")]
+        self.assertEqual(len(alters), 3)
+        self.assertTrue(all("ADD COLUMN IF NOT EXISTS" in query for query in alters))
+        insert = next(query for query in sql if query.startswith("INSERT INTO gold"))
+        self.assertIn("SELECT", insert)
+        self.assertIn("false, 0, false", insert)
+        self.assertNotIn('"is_calculated" FROM', insert)
+
+    def test_non_player_copy_has_no_flag_columns(self):
+        db = FakeConnection()
+        replace_scope(db, "games", "E", "E2025")
+        self.assertFalse(any(query.startswith("ALTER TABLE") for query, _ in db.statements))
 
 
 class QualityTests(unittest.TestCase):

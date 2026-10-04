@@ -3,8 +3,9 @@
 from collections import defaultdict
 from decimal import Decimal, ROUND_HALF_EVEN
 
+from gold_etl.qualification import POSTSEASON_PHASES as PHASES, min_games
 
-PHASES = frozenset({"PI", "PO", "FF"})
+
 COUNTING = (
     "points", "two_pointers_made", "two_pointers_attempted",
     "three_pointers_made", "three_pointers_attempted", "free_throws_made",
@@ -52,11 +53,7 @@ def derive_rows(games, box_scores, identities=None, clubs=None):
         key=lambda game: (str(game.get("scheduled_at") or ""), game["game_code"]),
     )
     game_by_code = {game["game_code"]: game for game in postseason}
-    club_games = defaultdict(int)
-    for game in postseason:
-        for column in ("local_club_code", "road_club_code"):
-            if game.get(column):
-                club_games[game[column]] += 1
+    threshold = min_games(len({game["round_number"] for game in postseason}), "PS")
     by_game = defaultdict(list)
     for row in box_scores:
         if row["game_code"] in game_by_code and row.get("person_key") and \
@@ -86,6 +83,8 @@ def derive_rows(games, box_scores, identities=None, clubs=None):
             "player_ranking": None,
             "games_played": played,
             "games_started": sum(row.get("started") is True for _, row in appearances),
+            "is_calculated": True, "min_games": threshold,
+            "qualified": played >= threshold,
         }
         minutes = sum(decimal(row["seconds_played"]) for _, row in appearances) / 60
         totals = {metric: _total(appearances, metric) for metric in COUNTING}
@@ -110,10 +109,8 @@ def derive_rows(games, box_scores, identities=None, clubs=None):
         }
         for table, (accumulated, per_game) in variants.items():
             accumulated["mode"] = "accumulated"
-            result[table].append(accumulated)
-            if played * 2 > club_games[club_code]:
-                per_game["mode"] = "perGame"
-                result[table].append(per_game)
+            per_game["mode"] = "perGame"
+            result[table].extend((accumulated, per_game))
 
     for table, rows in result.items():
         for mode in ("accumulated", "perGame"):
@@ -144,7 +141,7 @@ def read_rows(cursor, competition_code, season_code):
     """Build expected PS rows from Silver only, including optional v3 display fields."""
     scope = (competition_code, season_code)
     cursor.execute(
-        'SELECT game_code, played, phase_code, scheduled_at, local_club_code, '
+        'SELECT game_code, played, phase_code, round_number, scheduled_at, local_club_code, '
         'road_club_code, local_score, road_score FROM silver.games '
         'WHERE competition_code = %s AND season_code = %s '
         "AND played IS TRUE AND phase_code IN ('PI', 'PO', 'FF')", scope,

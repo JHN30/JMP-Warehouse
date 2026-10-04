@@ -131,7 +131,8 @@ python tables_to_csv/main.py
 The 47 tables listed by `--list-tables` reach Neon (the 12 added in 30g, the 2 added in 30h,
 the 4 added in 30i and the 3 added in 30j need the reviewed one-time migrations from
 `--print-migration [30h|30i|30j]` first, applied only with
-the owner's approval). Every per-game Silver-derived table now has a published Gold copy.
+the owner's approval). The 3 columns added to the four `app_season_player_stats_*` tables in
+30l need `neon_publish/migrations/30l_player_stats_qualification.sql` the same way. Every per-game Silver-derived table now has a published Gold copy.
 For the current season, `python pipeline.py --dry-run-publish` runs fetch, load,
 Gold and checks and previews the publish; plain `python pipeline.py` also
 publishes to Neon.

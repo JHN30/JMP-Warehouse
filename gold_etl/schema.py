@@ -1,5 +1,7 @@
 """The 16 source projections owned by the first Gold build."""
 
+from dataclasses import replace
+
 from postgres_etl.flat_schema import (ADVANCED_TABLES, ALL_TABLES, COLUMN_NAMES, Field, SCOPE,
                                        STANDINGS_IDENTITY, TABLES as SILVER_TABLES,
                                        Table, snake)
@@ -14,6 +16,13 @@ SOURCE_NAMES = (
 )
 PLAYER_STATS = frozenset(name for name in SOURCE_NAMES
                          if name.startswith("season_player_stats_"))
+# Gold-only columns of the four season player tables; Silver mirrors the feed and has none.
+PLAYER_STATS_FLAGS = (
+    Field("is_calculated", "BOOLEAN NOT NULL", "derived"),
+    Field("min_games", "INTEGER NOT NULL", "derived"),
+    Field("qualified", "BOOLEAN NOT NULL", "derived"),
+)
+FLAG_DEFAULTS = {"is_calculated": "false", "min_games": "0", "qualified": "false"}
 TABLES = {name: SILVER_TABLES[name] for name in SOURCE_NAMES}
 # Feature 30i: the per-game play-by-play Silver tables, copied to Gold unchanged.
 GAME_PBP_NAMES = ("game_team_possessions", "game_team_score_flow",
@@ -471,10 +480,27 @@ GOLD_TABLES = {**COPIED_TABLES, "app_standings": STANDINGS_TABLE,
                "player_rapm": PLAYER_RAPM_TABLE,
                "game_player_advanced": GAME_PLAYER_ADVANCED_TABLE,
                "game_team_advanced": GAME_TEAM_ADVANCED_TABLE}
+for _name in PLAYER_STATS:
+    GOLD_TABLES[_name] = replace(
+        GOLD_TABLES[_name], fields=GOLD_TABLES[_name].fields + PLAYER_STATS_FLAGS)
 
 
 def columns(name):
     return tuple(field.name for field in GOLD_TABLES[name].fields)
+
+
+def source_columns(name):
+    """The columns a Silver table supplies; Gold-only flag columns are excluded."""
+    return tuple(field.name for field in COPIED_TABLES[name].fields)
+
+
+def add_flag_columns_sql(name):
+    """Additive DDL bringing an existing Gold player table up to the current columns."""
+    if name not in PLAYER_STATS:
+        return []
+    return [f'ALTER TABLE gold."{name}" ADD COLUMN IF NOT EXISTS "{field.name}" '
+            f'{field.kind} DEFAULT {FLAG_DEFAULTS[field.name]}'
+            for field in PLAYER_STATS_FLAGS]
 
 
 def create_table_sql(name):
@@ -484,16 +510,20 @@ def create_table_sql(name):
     return f'CREATE TABLE IF NOT EXISTS gold."{name}" ({fields}, PRIMARY KEY ({key}))'
 
 
-def scope_predicate(name, alias=None):
+def scope_predicate(name, alias=None, feed_only=False):
+    """Rows owned by the Silver copy; feed_only also drops Gold's calculated rows."""
     prefix = f'{alias}.' if alias else ""
     predicate = (f'{prefix}"competition_code" = %s AND '
                  f'{prefix}"season_code" = %s')
     if name in PLAYER_STATS:
         predicate += f' AND {prefix}"phase_code" <> \'PS\''
+        if feed_only:
+            predicate += f' AND {prefix}"is_calculated" IS FALSE'
     return predicate
 
 
 def count_sql(name, schema):
     if schema not in {"silver", "gold"}:
         raise ValueError(f"Unknown schema: {schema}")
-    return f'SELECT count(*) FROM {schema}."{name}" WHERE {scope_predicate(name)}'
+    predicate = scope_predicate(name, feed_only=schema == "gold")
+    return f'SELECT count(*) FROM {schema}."{name}" WHERE {predicate}'

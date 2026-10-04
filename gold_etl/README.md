@@ -9,7 +9,14 @@ the seven Silver standings feeds, and derives team-season totals plus season
 and game coverage from Silver. It also builds three full-history top-50 record
 tables and season-scoped postseason series. Cross-season player and club identity
 tables are also built from Silver. Advanced and scoring player stats
-remain API-only.
+remain API rows, with calculated perGame rows added (below).
+
+The four season player tables (`season_player_stats_*`) also get, in the same transaction
+as their copy, a calculated `perGame` row for every player the feed lists only in `accumulated`
+mode, plus the columns `is_calculated`, `min_games` and `qualified` on every row (feature 30l).
+The rule and the checks behind it are in `docs/DATA_DICTIONARY.md`; the code is
+`qualification.py` (the games threshold) and `per_game_rows.py` (the derived rows). A rebuild of
+the current season recomputes them, so they follow each refresh.
 
 Nine per-game tables came with features 30h-30j. `game_team_possessions`,
 `game_team_score_flow`, `game_team_shot_splits`, `game_team_shot_zones`,

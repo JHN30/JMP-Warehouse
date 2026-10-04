@@ -385,7 +385,9 @@ committed; copy the `.example`). Publishing reads the direct non-pooled
 - Build local RAPM per player and season (ridge fit over `lineups.py` stints; needs numpy
   in the Python environment; published to Neon by 30g):
   `python gold_etl/main.py -sc <seasons> -tb player_rapm`.
-- Traditional or misc table selections also rebuild their derived `PS` rows.
+- Traditional or misc table selections also rebuild their derived `PS` rows. Selecting any
+  `season_player_stats_*` table also adds the calculated `perGame` rows and sets `min_games` and
+  `qualified` (30l); `--quality-only` checks them and prints `WARN` where the feed disagrees.
 - Gold read-only source and derived counts: `python gold_etl/main.py -sc <seasons> --dry-run`
 - Gold read-only equality checks: `python gold_etl/main.py -sc <seasons> --quality-only`
 - List the 47 fixed Gold-to-Neon mappings: `python neon_publish/main.py --list-tables`;

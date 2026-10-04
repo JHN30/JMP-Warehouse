@@ -43,6 +43,16 @@ empty for E2025 and E2026). The four tables of 30i:
 [30i_game_play_by_play.sql](migrations/30i_game_play_by_play.sql). Neon has only the owner role, so the migration
 writes no `GRANT`; a read-only role added later needs its grants for every `app_*` table.
 
+[database_size.sql](database_size.sql) is a read-only query for the Neon size (whole database and
+the ten largest tables); check it before publishing another season.
+
+The three qualification columns (`is_calculated`, `min_games`, `qualified`) of the four
+`app_season_player_stats_*` tables (30l) need a column migration first,
+[30l_player_stats_qualification.sql](migrations/30l_player_stats_qualification.sql). Until it is
+applied the preflight reports the missing columns and the publish refuses. Apply it with the
+owner's approval, then publish every season (`E2024`, `E2025`, `E2026`) because the old rows
+hold placeholder values until they are replaced.
+
 Use `-tb games app_standings` to select registered tables. `-sc` accepts
 `current`, a four-digit year, or an `EYYYY` code; it never publishes multiple
 historical seasons. `--allow-shrink` overrides only the guard that refuses a

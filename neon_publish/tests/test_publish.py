@@ -72,6 +72,48 @@ class ContractTests(unittest.TestCase):
         self.assertTrue(any("primary key differs" in issue for issue in issues))
 
 
+class PlayerQualificationTests(unittest.TestCase):
+    """The three columns added to the four season player tables in 30l."""
+
+    FLAGS = ("is_calculated", "min_games", "qualified")
+    TYPES = {"TEXT": "text", "INTEGER": "integer", "NUMERIC": "numeric", "BOOLEAN": "boolean"}
+
+    def present(self, name, skip=()):
+        spec = GOLD_TABLES[name]
+        columns = [(field.name, self.TYPES[field.kind.split()[0]],
+                    "NO" if "NOT NULL" in field.kind or field.name in spec.key else "YES", None)
+                   for field in spec.fields if field.name not in skip]
+        cursor = mock.MagicMock()
+        cursor.fetchone.return_value = (target_name(name),)
+        cursor.fetchall.side_effect = [columns, [("p", f"PRIMARY KEY ({', '.join(spec.key)})")]]
+        return cursor
+
+    def test_published_columns_include_the_flags_after_the_feed_columns(self):
+        for name in ("season_player_stats_traditional", "season_player_stats_advanced",
+                     "season_player_stats_scoring", "season_player_stats_misc"):
+            with self.subTest(table=name):
+                fields = GOLD_TABLES[name].fields
+                self.assertEqual(tuple(field.name for field in fields[-3:]), self.FLAGS)
+                self.assertEqual([field.kind for field in fields[-3:]],
+                                 ["BOOLEAN NOT NULL", "INTEGER NOT NULL", "BOOLEAN NOT NULL"])
+                self.assertEqual(inspect_target(self.present(name), name), [])
+
+    def test_a_neon_table_without_the_flags_fails_the_preflight(self):
+        name = "season_player_stats_misc"
+        issues = inspect_target(self.present(name, skip=self.FLAGS), name)
+        for column in self.FLAGS:
+            self.assertTrue(any(f"missing column {column} " in issue for issue in issues), column)
+
+    def test_the_migration_adds_the_flags_to_all_four_tables_without_dropping(self):
+        path = Path(__file__).resolve().parents[1] / "migrations" / "30l_player_stats_qualification.sql"
+        sql = path.read_text(encoding="utf-8")
+        self.assertEqual(sql.count("ALTER TABLE public.app_season_player_stats_"), 4)
+        self.assertEqual(sql.count("ADD COLUMN"), 12)
+        self.assertTrue(sql.rstrip().endswith("COMMIT;"))
+        self.assertNotIn("DROP", sql)
+        self.assertNotIn("GRANT", sql)
+
+
 class NewTableTests(unittest.TestCase):
     """The twelve tables added in 30g: targets, migration, preflight and publishing."""
 

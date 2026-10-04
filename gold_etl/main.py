@@ -28,8 +28,9 @@ from gold_etl.quality import (check_scope, check_postseason_scope,
                               check_pbp_partition, check_on_off_totals, check_lineup_totals,
                               check_round_split_invariants,
                               check_series_scope, check_game_advanced_invariants, check_game_advanced_ranges,
-                              check_identity_scope)  # noqa: E402
-from gold_etl.schema import (GAME_ADVANCED_NAMES, GAME_COURT_NAMES, GAME_PBP_NAMES, PBP_NAMES, DERIVED_NAMES, IDENTITY_TABLES, RECORDS_TABLES, ROUND_NAMES,
+                              check_identity_scope, check_player_stats_flags,
+                              check_player_stats_warnings)  # noqa: E402
+from gold_etl.schema import (GAME_ADVANCED_NAMES, GAME_COURT_NAMES, GAME_PBP_NAMES, PBP_NAMES, DERIVED_NAMES, IDENTITY_TABLES, PLAYER_STATS, RECORDS_TABLES, ROUND_NAMES,
                              SEASON_DERIVED_NAMES, SOURCE_NAMES, count_sql)  # noqa: E402
 
 
@@ -192,6 +193,10 @@ def main(argv=None):
                         issues = check_scope(cursor, name, *scope)
                         if name in PS_TABLES:
                             issues += check_postseason_scope(cursor, name, *scope)
+                        if name in PLAYER_STATS and not issues:
+                            issues += check_player_stats_flags(cursor, name, *scope)
+                            for warning in check_player_stats_warnings(cursor, name, *scope):
+                                print("WARN " + warning, flush=True)
                     for issue in issues:
                         print(issue, file=sys.stderr, flush=True)
                     passed &= not issues

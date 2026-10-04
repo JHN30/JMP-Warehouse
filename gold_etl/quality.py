@@ -2,7 +2,10 @@
 
 from collections import defaultdict
 
-from gold_etl.schema import COPIED_TABLES, columns, count_sql, scope_predicate
+from gold_etl.schema import (COPIED_TABLES, PLAYER_STATS, columns, count_sql, scope_predicate,
+                             source_columns)
+from gold_etl.per_game_rows import OWN_COLUMNS, derive_per_game
+from gold_etl.qualification import scope_min_games, scope_rounds
 from gold_etl.postseason import TABLES as PS_TABLES, _dict_rows, read_rows as read_postseason_rows
 from gold_etl.standings import KEY as STANDINGS_KEY, read_rows as read_standings_rows
 from gold_etl.schema import STANDINGS_FEEDS, STANDINGS_STATS_SOURCES, TEAM_PBP_ADDITIVE, ZONE_ADDITIVE
@@ -29,16 +32,75 @@ def check_scope(cursor, name, competition_code, season_code):
     if source_count != gold_count:
         issues.append(f"gold.{name} {season_code}: {gold_count} rows; "
                       f"silver has {source_count}")
-    field_list = ", ".join(f'"{column}"' for column in columns(name))
+    field_list = ", ".join(f'"{column}"' for column in source_columns(name))
     cursor.execute(
         f'SELECT EXISTS (SELECT {field_list} FROM silver."{name}" '
         f'WHERE {scope_predicate(name)} EXCEPT '
         f'SELECT {field_list} FROM gold."{name}" '
-        f'WHERE {scope_predicate(name)})', scope + scope,
+        f'WHERE {scope_predicate(name, feed_only=True)})', scope + scope,
     )
     if cursor.fetchone()[0]:
         issues.append(f"gold.{name} {season_code}: source-column values differ from silver")
     return issues
+
+
+def check_player_stats_flags(cursor, name, competition_code, season_code):
+    """Verify qualification columns and that calculated perGame rows follow their accumulated row."""
+    if name not in PLAYER_STATS:
+        raise ValueError(f"Not a season player table: {name}")
+    cursor.execute("SELECT to_regclass(%s)", (f"gold.{name}",))
+    if cursor.fetchone()[0] is None:
+        return [f"gold.{name} is missing"]
+    fields = ", ".join(f'"{field}"' for field in columns(name))
+    cursor.execute(f'SELECT {fields} FROM gold."{name}" '
+                   "WHERE competition_code = %s AND season_code = %s",
+                   (competition_code, season_code))
+    rows = _dict_rows(cursor)
+    rounds = scope_rounds(cursor, competition_code, season_code)
+    return player_stats_issues(name, season_code, rows, rounds)
+
+
+def player_stats_issues(name, season_code, rows, rounds):
+    issues = []
+    label = f"gold.{name} {season_code}"
+    thresholds = defaultdict(set)
+    accumulated, per_game = {}, {}
+    for row in rows:
+        phase = row["phase_code"]
+        thresholds[(phase, row["mode"])].add(row["min_games"])
+        if row["qualified"] != (row["games_played"] >= row["min_games"]):
+            issues.append(f"{label} {phase} {row['mode']} {row['person_key']}: "
+                          "qualified does not match games_played >= min_games")
+        (accumulated if row["mode"] == "accumulated" else per_game)[
+            (phase, row["person_key"])] = row
+    for (phase, mode), values in sorted(thresholds.items()):
+        expected = scope_min_games(rounds, phase)
+        if values != {expected}:
+            issues.append(f"{label} {phase} {mode}: min_games {sorted(values)}, expected {expected}")
+    for key in sorted(accumulated):
+        if key not in per_game:
+            issues.append(f"{label} {key[0]} {key[1]}: accumulated row has no perGame row")
+    for key in sorted(per_game):
+        row = per_game[key]
+        if row["is_calculated"] and key[0] != "PS" and key in accumulated:
+            expected = derive_per_game(name, accumulated[key])
+            differing = sorted(column for column in expected if column not in OWN_COLUMNS
+                               and expected[column] != row[column])
+            if differing:
+                issues.append(f"{label} {key[0]} {key[1]}: calculated perGame row differs "
+                              f"from its accumulated row in {', '.join(differing)}")
+    return issues
+
+
+def check_player_stats_warnings(cursor, name, competition_code, season_code):
+    """Feed perGame rows below min_games: the rule does not reproduce that feed scope."""
+    cursor.execute(
+        f'SELECT phase_code, count(*) FROM gold."{name}" '
+        "WHERE competition_code = %s AND season_code = %s AND mode = 'perGame' "
+        'AND is_calculated IS FALSE AND NOT qualified GROUP BY phase_code ORDER BY phase_code',
+        (competition_code, season_code))
+    return [f"gold.{name} {season_code} {phase}: {count} feed perGame row(s) below min_games"
+            for phase, count in cursor.fetchall()]
 
 
 def check_postseason_scope(cursor, name, competition_code, season_code):

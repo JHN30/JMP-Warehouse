@@ -9,6 +9,7 @@ from gold_etl.postseason import COUNTING, derive_rows
 def game(code, phase, local="MAD", road="BAR", played=True, local_score=80,
          road_score=70):
     return {"game_code": code, "phase_code": phase, "played": played,
+            "round_number": code,
             "scheduled_at": f"2025-05-{code:02d}",
             "local_club_code": local, "road_club_code": road,
             "local_score": local_score, "road_score": road_score}
@@ -82,7 +83,7 @@ class PostseasonTests(unittest.TestCase):
         self.assertEqual(per["minutes_played"], 45)
         self.assertEqual(per["points"], Decimal("4.2"))
 
-    def test_misc_wins_doubles_and_per_game_threshold(self):
+    def test_per_game_rows_for_everyone_with_qualification_flags(self):
         games = [game(1, "PI", local_score=80, road_score=70),
                  game(2, "PO", local_score=60, road_score=70),
                  game(3, "FF", local_score=90, road_score=80)]
@@ -97,8 +98,11 @@ class PostseasonTests(unittest.TestCase):
         for metric in ("wins", "losses", "double_doubles", "triple_doubles",
                        "minutes_played"):
             self.assertEqual(acc[metric], per[metric])
-        self.assertIn("C", by_person(rows, "season_player_stats_misc", "accumulated"))
-        self.assertNotIn("C", by_person(rows, "season_player_stats_misc", "perGame"))
+        for mode in ("accumulated", "perGame"):
+            selected = by_person(rows, "season_player_stats_misc", mode)
+            self.assertEqual((selected["A"]["min_games"], selected["A"]["qualified"]), (2, True))
+            self.assertEqual((selected["C"]["min_games"], selected["C"]["qualified"]), (2, False))
+            self.assertTrue(selected["A"]["is_calculated"])
 
     def test_identity_display_fields_and_stable_sort(self):
         games = [game(1, "PO")]

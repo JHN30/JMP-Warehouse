@@ -517,10 +517,51 @@ names, source columns, types, and natural primary keys as their Silver sources:
 `season_player_stats_scoring`, `season_player_stats_misc`, `play_by_play`, and
 `shots`. Gold omits Silver's `load_id` and `loaded_at` metadata. It copies
 source values and NULLs unchanged. The four player-season tables copy only
-non-`PS` API rows; feature 30b owns derived `PS` rows in traditional and misc
+non-`PS` API rows and then add the calculated `perGame` rows and qualification
+columns described below; feature 30b owns derived `PS` rows in traditional and misc
 Gold tables, and a source rerun leaves those rows in place. Advanced and scoring
 have no derived `PS` rows. The other 12 Silver tables and `silver.load_log`
 are not copied by 30a.
+
+### Season player qualification columns (30l)
+
+The four `season_player_stats_*` Gold tables carry three columns that Silver does not
+have, so the web app needs no calculation:
+
+| Column | Meaning |
+|---|---|
+| `is_calculated` | `false` on rows copied from the API feed, `true` on rows Gold derives: every `PS` row and the `perGame` rows below. |
+| `min_games` | Games a player needs in that `(season_code, phase_code)` to qualify for leaderboards. One value per scope, the same in both modes. |
+| `qualified` | `games_played >= min_games`, on every row. |
+
+The feed lists every player who played in `accumulated` mode but only players above
+a games threshold in `perGame` mode. Gold adds the missing `perGame` rows (phases `RS`,
+`PI`, `PO`, `FF` and `all`) from the same player's `accumulated` row, so both modes
+cover the same players. In the traditional table each counting column is the
+accumulated value divided by `games_played`, rounded half-even to one decimal, and
+`minutes_played` is the unrounded quotient. Every other column is copied unchanged:
+percentages, the whole advanced, scoring and misc tables, `games_played`,
+`games_started`, `club_code` and the other club fields, name, age and image. A traded
+player therefore keeps the feed's own club code (for example `MCO;PAR`) in both
+modes. `player_ranking` is NULL on calculated rows, and their `entry_ordinal` continues
+after the feed's highest ordinal in the scope, so feed rows are never renumbered.
+
+Checked against the 13,889 existing accumulated and perGame pairs of E2024-E2026: every
+counting column and every copied column matches, and the percentage columns differ by 0.1
+in about 0.2% of cells (the API's own rounding), which is why percentages are copied and
+not recomputed from made and attempted shots.
+
+`min_games` is `floor(R / 2) + 1`, where `R` is the number of distinct played rounds
+in the scope in `silver.games` (`all` is the whole season, `PS` is `PI`+`PO`+`FF`), and
+it is 1 for `FF`, where the feed lists every player. For E2024-E2026 no feed `perGame` row
+is below `min_games` and no accumulated player at or above it lacks a feed row. The rule
+does not reproduce four older `PO` scopes (E2000, E2009, E2014, E2017), where the feed
+also lists players just below it; Gold quality prints a `WARN` for them. The current season
+is recomputed on every refresh, so `min_games` and `qualified` move as rounds are played.
+
+The `PS` rows follow the same rule: every player has a `perGame` row (before 30l only
+players above half of their latest club's postseason games did), and `PS` `min_games`
+is 5 for E2024 and E2025 (9 postseason rounds).
 
 Nine per-game tables were added later, all named like their Silver sources and published
 to Neon as `public.app_<name>` for E2025 and E2026 once their reviewed migrations are
@@ -545,9 +586,9 @@ still search `silver` by default.
 ## Local Gold derivations and historical web-app tables
 
 Feature 30b builds `PS` traditional and misc player-season rows from Silver
-played PI/PO/FF games and box scores. One player has an accumulated row and,
-when they appeared in more than half of their latest club's postseason games,
-a per-game row. Missing box-score measures propagate as NULL; percentages and
+played PI/PO/FF games and box scores. One player has an accumulated row and a
+per-game row, both flagged `is_calculated` with `min_games` and `qualified` (30l,
+above). Missing box-score measures propagate as NULL; percentages and
 per-game counting values round half-even to one decimal. No played postseason
 means no `PS` rows. The local `gold.app_standings` table below is also active.
 Feature 30c builds local `gold.app_team_season_stats`,

@@ -1,7 +1,10 @@
 """Replace one Gold table/season slice using registered Silver source columns."""
 
-from gold_etl.schema import (COPIED_TABLES, GAME_ADVANCED_NAMES, IDENTITY_TABLES, RECORDS_TABLES,
-                             SEASON_DERIVED_NAMES, columns, create_table_sql, scope_predicate)
+from gold_etl.schema import (COPIED_TABLES, FLAG_DEFAULTS, GAME_ADVANCED_NAMES, IDENTITY_TABLES,
+                             PLAYER_STATS, RECORDS_TABLES, SEASON_DERIVED_NAMES,
+                             add_flag_columns_sql, columns, create_table_sql, scope_predicate,
+                             source_columns)
+from gold_etl.per_game_rows import finalize_player_stats
 from gold_etl.game_advanced import read_rows as read_game_advanced_rows
 from gold_etl.player_rounds import read_rows as read_player_rows
 from gold_etl.player_ratings import read_rows as read_player_rating_rows
@@ -25,25 +28,37 @@ from gold_etl.series import read_rows as read_series_rows
 
 
 def replace_scope(connection, name, competition_code, season_code):
-    """DDL, delete, and copy commit together; a failure restores old Gold rows."""
+    """DDL, delete, and copy commit together; a failure restores old Gold rows.
+
+    Returns the Silver rows copied. For the season player tables the same transaction
+    then adds the calculated perGame rows and the qualification columns.
+    """
     if name not in COPIED_TABLES:
         raise ValueError(f"Unknown Gold source table: {name}")
     with connection:
         with connection.cursor() as cursor:
             cursor.execute("CREATE SCHEMA IF NOT EXISTS gold")
             cursor.execute(create_table_sql(name))
+            for statement in add_flag_columns_sql(name):
+                cursor.execute(statement)
             cursor.execute(
                 f'DELETE FROM gold."{name}" WHERE {scope_predicate(name)}',
                 (competition_code, season_code),
             )
+            source = set(source_columns(name))
             field_list = ", ".join(f'"{column}"' for column in columns(name))
+            select_list = ", ".join(f'"{column}"' if column in source else FLAG_DEFAULTS[column]
+                                    for column in columns(name))
             cursor.execute(
                 f'INSERT INTO gold."{name}" ({field_list}) '
-                f'SELECT {field_list} FROM silver."{name}" '
+                f'SELECT {select_list} FROM silver."{name}" '
                 f'WHERE {scope_predicate(name)}',
                 (competition_code, season_code),
             )
-            return cursor.rowcount
+            copied = cursor.rowcount
+            if name in PLAYER_STATS:
+                finalize_player_stats(cursor, name, competition_code, season_code)
+            return copied
 
 
 def replace_postseason_scope(connection, name, competition_code, season_code):

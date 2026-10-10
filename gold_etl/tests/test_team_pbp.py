@@ -4,6 +4,7 @@ import unittest
 from decimal import Decimal
 from unittest.mock import patch
 
+from gold_etl.schema import physical_name
 from gold_etl.schema import GOLD_TABLES, PBP_NAMES, ROUND_NAMES, TEAM_PBP_ADDITIVE, columns
 from gold_etl.team_pbp import derive_rows, read_silver
 from gold_etl.team_shot_zones import derive_rows as zone_rows
@@ -217,7 +218,7 @@ class StorageTests(unittest.TestCase):
                     patch("psycopg2.extras.execute_values") as insert:
                 self.assertEqual(replace_aggregate_scope(db, name, "E", "E2025"), 1)
             self.assertEqual((db.commits, db.rollbacks), (1, 0))
-            self.assertTrue(any(query.startswith(f'DELETE FROM gold."{name}"')
+            self.assertTrue(any(query.startswith(f'DELETE FROM gold."{physical_name(name)}"')
                                 and params == ("E", "E2025") for query, params in db.queries))
             self.assertEqual(insert.call_args.args[2][0][:2], ("E", "E2025"))
             failing = FakeConnection()

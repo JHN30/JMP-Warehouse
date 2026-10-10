@@ -18,6 +18,23 @@
       "options": { "cwd": "${workspaceFolder}" },
       "presentation": { "reveal": "always", "focus": true, "panel": "dedicated", "clear": true },
       "problemMatcher": []
-    }
-  ]
+    },
+    {
+      "label": "Refresh full local history",
+      "detail": "Fetch all seasons, rebuild Silver and Gold, and check quality; local only",
+      "type": "shell",
+      "command": "python pipeline.py --all",
+      "options": { "cwd": "${workspaceFolder}" },
+      "presentation": { "reveal": "always", "focus": true, "panel": "dedicated", "clear": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "Rebuild full local history (cached Bronze)",
+      "detail": "Rebuild Silver and Gold from cached Bronze and check quality; no API fetch or publish",
+      "type": "shell",
+      "command": "python pipeline.py --all --skip-fetch",
+      "options": { "cwd": "${workspaceFolder}" },
+      "presentation": { "reveal": "always", "focus": true, "panel": "dedicated", "clear": true },
+      "problemMatcher": []
+    }  ]
 }

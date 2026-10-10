@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 from gold_etl.loader import replace_aggregate_scope
 from gold_etl.quality import check_aggregate_scope
+from gold_etl.schema import physical_name
 from gold_etl.schema import AGGREGATE_NAMES, columns
 
 
@@ -71,11 +72,11 @@ class AggregateStorageTests(unittest.TestCase):
                               writes.append((sql, values))):
                     self.assertEqual(replace_aggregate_scope(db, name, "E", "E2025"), 1)
                 self.assertEqual(db.commits, 1)
-                self.assertIn(f'INSERT INTO gold."{name}"', writes[0][0])
+                self.assertIn(f'INSERT INTO gold."{physical_name(name)}"', writes[0][0])
                 if name.startswith("app_coverage"):
                     self.assertEqual(writes[0][1][0][columns(name).index("items")].adapted,
                                      [])
-                self.assertTrue(any(query.startswith(f'DELETE FROM gold."{name}"')
+                self.assertTrue(any(query.startswith(f'DELETE FROM gold."{physical_name(name)}"')
                                     and params == ("E", "E2025")
                                     for query, params in db.queries))
                 with patch("gold_etl.loader.read_aggregate_rows", return_value=[]), \
@@ -99,7 +100,7 @@ class AggregateStorageTests(unittest.TestCase):
         with db.cursor() as cursor:
             db.exists = False
             self.assertEqual(check_aggregate_scope(cursor, name, "E", "E2025"),
-                             [f"gold.{name} is missing"])
+                             [f"gold.{physical_name(name)} is missing"])
             db.exists = True
             expected = row(name)
             with patch("gold_etl.quality.read_aggregate_rows", return_value=[expected]), \

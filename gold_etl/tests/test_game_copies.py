@@ -4,6 +4,7 @@ import unittest
 
 from gold_etl.loader import replace_scope
 from gold_etl.quality import check_scope
+from gold_etl.schema import physical_name
 from gold_etl.schema import (COPIED_TABLES, GAME_COURT_NAMES, GAME_PBP_NAMES, GOLD_TABLES,
                              SOURCE_NAMES, TABLES, columns, count_sql, create_table_sql)
 from gold_etl.tests.test_gold import FakeConnection
@@ -33,8 +34,8 @@ class SchemaTests(unittest.TestCase):
                 self.assertNotIn("load_id", columns(name))
                 self.assertNotIn("loaded_at", columns(name))
                 self.assertEqual(GOLD_TABLES[name].key, KEYS[name])
-                self.assertIn(f'gold."{name}"', create_table_sql(name))
-                self.assertIn(f'gold."{name}"', count_sql(name, "gold"))
+                self.assertIn(f'gold."{physical_name(name)}"', create_table_sql(name))
+                self.assertIn(f'gold."{physical_name(name)}"', count_sql(name, "gold"))
 
     def test_source_projections_stay_sixteen_and_the_groups_are_registered(self):
         self.assertEqual((len(SOURCE_NAMES), len(TABLES)), (16, 16))
@@ -62,8 +63,8 @@ class LoaderTests(unittest.TestCase):
                 self.assertEqual(replace_scope(db, name, "E", "E2025"), 2)
                 self.assertEqual((db.commits, db.rollbacks), (1, 0))
                 sql = [query for query, _ in db.statements]
-                self.assertTrue(sql[2].startswith(f'DELETE FROM gold."{name}"'))
-                self.assertTrue(sql[3].startswith(f'INSERT INTO gold."{name}"'))
+                self.assertTrue(sql[2].startswith(f'DELETE FROM gold."{physical_name(name)}"'))
+                self.assertTrue(sql[3].startswith(f'INSERT INTO gold."{physical_name(name)}"'))
                 self.assertIn(f'FROM silver."{name}"', sql[3])
                 self.assertNotIn("load_id", sql[3])
                 self.assertEqual(db.statements[3][1], ("E", "E2025"))

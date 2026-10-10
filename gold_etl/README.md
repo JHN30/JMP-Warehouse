@@ -2,7 +2,7 @@
 
 `gold_etl/main.py` builds `gold` from the local PostgreSQL `silver` schema. It copies the 16
 source tables, plus seven per-game tables (below). It reads only the registered Silver columns,
-leaving `load_id` and `loaded_at` in Silver. It keeps source names, values, NULLs,
+leaving `load_id` and `loaded_at` in Silver. It keeps source values, NULLs,
 types, and primary keys. It also derives traditional and misc player-season
 `PS` rows from played PI/PO/FF box scores, builds `gold.app_standings` from
 the seven Silver standings feeds, and derives team-season totals plus season
@@ -21,10 +21,36 @@ the current season recomputes them, so they follow each refresh.
 Nine per-game tables came with features 30h-30j. `game_team_possessions`,
 `game_team_score_flow`, `game_team_shot_splits`, `game_team_shot_zones`,
 `game_player_on_court`, `game_team_lineup_stints` and `game_stat_gaps` are copied from Silver
-unchanged (names, values, NULLs, types and keys, without `load_id` and `loaded_at`).
+unchanged (values, NULLs, types and keys, without `load_id` and `loaded_at`).
 `game_player_advanced` and `game_team_advanced` project Silver's per-game advanced tables to
 the published columns, and the player table adds single-game PER (`game_uper`, `game_aper`,
 `game_per`). Their definitions are in `docs/DATA_DICTIONARY.md`.
+
+All 47 physical Gold tables are named `app_*`, exactly like Neon `public`.
+For example, Silver `games` projects to `gold.app_games`. The web app can use
+identical unqualified names with `search_path=gold` locally and `public` on Neon.
+`--list-tables` lists physical names. Builds accept both physical names and the
+original logical selectors used in the examples below. Gold creation ensures
+four app secondary indexes on standings, play-by-play and shots, in addition
+to each table's primary key.
+
+To rebuild the complete local pipeline in one command, use `python pipeline.py --all`.
+It fetches API years from 2000 through the current season, loads Silver, builds Gold
+and checks Gold quality. `python pipeline.py --all --skip-fetch` runs the local
+builds and checks using existing Bronze files. Both modes stay local, preserve
+the `app_*` Gold names and leave the current-season publish pending for later.
+
+Existing installations must rename their Gold tables before the next refresh:
+
+```powershell
+python gold_etl/migrate_names.py          # preview, no schema changes
+python gold_etl/migrate_names.py --apply  # local Gold only, one transaction
+```
+
+The migration preserves table storage, all seasons, columns, primary keys and
+existing indexes. It refuses missing tables, unexpected tables and collisions
+between old and new names. It is repeatable and never connects to Neon. It also
+adds the app's four secondary indexes locally.
 
 Run from the repository root with the local connection settings in
 `postgres_etl/config_connection.json`:

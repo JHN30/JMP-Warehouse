@@ -9,7 +9,7 @@ from psycopg2 import sql
 
 from common.dotenv import read_env_value
 from common.seasons import COMPETITION_CODES
-from gold_etl.schema import GOLD_TABLES
+from gold_etl.schema import PHYSICAL_TABLES as GOLD_TABLES
 from neon_publish.contract import (APP_TABLES, GAME_DIFF_TABLES, GLOBAL_TABLES, predicate,
                                    preflight, scope, target_name)
 
@@ -39,7 +39,7 @@ def shrink_problems(local_counts, remote_counts, limit=SHRINK_LIMIT):
 
 
 def _relation(name, schema):
-    return sql.Identifier(schema, name if schema == "gold" else target_name(name))
+    return sql.Identifier(schema, target_name(name))
 
 
 def _columns(name):

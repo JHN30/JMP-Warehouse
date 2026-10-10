@@ -216,7 +216,7 @@ class StorageTests(unittest.TestCase):
             self.assertEqual(replace_aggregate_scope(db, "player_round_win_shares", "E",
                                                      "E2025"), 1)
         self.assertEqual((db.commits, db.rollbacks), (1, 0))
-        self.assertTrue(any(query.startswith('DELETE FROM gold."player_round_win_shares"')
+        self.assertTrue(any(query.startswith('DELETE FROM gold."app_player_round_win_shares"')
                             and params == ("E", "E2025") for query, params in db.queries))
         self.assertEqual(insert.call_args.args[2][0][:2], ("E", "E2025"))
         failing = FakeConnection()

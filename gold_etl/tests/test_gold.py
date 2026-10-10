@@ -9,6 +9,7 @@ from unittest.mock import patch
 from gold_etl import main
 from gold_etl.loader import replace_scope
 from gold_etl.quality import check_records_scope, check_scope, check_series_scope
+from gold_etl.schema import physical_name
 from gold_etl.schema import (AGGREGATE_NAMES, DERIVED_NAMES, GAME_ADVANCED_NAMES, GAME_COURT_NAMES, GAME_PBP_NAMES, GOLD_TABLES,
                              PLAYER_STATS, PLAYER_STATS_FLAGS, RECORDS_TABLES, ROUND_NAMES,
                              SOURCE_NAMES, TABLES, columns, count_sql, create_table_sql,
@@ -40,7 +41,7 @@ class FakeCursor:
         elif query.startswith("SELECT season_code"):
             self.answer = [("E2025",), ("E2026",)]
         elif query.startswith("SELECT to_regclass"):
-            self.answer = [("gold.games" if self.connection.table_exists else None,)]
+            self.answer = [("gold.app_games" if self.connection.table_exists else None,)]
         elif query.startswith("SELECT count(*)"):
             self.answer = [(self.connection.source_count if "silver." in query else
                             self.connection.gold_count,)]
@@ -129,7 +130,7 @@ class SchemaTests(unittest.TestCase):
             self.assertNotIn("load_id", columns(name))
             self.assertNotIn("loaded_at", columns(name))
             ddl = create_table_sql(name)
-            self.assertIn(f'gold."{name}"', ddl)
+            self.assertIn(f'gold."{physical_name(name)}"', ddl)
             self.assertIn("PRIMARY KEY", ddl)
             self.assertNotIn("load_id", ddl)
             self.assertNotIn("loaded_at", ddl)
@@ -149,8 +150,8 @@ class LoaderTests(unittest.TestCase):
         sql = [query for query, _ in db.statements]
         self.assertEqual(sql[0], "CREATE SCHEMA IF NOT EXISTS gold")
         self.assertTrue(sql[1].startswith("CREATE TABLE IF NOT EXISTS gold."))
-        self.assertTrue(sql[2].startswith('DELETE FROM gold."games"'))
-        self.assertTrue(sql[3].startswith('INSERT INTO gold."games"'))
+        self.assertTrue(sql[2].startswith('DELETE FROM gold."app_games"'))
+        self.assertTrue(sql[3].startswith('INSERT INTO gold."app_games"'))
         self.assertIn('FROM silver."games"', sql[3])
         self.assertNotIn("load_id", sql[3])
         self.assertEqual(db.statements[2][1], ("E", "E2025"))
@@ -164,7 +165,7 @@ class LoaderTests(unittest.TestCase):
         db.source_count = 2
         self.assertEqual(replace_scope(db, "games", "E", "E2025"), 2)
         self.assertEqual(db.commits, 2)
-        self.assertEqual(sum(query.startswith('DELETE FROM gold."games"')
+        self.assertEqual(sum(query.startswith('DELETE FROM gold."app_games"')
                              for query, _ in db.statements), 2)
 
     def test_insert_failure_rolls_back_prior_scope(self):
@@ -237,7 +238,7 @@ class QualityTests(unittest.TestCase):
         db.table_exists = False
         with db.cursor() as cursor:
             self.assertEqual(check_scope(cursor, "games", "E", "E2025"),
-                             ["gold.games is missing"])
+                             ["gold.app_games is missing"])
         self.assertEqual(len(db.statements), 1)
 
     def test_count_and_value_mismatch(self):
@@ -316,8 +317,21 @@ class CliTests(unittest.TestCase):
                 contextlib.redirect_stdout(io.StringIO()) as output:
             self.assertEqual(main.main(["--list-tables"]), 0)
         connect.assert_not_called()
-        self.assertEqual(output.getvalue().splitlines(), [*SOURCE_NAMES, *DERIVED_NAMES, *ROUND_NAMES, *GAME_ADVANCED_NAMES,
-                          *GAME_PBP_NAMES, *GAME_COURT_NAMES])
+        self.assertEqual(output.getvalue().splitlines(), list(map(physical_name,
+                         [*SOURCE_NAMES, *DERIVED_NAMES, *ROUND_NAMES, *GAME_ADVANCED_NAMES,
+                          *GAME_PBP_NAMES, *GAME_COURT_NAMES])))
+
+    def test_physical_and_logical_selectors_address_the_same_gold_table(self):
+        for selector in ("games", "app_games"):
+            with self.subTest(selector=selector):
+                code, out, _, db = self.run_cli(
+                    ["-sc", "2025", "-tb", selector, "--quality-only"])
+                self.assertEqual(code, 0)
+                self.assertIn("Gold quality: passed", out)
+                self.assertTrue(any('FROM gold."app_games"' in query
+                                    for query, _ in db.statements))
+                self.assertFalse(any('FROM gold."games"' in query
+                                     for query, _ in db.statements))
 
     def test_dry_run_is_read_only_and_reports_counts(self):
         code, out, _, db = self.run_cli(["-sc", "2025", "-tb", "games", "--dry-run"])
@@ -367,11 +381,11 @@ class CliTests(unittest.TestCase):
                                              "--dry-run"])
         self.assertEqual(code, 0)
         self.assertTrue(db.readonly)
-        self.assertIn(f"gold.{name} PS E2025: 2 derived rows", out)
+        self.assertIn(f"gold.{physical_name(name)} PS E2025: 2 derived rows", out)
         with patch.object(main, "replace_postseason_scope", return_value=2) as replace_ps:
             code, out, _, db = self.run_cli(["-sc", "2025", "-tb", name])
         self.assertEqual(code, 0)
-        self.assertIn(f"gold.{name} PS E2025: 2 derived rows", out)
+        self.assertIn(f"gold.{physical_name(name)} PS E2025: 2 derived rows", out)
         replace_ps.assert_called_once_with(db, name, "E", "E2025")
 
     def test_missing_player_season_never_replaces_its_ps_slice(self):
@@ -429,7 +443,7 @@ class CliTests(unittest.TestCase):
                                                      "--dry-run"])
                 self.assertEqual(code, 0)
                 self.assertTrue(db.readonly)
-                self.assertIn(f"gold.{name} E2025: 1 derived rows", out)
+                self.assertIn(f"gold.{physical_name(name)} E2025: 1 derived rows", out)
                 self.assertFalse(any(q.startswith(("CREATE", "DELETE", "INSERT"))
                                      for q, _ in db.statements))
                 with patch.object(main, "check_aggregate_scope", return_value=["bad"]):

@@ -9,6 +9,7 @@ from decimal import Decimal
 
 from gold_etl.postseason import COUNTING, one_decimal
 from gold_etl.qualification import scope_min_games, scope_rounds
+from gold_etl.schema import physical_name
 from gold_etl.schema import columns
 
 
@@ -57,10 +58,10 @@ def read_missing_rows(cursor, name, competition_code, season_code):
     """Accumulated feed rows (not PS) that have no perGame row for the same player."""
     names = ", ".join(f'a."{column}"' for column in columns(name))
     cursor.execute(
-        f'SELECT {names} FROM gold."{name}" AS a '
+        f'SELECT {names} FROM gold."{physical_name(name)}" AS a '
         'WHERE a.competition_code = %s AND a.season_code = %s '
         "AND a.phase_code <> 'PS' AND a.mode = 'accumulated' "
-        f'AND NOT EXISTS (SELECT 1 FROM gold."{name}" AS b '
+        f'AND NOT EXISTS (SELECT 1 FROM gold."{physical_name(name)}" AS b '
         'WHERE b.competition_code = a.competition_code AND b.season_code = a.season_code '
         "AND b.phase_code = a.phase_code AND b.mode = 'perGame' "
         'AND b.person_key = a.person_key) '
@@ -70,7 +71,7 @@ def read_missing_rows(cursor, name, competition_code, season_code):
 
 def read_last_ordinals(cursor, name, competition_code, season_code):
     cursor.execute(
-        f'SELECT phase_code, max(entry_ordinal) FROM gold."{name}" '
+        f'SELECT phase_code, max(entry_ordinal) FROM gold."{physical_name(name)}" '
         "WHERE competition_code = %s AND season_code = %s AND mode = 'perGame' "
         "AND phase_code <> 'PS' GROUP BY phase_code", (competition_code, season_code))
     return {phase: last for phase, last in cursor.fetchall()}
@@ -81,14 +82,14 @@ def set_qualification(cursor, name, competition_code, season_code, phases=None):
     rounds = scope_rounds(cursor, competition_code, season_code)
     if phases is None:
         cursor.execute(
-            f'SELECT DISTINCT phase_code FROM gold."{name}" '
+            f'SELECT DISTINCT phase_code FROM gold."{physical_name(name)}" '
             "WHERE competition_code = %s AND season_code = %s AND phase_code <> 'PS'",
             (competition_code, season_code))
         phases = [phase for (phase,) in cursor.fetchall()]
     for phase in phases:
         threshold = scope_min_games(rounds, phase)
         cursor.execute(
-            f'UPDATE gold."{name}" SET "min_games" = %s, "qualified" = "games_played" >= %s '
+            f'UPDATE gold."{physical_name(name)}" SET "min_games" = %s, "qualified" = "games_played" >= %s '
             'WHERE competition_code = %s AND season_code = %s AND phase_code = %s',
             (threshold, threshold, competition_code, season_code, phase))
 
@@ -103,7 +104,7 @@ def finalize_player_stats(cursor, name, competition_code, season_code):
     if rows:
         fields = columns(name)
         names = ", ".join(f'"{field}"' for field in fields)
-        execute_values(cursor, f'INSERT INTO gold."{name}" ({names}) VALUES %s',
+        execute_values(cursor, f'INSERT INTO gold."{physical_name(name)}" ({names}) VALUES %s',
                        [tuple(row[field] for field in fields) for row in rows],
                        page_size=1000)
     set_qualification(cursor, name, competition_code, season_code)

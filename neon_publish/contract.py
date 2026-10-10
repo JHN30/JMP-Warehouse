@@ -1,29 +1,30 @@
 """Fixed Gold source and Neon target contract."""
 
 from gold_etl.schema import (DERIVED_NAMES, GAME_ADVANCED_NAMES, GAME_COURT_NAMES,
-                             GAME_PBP_NAMES, GOLD_TABLES, IDENTITY_TABLES, RECORDS_TABLES, ROUND_NAMES, SOURCE_NAMES)
+                             GAME_PBP_NAMES, PHYSICAL_TABLES as GOLD_TABLES, IDENTITY_TABLES,
+                             RECORDS_TABLES, ROUND_NAMES, SOURCE_NAMES, physical_name)
 
 
 # Feature 30g added the twelve tables of features 26-29 (ROUND_NAMES) after the first 26.
-NEW_TABLES = ROUND_NAMES
+NEW_TABLES = tuple(map(physical_name, ROUND_NAMES))
 # Feature 30h added the two per-game advanced tables after those.
-GAME_TABLES = GAME_ADVANCED_NAMES
+GAME_TABLES = tuple(map(physical_name, GAME_ADVANCED_NAMES))
 # Feature 30i added the four per-game play-by-play tables after those.
-GAME_PBP_TABLES = GAME_PBP_NAMES
+GAME_PBP_TABLES = tuple(map(physical_name, GAME_PBP_NAMES))
 # Feature 30j added the on-court, lineup-stint and stat-gap tables after those.
-GAME_COURT_TABLES = GAME_COURT_NAMES
+GAME_COURT_TABLES = tuple(map(physical_name, GAME_COURT_NAMES))
 MIGRATIONS = {"30g": NEW_TABLES, "30h": GAME_TABLES, "30i": GAME_PBP_TABLES,
               "30j": GAME_COURT_TABLES}
-APP_TABLES = (SOURCE_NAMES + DERIVED_NAMES + NEW_TABLES + GAME_TABLES + GAME_PBP_TABLES
-              + GAME_COURT_TABLES)
+APP_TABLES = (tuple(map(physical_name, SOURCE_NAMES + DERIVED_NAMES)) + NEW_TABLES
+              + GAME_TABLES + GAME_PBP_TABLES + GAME_COURT_TABLES)
 GLOBAL_TABLES = frozenset((*RECORDS_TABLES, *IDENTITY_TABLES))
-GAME_DIFF_TABLES = frozenset(("play_by_play", "shots"))
+GAME_DIFF_TABLES = frozenset(("app_play_by_play", "app_shots"))
 
 
 def target_name(name):
     if name not in APP_TABLES:
         raise ValueError(f"Unknown publish table: {name}")
-    return name if name.startswith("app_") else f"app_{name}"
+    return name
 
 
 def scope(name, competition_code, season_code):

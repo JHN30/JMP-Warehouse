@@ -139,10 +139,10 @@ class TieTests(unittest.TestCase):
         changed[0]["wins"] = 99
         issues = self.issues(rows, [changed, good, good])
         self.assertEqual(len(issues), 1)
-        self.assertIn("wins differs from gold.team_round_stats", issues[0])
+        self.assertIn("wins differs from gold.app_team_round_stats", issues[0])
         issues = self.issues(rows, [good, good[1:], good])
         self.assertEqual(len(issues), 1)
-        self.assertIn("keys differ from gold.team_round_ratings", issues[0])
+        self.assertIn("keys differ from gold.app_team_round_ratings", issues[0])
 
     def test_decimal_values_compare_exactly(self):
         rows = derive_rows(*TABLES)

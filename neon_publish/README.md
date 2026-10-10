@@ -1,21 +1,20 @@
 # Gold publishing to Neon
 
 `python neon_publish/main.py` publishes one EuroLeague season from local
-`gold` to Neon's `public.app_*` tables. The 16 source tables use the target
-name `app_<source>`; the ten derived tables already begin with `app_`; the twelve
-tables of features 26-29 added in 30g use `app_<name>` (`app_standings_stats` keeps its
-name), plus the two per-game tables of 30h (`app_game_player_advanced`,
-`app_game_team_advanced`) and the four per-game play-by-play tables of 30i
-(`app_game_team_possessions`, `app_game_team_score_flow`, `app_game_team_shot_splits`,
-`app_game_team_shot_zones`) and the three tables of 30j (`app_game_player_on_court`,
-`app_game_team_lineup_stints`, `app_game_stat_gaps`), 47 targets in all.
+`gold` to Neon's `public.app_*` tables. All 47 Gold sources have exactly
+the same physical names as their Neon targets, for example
+`gold.app_games -> public.app_games`. The publisher copies names as they are;
+it never adds a prefix. The Gold-only migration is documented in
+[gold_etl/README.md](../gold_etl/README.md) and does not change Neon.
+The naming change preserves publishing scope: Neon currently holds E2023-E2026,
+while local Gold retains E2000-E2026. Each publish still selects one season.
 `--list-tables` prints every fixed mapping and scope without a database connection.
 
 The three record tables and `app_players` and `app_club_identities` replace all
 rows for competition `E` once per run. The other 42 tables replace only the
 selected season (the 21 tables added in 30g, 30h, 30i and 30j are season-scoped too). All selected scopes commit in one Neon transaction. A failed
 preflight, shrink guard, COPY, or post-copy count check rolls the transaction
-back. `play_by_play` and `shots` copy only games whose Gold rows differ, and
+back. `app_play_by_play` and `app_shots` copy only games whose Gold rows differ, and
 remove games no longer present locally.
 
 ```powershell
@@ -53,7 +52,7 @@ applied the preflight reports the missing columns and the publish refuses. Apply
 owner's approval, then publish every season (`E2024`, `E2025`, `E2026`) because the old rows
 hold placeholder values until they are replaced.
 
-Use `-tb games app_standings` to select registered tables. `-sc` accepts
+Use `-tb app_games app_standings` to select registered physical tables. `-sc` accepts
 `current`, a four-digit year, or an `EYYYY` code; it never publishes multiple
 historical seasons. `--allow-shrink` overrides only the guard that refuses a
 scope with fewer than 90% of its current Neon rows. Real publishing requires

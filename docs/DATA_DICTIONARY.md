@@ -14,6 +14,14 @@ in-place Neon migration and first E2026 publish completed on 2026-09-28.
 
 ## Neon app-table contract
 
+All 47 local `gold` tables now use the same `app_*` names as Neon `public`.
+The publisher copies identically named relations; Gold's build selectors may
+still use logical Silver names. The local rename retains E2000-E2026, and Neon
+retains its existing E2023-E2026 scope. Each Gold table has the same primary-key
+columns as Neon, plus the app secondary indexes on standings (`club_code`),
+play-by-play (`game_code, play_number` and `person_code`) and shots (`person_code`).
+See [gold_etl/README.md](../gold_etl/README.md) for the in-place local migration.
+
 The 16 Gold source tables publish to `public.app_<source>`:
 `app_seasons`, `app_clubs`, `app_people`, `app_registrations`, `app_rounds`,
 `app_games`, `app_game_officials`, `app_game_period_scores`,
@@ -125,7 +133,7 @@ game with a full box score) and `game_player_advanced` (`game_code`, `side`,
 `person_key`; one row per player box score) are computed by
 `postgres_etl/advanced.py` from Silver only. They are not loaded from Bronze,
 carry the same `load_id` and `loaded_at` columns. Gold projects both as
-`gold.game_team_advanced` and `gold.game_player_advanced` (see below).
+`gold.app_game_team_advanced` and `gold.app_game_player_advanced` (see below).
 Ratios are fractions (0.512); NULL means a needed measure was missing or a
 denominator was zero. Forfeits (`game_stat_gaps` `*`) and unplayed games have
 no rows.
@@ -177,7 +185,7 @@ These are box-score estimates. Counted play-by-play possessions sit next to them
 Built by `python postgres_etl/possessions.py -sc <seasons>` from `play_by_play`, `games`
 and `game_team_advanced` (E2007 onward; earlier seasons have no play-by-play and no
 rows). Extra key `game_code`, `side`; one row per club per played game with events and a
-`game_team_advanced` row. Same provenance columns. Gold copy `gold.game_team_possessions` (without the provenance columns) is published to Neon as `public.app_game_team_possessions` (E2025 and E2026) once the reviewed 30i migration is applied.
+`game_team_advanced` row. Same provenance columns. Gold copy `gold.app_game_team_possessions` (without the provenance columns) is published to Neon as `public.app_game_team_possessions` (E2025 and E2026) once the reviewed 30i migration is applied.
 
 | Column | Meaning |
 | --- | --- |
@@ -215,7 +223,7 @@ estimate by more than 10% (16 rows across E2007-E2026: 7 in E2007 and 9 in E2009
 
 Built by `python postgres_etl/score_flow.py -sc <seasons>` from `play_by_play` and `games`
 (E2007 onward; same rows as `game_team_possessions`). Extra key `game_code`, `side`; one row
-per club per played game whose events carry a running score. Same provenance columns. Gold copy `gold.game_team_score_flow` (without the provenance columns) is published to Neon as `public.app_game_team_score_flow` (E2025 and E2026) once the reviewed 30i migration is applied.
+per club per played game whose events carry a running score. Same provenance columns. Gold copy `gold.app_game_team_score_flow` (without the provenance columns) is published to Neon as `public.app_game_team_score_flow` (E2025 and E2026) once the reviewed 30i migration is applied.
 
 | Column | Meaning |
 | --- | --- |
@@ -241,7 +249,7 @@ a fresh derivation and warns when a final score differs from `games` (none found
 
 Built by `python postgres_etl/shot_splits.py -sc <seasons>` from `games`, `shots` and
 `play_by_play` (E2007 onward; same rows as `game_team_possessions`). Extra key `game_code`,
-`side`. Same provenance columns. Gold copy `gold.game_team_shot_splits` (without the provenance columns) is published to Neon as `public.app_game_team_shot_splits` (E2025 and E2026) once the reviewed 30i migration is applied.
+`side`. Same provenance columns. Gold copy `gold.app_game_team_shot_splits` (without the provenance columns) is published to Neon as `public.app_game_team_shot_splits` (E2025 and E2026) once the reviewed 30i migration is applied.
 
 | Column | Meaning |
 | --- | --- |
@@ -263,7 +271,7 @@ points differ from `games` (none found).
 
 Built by `python postgres_etl/shot_zones.py -sc <seasons>` from `games` and `shots`
 (E2007 onward). Extra key `game_code`, `side`, `zone`; columns `club_code`, `attempts`,
-`made`, `points`. Gold copy `gold.game_team_shot_zones` (without the provenance columns) is published to Neon as `public.app_game_team_shot_zones` (E2025 and E2026) once the reviewed 30i migration is applied. Field goals only: `2FGM`, `3FGM`, `LAYUPMD`, `DUNK` made and `2FGA`, `3FGA`,
+`made`, `points`. Gold copy `gold.app_game_team_shot_zones` (without the provenance columns) is published to Neon as `public.app_game_team_shot_zones` (E2025 and E2026) once the reviewed 30i migration is applied. Field goals only: `2FGM`, `3FGM`, `LAYUPMD`, `DUNK` made and `2FGA`, `3FGA`,
 `LAYUPATT`, `2FGAB`, `3FGAB` missed (E2008-E2014 use the layup, dunk and blocked types; 19a
 has the same list). Free throws and shots without a zone code are left out, and a team has a
 row only for zones it shot from. Zone totals equal the box score's field goals made in every
@@ -291,7 +299,7 @@ games.
 Built by `python postgres_etl/on_court.py -sc <seasons>` from `games`, `game_player_stats` and
 `play_by_play` (E2007 onward). Key `game_code`, `side`, `person_key`, `interval_ordinal`
 (the player's stretches counted from 1 in time order); columns `club_code`, `start_seconds` and
-`end_seconds` (elapsed game seconds). It is the base of the lineup features 29b-29d. Gold copy `gold.game_player_on_court` (without the provenance columns) is published to Neon as `public.app_game_player_on_court` (E2025 and E2026) once the reviewed 30j migration is applied.
+`end_seconds` (elapsed game seconds). It is the base of the lineup features 29b-29d. Gold copy `gold.app_game_player_on_court` (without the provenance columns) is published to Neon as `public.app_game_player_on_court` (E2025 and E2026) once the reviewed 30j migration is applied.
 
 A side starts with the players whose `started` flag is set. An `IN` adds a player, an `OUT`
 removes one, in event order (period, overtime, `event_ordinal`); players carry across periods;
@@ -325,7 +333,7 @@ the box score's `seconds_played`.
 Built by `python postgres_etl/lineups.py -sc <seasons>` from `games`, `game_player_stats` and
 `play_by_play` (E2007 onward), right after `game_player_on_court`. Key `game_code`, `side`,
 `stint_ordinal` (counted from 1 over the stored stints of the game); two rows per stint, one
-from each team's side. Gold copy `gold.game_team_lineup_stints` (without the provenance columns) is published to Neon as `public.app_game_team_lineup_stints` (E2025 and E2026) once the reviewed 30j migration is applied.
+from each team's side. Gold copy `gold.app_game_team_lineup_stints` (without the provenance columns) is published to Neon as `public.app_game_team_lineup_stints` (E2025 and E2026) once the reviewed 30j migration is applied.
 
 | Column | Meaning |
 | --- | --- |
@@ -358,7 +366,7 @@ five starters of each team.
 
 ### `player_on_off`
 
-Built as `gold.player_on_off` by `python gold_etl/main.py -sc <seasons> -tb player_on_off`
+Built as `gold.app_player_on_off` by `python gold_etl/main.py -sc <seasons> -tb player_on_off`
 from `game_team_lineup_stints` (phase from `silver.games`) and `game_player_stats` (name), for
 E2007 onward; a missing stint table stops the build with the command that creates it. Key
 `competition_code`, `season_code`, `scope` (`all`, each phase, `PS`), `club_code`, `person_key`;
@@ -381,7 +389,7 @@ of 4,507), within 3 points in 83%, and differs by 1.9 points on average.
 
 ### `lineup_ratings`
 
-Built as `gold.lineup_ratings` by `python gold_etl/main.py -sc <seasons> -tb lineup_ratings`
+Built as `gold.app_lineup_ratings` by `python gold_etl/main.py -sc <seasons> -tb lineup_ratings`
 from `game_team_lineup_stints` (phase from `silver.games`) and `game_player_stats` (names), for
 E2007 onward; a missing stint table stops the build with the command that creates it. Key
 `competition_code`, `season_code`, `scope` (`all`, each phase, `PS`), `club_code`, `lineup_size`
@@ -404,7 +412,7 @@ rows.
 
 ### `player_rapm`
 
-Built as `gold.player_rapm` by `python gold_etl/main.py -sc <seasons> -tb player_rapm` from
+Built as `gold.app_player_rapm` by `python gold_etl/main.py -sc <seasons> -tb player_rapm` from
 `game_team_lineup_stints` (both teams' lineups per stint), `game_player_stats` (names) and the
 played games of `silver.games`, for E2007 onward. It needs numpy in the Python environment
 (imported only by this table; a missing numpy stops the build with a message). Key
@@ -437,7 +445,7 @@ reproduces the rows exactly).
 
 ### `team_pbp_stats` and `team_shot_zone_stats`
 
-Built as `gold.team_pbp_stats` and `gold.team_shot_zone_stats` by `python gold_etl/main.py
+Built as `gold.app_team_pbp_stats` and `gold.app_team_shot_zone_stats` by `python gold_etl/main.py
 -sc <seasons> -tb team_pbp_stats team_shot_zone_stats` from `silver.games` (phase) and the
 per-game tables `game_team_possessions`, `game_team_score_flow`, `game_team_shot_splits` and
 `game_team_shot_zones` (E2007 onward; earlier seasons build zero rows, and a missing Silver
@@ -580,7 +588,7 @@ the sections from `game_team_possessions` through `game_team_lineup_stints` (inc
 `--quality-only` compares Gold source and derived keys and full values with
 Silver. Both read the local database only. Use
 `python neon_publish/main.py -sc E2025 --dry-run` for the read-only Neon preview.
-Use explicit `gold.games` or `silver.games` names because local connections
+Use explicit `gold.app_games` or `silver.games` names because local connections
 still search `silver` by default.
 
 ## Local Gold derivations and historical web-app tables
@@ -839,7 +847,7 @@ publishing replaces this table's competition scope after the approved cutover.
 
 ### `team_round_stats`
 
-Built as `gold.team_round_stats` by `python gold_etl/main.py -sc <seasons> -tb
+Built as `gold.app_team_round_stats` by `python gold_etl/main.py -sc <seasons> -tb
 team_round_stats` from `silver.games`, `silver.game_team_stats` (`total` rows)
 and `silver.game_team_advanced`. Published to Neon as `public.app_team_round_stats` (E2025 and E2026) once the reviewed 30g migration is applied.
 
@@ -880,7 +888,7 @@ the two forfeits above (`games_played` off by one for the forfeit's club in the
 
 ### `team_round_ratings`
 
-Built as `gold.team_round_ratings` by `python gold_etl/main.py -sc <seasons> -tb
+Built as `gold.app_team_round_ratings` by `python gold_etl/main.py -sc <seasons> -tb
 team_round_ratings` from the same Silver inputs and counted games as
 `team_round_stats`, with the same key (`competition_code`, `season_code`,
 `scope`, `round_number`, `club_code`) and the same rows. Published to Neon as `public.app_team_round_ratings` (E2025 and E2026) once the reviewed 30g migration is applied.
@@ -906,7 +914,7 @@ and reports an error if a connected scope-round's `srs` sum or possession-weight
 
 ### `team_round_splits`
 
-Built as `gold.team_round_splits` by `python gold_etl/main.py -sc <seasons> -tb
+Built as `gold.app_team_round_splits` by `python gold_etl/main.py -sc <seasons> -tb
 team_round_splits` from the same Silver inputs and counted games as
 `team_round_stats`, with the same key (`competition_code`, `season_code`,
 `scope`, `round_number`, `club_code`) and the same rows. Published to Neon as `public.app_team_round_splits` (E2025 and E2026) once the reviewed 30g migration is applied.
@@ -933,7 +941,7 @@ than the window.
 
 ### `player_round_stats`
 
-Built as `gold.player_round_stats` by `python gold_etl/main.py -sc <seasons> -tb
+Built as `gold.app_player_round_stats` by `python gold_etl/main.py -sc <seasons> -tb
 player_round_stats` from `silver.game_player_stats`, `game_player_advanced` and the
 counted team games of `team_round_stats`. Published to Neon as `public.app_player_round_stats` (E2025 and E2026) once the reviewed 30g migration is applied.
 
@@ -971,7 +979,7 @@ minutes share 5x too small. The stored rows were rebuilt with the corrected shar
 
 ### `player_round_ratings`
 
-Built as `gold.player_round_ratings` by `python gold_etl/main.py -sc <seasons> -tb
+Built as `gold.app_player_round_ratings` by `python gold_etl/main.py -sc <seasons> -tb
 player_round_ratings` from `silver.game_player_stats` and the same counted games as
 `team_round_stats`. Key `competition_code`, `season_code`, `scope` (`all`, each phase,
 `PS`), `round_number`, `person_key`; same row set as `player_round_stats`. Published to Neon as `public.app_player_round_ratings` (E2025 and E2026) once the reviewed 30g migration is applied.
@@ -992,7 +1000,7 @@ derivation equality and the league-mean invariant in `--quality-only`.
 
 ### `player_round_win_shares`
 
-Built as `gold.player_round_win_shares` by `python gold_etl/main.py -sc <seasons> -tb
+Built as `gold.app_player_round_win_shares` by `python gold_etl/main.py -sc <seasons> -tb
 player_round_win_shares` from `silver.game_player_stats` and the same counted games as
 `team_round_stats`. Key `competition_code`, `season_code`, `scope` (`all`, each phase,
 `PS`), `round_number`, `person_key`; same row set as `player_round_stats`. Published to Neon as `public.app_player_round_win_shares` (E2025 and E2026) once the reviewed 30g migration is applied.

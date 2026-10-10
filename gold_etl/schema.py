@@ -485,6 +485,31 @@ for _name in PLAYER_STATS:
         GOLD_TABLES[_name], fields=GOLD_TABLES[_name].fields + PLAYER_STATS_FLAGS)
 
 
+def physical_name(name):
+    """Resolve a registered build selector to its app-facing Gold relation."""
+    if name not in GOLD_TABLES:
+        raise ValueError(f"Unknown Gold table: {name}")
+    return name if name.startswith("app_") else f"app_{name}"
+
+
+PHYSICAL_TABLES = {physical_name(name): spec for name, spec in GOLD_TABLES.items()}
+LOGICAL_NAMES = {physical_name(name): name for name in GOLD_TABLES}
+APP_INDEXES = {
+    "app_standings": (("idx_flat_app_standings_club_code", ("club_code",)),),
+    "app_play_by_play": (
+        ("idx_flat_play_by_play_game_code_play_number", ("game_code", "play_number")),
+        ("idx_flat_play_by_play_person_code", ("person_code",)),
+    ),
+    "app_shots": (("idx_flat_shots_person_code", ("person_code",)),),
+}
+
+
+def index_sql(name):
+    return [f'CREATE INDEX IF NOT EXISTS "{index}" ON gold."{name}" '
+            f'({", ".join(column_names)})'
+            for index, column_names in APP_INDEXES.get(name, ())]
+
+
 def columns(name):
     return tuple(field.name for field in GOLD_TABLES[name].fields)
 
@@ -498,7 +523,7 @@ def add_flag_columns_sql(name):
     """Additive DDL bringing an existing Gold player table up to the current columns."""
     if name not in PLAYER_STATS:
         return []
-    return [f'ALTER TABLE gold."{name}" ADD COLUMN IF NOT EXISTS "{field.name}" '
+    return [f'ALTER TABLE gold."{physical_name(name)}" ADD COLUMN IF NOT EXISTS "{field.name}" '
             f'{field.kind} DEFAULT {FLAG_DEFAULTS[field.name]}'
             for field in PLAYER_STATS_FLAGS]
 
@@ -507,7 +532,9 @@ def create_table_sql(name):
     spec = GOLD_TABLES[name]
     fields = ", ".join(f'"{field.name}" {field.kind}' for field in spec.fields)
     key = ", ".join(f'"{column}"' for column in spec.key)
-    return f'CREATE TABLE IF NOT EXISTS gold."{name}" ({fields}, PRIMARY KEY ({key}))'
+    target = physical_name(name)
+    statements = [f'CREATE TABLE IF NOT EXISTS gold."{target}" ({fields}, PRIMARY KEY ({key}))']
+    return "; ".join(statements + index_sql(target))
 
 
 def scope_predicate(name, alias=None, feed_only=False):
@@ -526,4 +553,5 @@ def count_sql(name, schema):
     if schema not in {"silver", "gold"}:
         raise ValueError(f"Unknown schema: {schema}")
     predicate = scope_predicate(name, feed_only=schema == "gold")
-    return f'SELECT count(*) FROM {schema}."{name}" WHERE {predicate}'
+    target = physical_name(name) if schema == "gold" else name
+    return f'SELECT count(*) FROM {schema}."{target}" WHERE {predicate}'

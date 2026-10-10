@@ -35,7 +35,9 @@
 
 - Shared flags: `-cp/--competition` (`euroleague`, `eurocup`),
   `-sc/--season-code` (year, `E2025`, range `2000-2025`, `current`, `latest`,
-  `all`), `-tb/--table` (logical names without `app_`/`etl_flat_`), `--dry-run`.
+  `all`), `-tb/--table`, `--dry-run`. Silver uses logical source names; Gold
+  accepts logical selectors and physical `app_*` names; Neon uses physical
+  `app_*` names.
 - Exit codes: 0 success, 1 failure, 130 interrupted.
 - Progress goes to stdout with `flush=True`; each run is also written to
   `logs/<stage>/` (`common.db.log_directory`).

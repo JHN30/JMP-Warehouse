@@ -9,7 +9,7 @@ from pathlib import Path
 from unittest import mock
 
 from gold_etl.schema import (DERIVED_NAMES, GAME_ADVANCED_NAMES, GAME_COURT_NAMES,
-                             GAME_PBP_NAMES, GOLD_TABLES, ROUND_NAMES, SOURCE_NAMES)
+                             GAME_PBP_NAMES, PHYSICAL_TABLES as GOLD_TABLES, ROUND_NAMES, SOURCE_NAMES, physical_name)
 from neon_publish import publish
 from neon_publish.contract import (APP_TABLES, GAME_COURT_TABLES, GAME_PBP_TABLES,
                                    GAME_TABLES, GLOBAL_TABLES,
@@ -17,7 +17,14 @@ from neon_publish.contract import (APP_TABLES, GAME_COURT_TABLES, GAME_PBP_TABLE
                                    inspect_target,
                                    migration_sql, predicate, scope, target_name)
 from neon_publish.main import main as publish_main
-from pipeline import StageFacts, build_parser, build_summary, read_state, redactor, refresh
+from pipeline import StageFacts, build_parser, build_summary, read_state, redactor, refresh, refresh_history
+
+
+SOURCE_NAMES = tuple(map(physical_name, SOURCE_NAMES))
+ROUND_NAMES = tuple(map(physical_name, ROUND_NAMES))
+GAME_ADVANCED_NAMES = tuple(map(physical_name, GAME_ADVANCED_NAMES))
+GAME_PBP_NAMES = tuple(map(physical_name, GAME_PBP_NAMES))
+GAME_COURT_NAMES = tuple(map(physical_name, GAME_COURT_NAMES))
 
 
 class ContractTests(unittest.TestCase):
@@ -30,28 +37,27 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(len(GLOBAL_TABLES), 5)
         self.assertEqual(set(APP_TABLES), set(GOLD_TABLES))
         for name in APP_TABLES:
-            self.assertEqual(target_name(name), name if name.startswith("app_")
-                             else "app_" + name)
+            self.assertEqual(target_name(name), name)
             self.assertEqual(scope(name, "E", "E2025"),
                              ("E",) if name in GLOBAL_TABLES else ("E", "E2025"))
             self.assertEqual(predicate(name), "competition_code = %s" if name in GLOBAL_TABLES
                              else "competition_code = %s AND season_code = %s")
 
     def test_shrink_and_game_diff(self):
-        self.assertEqual(publish.shrink_problems({"games": 80}, {"games": 100}),
+        self.assertEqual(publish.shrink_problems({"app_games": 80}, {"app_games": 100}),
                          ["app_games: 100 -> 80 rows"])
-        self.assertEqual(publish.shrink_problems({"games": 95}, {"games": 100}), [])
+        self.assertEqual(publish.shrink_problems({"app_games": 95}, {"app_games": 100}), [])
         self.assertEqual(publish.changed_games({1: (10, "a"), 2: (8, "b")},
                                                {1: (10, "a"), 3: (2, "c")}), ([2], [3]))
 
     def test_preflight_reports_missing_compatible_and_incompatible(self):
         missing = mock.MagicMock()
         missing.fetchone.return_value = (None,)
-        self.assertEqual(inspect_target(missing, "games"),
+        self.assertEqual(inspect_target(missing, "app_games"),
                          ["public.app_games: missing table"])
         self.assertFalse(any("ALTER" in str(call) for call in missing.execute.call_args_list))
 
-        spec = GOLD_TABLES["games"]
+        spec = GOLD_TABLES["app_games"]
         columns = [(field.name, {"TEXT": "text", "INTEGER": "integer",
                                  "BOOLEAN": "boolean", "TIMESTAMP": "timestamp without time zone",
                                  "TIMESTAMPTZ": "timestamp with time zone"}[field.kind.split()[0]],
@@ -61,12 +67,12 @@ class ContractTests(unittest.TestCase):
         compatible = mock.MagicMock()
         compatible.fetchone.return_value = ("app_games",)
         compatible.fetchall.side_effect = [columns, [("p", f"PRIMARY KEY ({key})")]]
-        self.assertEqual(inspect_target(compatible, "games"), [])
+        self.assertEqual(inspect_target(compatible, "app_games"), [])
         incompatible = mock.MagicMock()
         incompatible.fetchone.return_value = ("app_games",)
         incompatible.fetchall.side_effect = [columns[:-1] + [("extra", "text", "NO", None)],
                                              [("p", "PRIMARY KEY (wrong)")]]
-        issues = inspect_target(incompatible, "games")
+        issues = inspect_target(incompatible, "app_games")
         self.assertTrue(any("missing column" in issue for issue in issues))
         self.assertTrue(any("extra required column" in issue for issue in issues))
         self.assertTrue(any("primary key differs" in issue for issue in issues))
@@ -89,8 +95,8 @@ class PlayerQualificationTests(unittest.TestCase):
         return cursor
 
     def test_published_columns_include_the_flags_after_the_feed_columns(self):
-        for name in ("season_player_stats_traditional", "season_player_stats_advanced",
-                     "season_player_stats_scoring", "season_player_stats_misc"):
+        for name in ("app_season_player_stats_traditional", "app_season_player_stats_advanced",
+                     "app_season_player_stats_scoring", "app_season_player_stats_misc"):
             with self.subTest(table=name):
                 fields = GOLD_TABLES[name].fields
                 self.assertEqual(tuple(field.name for field in fields[-3:]), self.FLAGS)
@@ -99,7 +105,7 @@ class PlayerQualificationTests(unittest.TestCase):
                 self.assertEqual(inspect_target(self.present(name), name), [])
 
     def test_a_neon_table_without_the_flags_fails_the_preflight(self):
-        name = "season_player_stats_misc"
+        name = "app_season_player_stats_misc"
         issues = inspect_target(self.present(name, skip=self.FLAGS), name)
         for column in self.FLAGS:
             self.assertTrue(any(f"missing column {column} " in issue for issue in issues), column)
@@ -123,9 +129,9 @@ class NewTableTests(unittest.TestCase):
 
     def test_targets_and_scopes(self):
         self.assertEqual(len(NEW_TABLES), 12)
-        self.assertEqual(target_name("team_round_stats"), "app_team_round_stats")
+        self.assertEqual(target_name("app_team_round_stats"), "app_team_round_stats")
         self.assertEqual(target_name("app_standings_stats"), "app_standings_stats")
-        self.assertEqual(target_name("player_rapm"), "app_player_rapm")
+        self.assertEqual(target_name("app_player_rapm"), "app_player_rapm")
         for name in NEW_TABLES:
             self.assertEqual(scope(name, "E", "E2026"), ("E", "E2026"))
             self.assertEqual(predicate(name), "competition_code = %s AND season_code = %s")
@@ -169,7 +175,7 @@ class NewTableTests(unittest.TestCase):
             self.assertEqual(inspect_target(present, name), [], name)
 
     def test_a_wrong_type_in_a_new_table_is_reported(self):
-        spec = GOLD_TABLES["player_rapm"]
+        spec = GOLD_TABLES["app_player_rapm"]
         columns = [(field.name, "text" if field.name == "rapm"
                     else self.TYPES[field.kind.split()[0]],
                     "NO" if "NOT NULL" in field.kind else "YES", None)
@@ -177,7 +183,7 @@ class NewTableTests(unittest.TestCase):
         cursor = mock.MagicMock()
         cursor.fetchone.return_value = ("app_player_rapm",)
         cursor.fetchall.side_effect = [columns, [("p", f"PRIMARY KEY ({', '.join(spec.key)})")]]
-        issues = inspect_target(cursor, "player_rapm")
+        issues = inspect_target(cursor, "app_player_rapm")
         self.assertEqual(issues, ["public.app_player_rapm.rapm: text, expected numeric"])
 
     def test_print_migration_needs_no_connection(self):
@@ -196,17 +202,17 @@ class NewTableTests(unittest.TestCase):
               mock.patch("neon_publish.main.gold_main", return_value=1) as quality,
               mock.patch("neon_publish.main.neon_connect") as remote,
               mock.patch("sys.stderr", new_callable=io.StringIO)):
-            self.assertEqual(publish_main(["-sc", "E2026", "-tb", "player_rapm",
-                                           "lineup_ratings"]), 1)
+            self.assertEqual(publish_main(["-sc", "E2026", "-tb", "app_player_rapm",
+                                           "app_lineup_ratings"]), 1)
         self.assertEqual(quality.call_args.args[0],
-                         ["-sc", "E2026", "-tb", "player_rapm", "lineup_ratings",
+                         ["-sc", "E2026", "-tb", "app_player_rapm", "app_lineup_ratings",
                           "--quality-only"])
         remote.assert_not_called()
 
     def test_a_publish_of_new_tables_replaces_their_season_slice(self):
-        names = ("app_standings_stats", "player_rapm")
-        before = {"app_standings_stats": None, "player_rapm": 10}
-        after = {"app_standings_stats": 1874, "player_rapm": 560}
+        names = ("app_standings_stats", "app_player_rapm")
+        before = {"app_standings_stats": None, "app_player_rapm": 10}
+        after = {"app_standings_stats": 1874, "app_player_rapm": 560}
         neon = FakeNeon(before)
         spools = {name: io.BytesIO(b"row\n") for name in names}
 
@@ -222,7 +228,7 @@ class NewTableTests(unittest.TestCase):
             result = publish.publish_season(None, neon, "euroleague", "E2026", names,
                                             log=lambda _: None)
         self.assertEqual(result, {"app_standings_stats": (None, 1874),
-                                  "player_rapm": (10, 560)})
+                                  "app_player_rapm": (10, 560)})
         self.assertEqual(neon.commits, 1)
 
     def test_delete_and_copy_target_the_public_table_and_the_season(self):
@@ -230,7 +236,7 @@ class NewTableTests(unittest.TestCase):
         cursor.connection = mock.MagicMock()
         with mock.patch("neon_publish.publish.sql.Composed.as_string",
                         return_value="COPY"):
-            publish._replace(cursor, "player_rapm", "E", "E2026", io.BytesIO(), None)
+            publish._replace(cursor, "app_player_rapm", "E", "E2026", io.BytesIO(), None)
         self.assertEqual(cursor.execute.call_args.args[1], ["E", "E2026"])
         cursor.copy_expert.assert_called_once()
 
@@ -263,7 +269,7 @@ class NullabilityTests(unittest.TestCase):
         self.assertIn("public.app_players.name: NOT NULL in Neon but nullable in Gold", issues)
 
     def test_not_null_neon_columns_for_required_gold_fields_and_keys_are_accepted(self):
-        for name in ("app_players", "games", "play_by_play"):
+        for name in ("app_players", "app_games", "app_play_by_play"):
             self.assertEqual(self.inspect(name), [], name)
 
 
@@ -284,15 +290,15 @@ class PreviewOfIncompatibleTargetsTests(unittest.TestCase):
     def test_missing_scope_column_makes_counts_and_games_unavailable_without_queries(self):
         for column in ("competition_code", "season_code"):
             (counts, sums), count, rows, checks = self.state(
-                "play_by_play", [self.missing("app_play_by_play", column)])
-            self.assertEqual((counts, sums), ({"play_by_play": None}, {"play_by_play": {}}))
+                "app_play_by_play", [self.missing("app_play_by_play", column)])
+            self.assertEqual((counts, sums), ({"app_play_by_play": None}, {"app_play_by_play": {}}))
             for fake in (count, rows, checks):
                 fake.assert_not_called()
 
     def test_missing_game_code_keeps_the_count_but_not_the_game_rows(self):
         (counts, sums), count, rows, checks = self.state(
-            "shots", [self.missing("app_shots", "game_code")])
-        self.assertEqual((counts, sums), ({"shots": 7}, {"shots": {}}))
+            "app_shots", [self.missing("app_shots", "game_code")])
+        self.assertEqual((counts, sums), ({"app_shots": 7}, {"app_shots": {}}))
         count.assert_called_once()
         rows.assert_not_called()
         checks.assert_not_called()
@@ -309,16 +315,16 @@ class PreviewOfIncompatibleTargetsTests(unittest.TestCase):
 
     def test_other_problems_and_clean_tables_are_queried_as_before(self):
         (counts, sums), count, rows, checks = self.state(
-            "play_by_play", ["public.app_play_by_play: extra required column"])
-        self.assertEqual((counts, sums), ({"play_by_play": 7},
-                                          {"play_by_play": {1: (3, None)}}))
+            "app_play_by_play", ["public.app_play_by_play: extra required column"])
+        self.assertEqual((counts, sums), ({"app_play_by_play": 7},
+                                          {"app_play_by_play": {1: (3, None)}}))
         checks.assert_not_called()
-        (counts, sums), _, rows, checks = self.state("play_by_play", [])
-        self.assertEqual(sums, {"play_by_play": {1: (3, "x")}})
+        (counts, sums), _, rows, checks = self.state("app_play_by_play", [])
+        self.assertEqual(sums, {"app_play_by_play": {1: (3, "x")}})
         rows.assert_not_called()
         (counts, sums), _, _, _ = self.state(
-            "games", ["public.app_games: missing table"])
-        self.assertEqual(counts, {"games": None})
+            "app_games", ["public.app_games: missing table"])
+        self.assertEqual(counts, {"app_games": None})
 
     @staticmethod
     def wrong_type(target, column):
@@ -327,16 +333,16 @@ class PreviewOfIncompatibleTargetsTests(unittest.TestCase):
     def test_wrong_scope_column_type_makes_counts_unavailable_without_queries(self):
         for column in ("competition_code", "season_code"):
             (counts, sums), count, rows, checks = self.state(
-                "play_by_play", [self.wrong_type("app_play_by_play", column)])
-            self.assertEqual((counts, sums), ({"play_by_play": None}, {"play_by_play": {}}))
+                "app_play_by_play", [self.wrong_type("app_play_by_play", column)])
+            self.assertEqual((counts, sums), ({"app_play_by_play": None}, {"app_play_by_play": {}}))
             for fake in (count, rows, checks):
                 fake.assert_not_called()
 
     def test_wrong_type_on_other_columns_and_global_season_column_still_query(self):
         (counts, _), count, _, _ = self.state(
-            "play_by_play", [self.wrong_type("app_play_by_play", "quarter"),
+            "app_play_by_play", [self.wrong_type("app_play_by_play", "quarter"),
                              "public.app_play_by_play.season_code: expected NOT NULL"])
-        self.assertEqual(counts, {"play_by_play": 7})
+        self.assertEqual(counts, {"app_play_by_play": 7})
         (counts, _), count, _, _ = self.state(
             "app_players", [self.wrong_type("app_players", "season_code")])
         self.assertEqual(counts, {"app_players": 7})
@@ -349,34 +355,34 @@ class PreviewOfIncompatibleTargetsTests(unittest.TestCase):
         from neon_publish import main as cli
         with (mock.patch.object(cli, "connect"), mock.patch.object(cli, "neon_connect"),
               mock.patch.object(cli, "publish_season",
-                                return_value={"play_by_play": (None, 5), "shots": (2, 5)}),
+                                return_value={"app_play_by_play": (None, 5), "app_shots": (2, 5)}),
               mock.patch("sys.stdout", new_callable=io.StringIO) as out):
             self.assertEqual(cli.main(["-sc", "E2025", "--dry-run"]), 0)
         self.assertIn("unavailable -> 5 rows", out.getvalue())
         self.assertNotIn("missing", out.getvalue())
 
     def run_publish(self, dry_run):
-        issues = {"play_by_play": [self.missing("app_play_by_play", "competition_code"),
+        issues = {"app_play_by_play": [self.missing("app_play_by_play", "competition_code"),
                                    self.missing("app_play_by_play", "game_code")]}
         neon = FakeNeon({})
-        plans = {"play_by_play": ([1], [], 1)}
+        plans = {"app_play_by_play": ([1], [], 1)}
         with (mock.patch.object(publish, "preflight", return_value=issues),
               mock.patch.object(publish, "_snapshot",
-                                return_value=({"play_by_play": 5},
-                                              {"play_by_play": io.BytesIO(b"row\n")}, plans)),
+                                return_value=({"app_play_by_play": 5},
+                                              {"app_play_by_play": io.BytesIO(b"row\n")}, plans)),
               mock.patch.object(publish, "_count",
                                 side_effect=AssertionError("queried an incompatible table")),
               mock.patch.object(publish, "_replace") as replace):
             try:
                 return publish.publish_season(None, neon, "euroleague", "E2025",
-                                              ("play_by_play",), dry_run=dry_run,
+                                              ("app_play_by_play",), dry_run=dry_run,
                                               log=lambda _: None), replace
             except Exception as error:
                 return error, replace
 
     def test_dry_run_reports_instead_of_failing_and_real_publish_still_refuses(self):
         result, replace = self.run_publish(dry_run=True)
-        self.assertEqual(result, {"play_by_play": (None, 5)})
+        self.assertEqual(result, {"app_play_by_play": (None, 5)})
         replace.assert_not_called()
         error, replace = self.run_publish(dry_run=False)
         self.assertIsInstance(error, ValueError)
@@ -416,7 +422,7 @@ class FakeNeon:
 class TransactionTests(unittest.TestCase):
     def test_removed_game_deletes_without_copy(self):
         cursor = mock.MagicMock()
-        publish._replace(cursor, "play_by_play", "E", "E2025", io.BytesIO(),
+        publish._replace(cursor, "app_play_by_play", "E", "E2025", io.BytesIO(),
                          ([], [42], 0))
         cursor.copy_expert.assert_not_called()
         self.assertEqual(cursor.execute.call_args.args[1], ("E", "E2025", [42]))
@@ -447,48 +453,48 @@ class TransactionTests(unittest.TestCase):
         return neon, result, copied.call_count
 
     def test_first_publish_and_rerun(self):
-        for before in ({"games": None, "app_players": None},
-                       {"games": 10, "app_players": 4}):
-            neon, result, copies = self.run_publish(before, {"games": 10, "app_players": 4})
+        for before in ({"app_games": None, "app_players": None},
+                       {"app_games": 10, "app_players": 4}):
+            neon, result, copies = self.run_publish(before, {"app_games": 10, "app_players": 4})
             self.assertEqual(result, {name: (before[name], count)
-                                      for name, count in {"games": 10, "app_players": 4}.items()})
+                                      for name, count in {"app_games": 10, "app_players": 4}.items()})
             self.assertEqual((neon.commits, copies), (1, 2))
 
     def test_shrink_refusal_and_explicit_override(self):
-        neon, result, copies = self.run_publish({"games": 100}, {"games": 0})
+        neon, result, copies = self.run_publish({"app_games": 100}, {"app_games": 0})
         self.assertIsInstance(result, ValueError)
         self.assertEqual((neon.rollbacks, copies), (1, 0))
-        neon, result, copies = self.run_publish({"games": 100}, {"games": 0},
+        neon, result, copies = self.run_publish({"app_games": 100}, {"app_games": 0},
                                                 allow_shrink=True)
         self.assertEqual((neon.commits, copies), (1, 1))
 
     def test_dry_run_never_copies_even_with_schema_and_shrink_problems(self):
-        neon, result, copies = self.run_publish({"games": 100}, {"games": 0},
-                                                dry_run=True, issues={"games": ["missing column"]})
-        self.assertEqual(result, {"games": (100, 0)})
+        neon, result, copies = self.run_publish({"app_games": 100}, {"app_games": 0},
+                                                dry_run=True, issues={"app_games": ["missing column"]})
+        self.assertEqual(result, {"app_games": (100, 0)})
         self.assertEqual(copies, 0)
         self.assertEqual(neon.sessions, [{"readonly": True}, {"readonly": False}])
 
     def test_schema_problem_fails_before_mutation(self):
-        neon, result, copies = self.run_publish({"games": 10}, {"games": 10},
-                                                issues={"games": ["missing column"]})
+        neon, result, copies = self.run_publish({"app_games": 10}, {"app_games": 10},
+                                                issues={"app_games": ["missing column"]})
         self.assertIsInstance(result, ValueError)
         self.assertEqual((neon.rollbacks, copies), (1, 0))
 
     def test_an_empty_scope_publishes_cleanly(self):
         for before in (None, 0):
-            neon, result, copies = self.run_publish({"game_stat_gaps": before},
-                                                    {"game_stat_gaps": 0})
-            self.assertEqual(result, {"game_stat_gaps": (before, 0)})
+            neon, result, copies = self.run_publish({"app_game_stat_gaps": before},
+                                                    {"app_game_stat_gaps": 0})
+            self.assertEqual(result, {"app_game_stat_gaps": (before, 0)})
             self.assertEqual((neon.commits, neon.rollbacks, copies), (1, 0, 1))
 
     def test_failed_second_copy_rolls_back_first(self):
-        neon, result, copies = self.run_publish({"games": 10, "app_players": 4},
-                                                {"games": 11, "app_players": 5},
+        neon, result, copies = self.run_publish({"app_games": 10, "app_players": 4},
+                                                {"app_games": 11, "app_players": 5},
                                                 fail_after="app_players")
         self.assertIsInstance(result, RuntimeError)
         self.assertEqual((neon.rollbacks, copies), (1, 2))
-        self.assertEqual(neon.counts, {"games": 10, "app_players": 4})
+        self.assertEqual(neon.counts, {"app_games": 10, "app_players": 4})
 
 
 class GameAdvancedTests(unittest.TestCase):
@@ -595,7 +601,7 @@ class CliTests(unittest.TestCase):
               mock.patch("neon_publish.main.gold_main", return_value=1),
               mock.patch("neon_publish.main.neon_connect") as remote,
               mock.patch("sys.stderr", new_callable=io.StringIO)):
-            self.assertEqual(publish_main(["-sc", "E2025", "-tb", "games"]), 1)
+            self.assertEqual(publish_main(["-sc", "E2025", "-tb", "app_games"]), 1)
         remote.assert_not_called()
 
     def test_dry_run_skips_quality_and_passes_read_only_mode(self):
@@ -606,12 +612,124 @@ class CliTests(unittest.TestCase):
               mock.patch("neon_publish.main.gold_main") as quality,
               mock.patch("neon_publish.main.neon_connect", return_value=remote),
               mock.patch("neon_publish.main.publish_season",
-                         return_value={"games": (1, 1)}) as engine,
+                         return_value={"app_games": (1, 1)}) as engine,
               mock.patch("sys.stdout", new_callable=io.StringIO)):
-            self.assertEqual(publish_main(["-sc", "E2025", "-tb", "games",
+            self.assertEqual(publish_main(["-sc", "E2025", "-tb", "app_games",
                                            "--dry-run"]), 0)
         quality.assert_not_called()
         self.assertTrue(engine.call_args.kwargs["dry_run"])
+
+
+class HistoryPipelineTests(unittest.TestCase):
+    def run_history(self, flags=(), fail_at=None, changed=0, year=2026):
+        args = build_parser().parse_args(["--all", *flags])
+        stages = []
+        facts = StageFacts()
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory) / "state.json"
+
+            def runner(command, cwd, env, emit):
+                stages.append((command, cwd, env))
+                index = len(stages) - 1
+                if index == fail_at:
+                    return 7
+                if command[1] == "main.py":
+                    summary = Path(command[command.index("--summary-file") + 1])
+                    summary.write_text(json.dumps({
+                        "changed_resources": ["_catalog/seasons"] + [f"resource/{i}" for i in range(changed)],
+                        "failed_requests": 0,
+                        "kept_resources": ["kept_feed"], "behind_resources": ["behind_feed"],
+                    }), encoding="utf-8")
+                elif command[1] == "postgres_etl/main.py":
+                    emit("Finished: 12 rows")
+                    emit("Quality E2026: 1 table(s), 12 rows, 0 error(s), 1 warning(s)")
+                elif "--quality-only" in command:
+                    emit("Gold quality: passed")
+                return 0
+
+            with (mock.patch("pipeline.current_season_year", return_value=year),
+                  mock.patch("pipeline.resolve_neon_url", side_effect=AssertionError("Neon accessed"))):
+                result = refresh_history(args, mock.Mock(), state, facts, stage_runner=runner,
+                                         environ={"LOCAL_MARKER": "present"})
+            pending = read_state(state).get("publish_pending")
+        return result, stages, facts, pending
+
+    def test_full_fetch_rebuilds_all_layers_even_when_fetch_is_unchanged(self):
+        result, stages, facts, pending = self.run_history()
+        self.assertEqual(result[:2], (0, "LOCAL OK"))
+        self.assertEqual([command[1] for command, _, _ in stages],
+                         ["main.py", "postgres_etl/main.py", "gold_etl/main.py", "gold_etl/main.py"])
+        self.assertEqual(facts.changed, 0)
+        self.assertTrue(pending)
+        self.assertIn("--refresh-current", stages[0][0])
+        for command, _, env in stages[1:]:
+            self.assertEqual(command[command.index("-sc") + 1], "all")
+            self.assertEqual(env["LOCAL_MARKER"], "present")
+        self.assertEqual(facts.gold_status, "built and quality checked")
+        self.assertIn("--quality-only", stages[-1][0])
+        self.assertEqual(facts.publish_lines, [])
+
+    def test_cached_mode_skips_api_and_never_publishes(self):
+        result, stages, facts, pending = self.run_history(["--skip-fetch"])
+        self.assertEqual(result[0], 0)
+        self.assertEqual([command[1] for command, _, _ in stages],
+                         ["postgres_etl/main.py", "gold_etl/main.py", "gold_etl/main.py"])
+        self.assertIsNone(facts.changed)
+        self.assertTrue(pending)
+        summary = "\n".join(build_summary("all", result[1], facts, 1, "log"))
+        self.assertIn("Fetch:    not run", summary)
+        self.assertIn("Publish:  skipped", summary)
+        self.assertIn("quality 0 error(s), 1 warning(s)", summary)
+
+    def test_year_range_and_fetch_options_are_forwarded(self):
+        _, stages, _, _ = self.run_history(["--request-interval", "3", "--hot-hours", "72"], year=2027)
+        command = stages[0][0]
+        self.assertEqual(command[command.index("-sc") + 1], "2000-2027")
+        self.assertEqual(command[command.index("--request-interval") + 1], "3.0")
+        self.assertEqual(command[command.index("--hot-hours") + 1], "72.0")
+        self.assertEqual(stages[0][1].name, "api_requests")
+
+    def test_fetch_metadata_remains_visible(self):
+        result, _, facts, _ = self.run_history(changed=2)
+        self.assertEqual(facts.changed, 2)
+        self.assertEqual(facts.failed_requests, 0)
+        summary = "\n".join(build_summary("all", result[1], facts, 1, "log"))
+        self.assertIn("kept_feed", summary)
+        self.assertIn("behind_feed", summary)
+
+    def test_each_failed_stage_stops_later_stages(self):
+        for index, title in enumerate(("Fetch", "Load", "Gold build", "Gold quality")):
+            with self.subTest(stage=title):
+                result, stages, facts, pending = self.run_history(fail_at=index)
+                self.assertEqual(result[0], 7)
+                self.assertIn(f"FAILED at {title}", result[1])
+                self.assertEqual(len(stages), index + 1)
+                self.assertEqual(pending, None if index == 0 else True)
+                self.assertEqual(facts.publish_lines, [])
+
+    def test_main_routes_all_to_local_history_and_uses_current_pending_state(self):
+        import pipeline
+        with tempfile.TemporaryDirectory() as directory:
+            with (mock.patch.object(pipeline, "current_season_year", return_value=2027),
+                  mock.patch.object(pipeline, "log_directory", return_value=Path(directory)),
+                  mock.patch.object(pipeline, "refresh_history", return_value=(0, "LOCAL OK", None)) as history,
+                  mock.patch.object(pipeline, "refresh") as single,
+                  mock.patch("sys.stdout", new_callable=io.StringIO)):
+                self.assertEqual(pipeline.main(["--all", "--skip-fetch"]), 0)
+            single.assert_not_called()
+            self.assertTrue(history.call_args.args[0].skip_fetch)
+            self.assertEqual(history.call_args.args[2].name, "pipeline_euroleague_E2027.json")
+
+    def test_conflicting_flags_fail_before_any_stage_or_log(self):
+        import pipeline
+        for flags in (["-sc", "E2025"], ["--dry-run-publish"], ["--allow-shrink"]):
+            with (self.subTest(flags=flags), mock.patch.object(pipeline, "refresh_history") as history,
+                  mock.patch.object(pipeline, "log_directory") as logs,
+                  mock.patch("sys.stderr", new_callable=io.StringIO), self.assertRaises(SystemExit) as error):
+                pipeline.main(["--all", *flags])
+            self.assertEqual(error.exception.code, 2)
+            history.assert_not_called()
+            logs.assert_not_called()
 
 
 class PipelineTests(unittest.TestCase):

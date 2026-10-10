@@ -30,6 +30,7 @@ from gold_etl.quality import (check_scope, check_postseason_scope,
                               check_series_scope, check_game_advanced_invariants, check_game_advanced_ranges,
                               check_identity_scope, check_player_stats_flags,
                               check_player_stats_warnings)  # noqa: E402
+from gold_etl.schema import LOGICAL_NAMES, physical_name  # noqa: E402
 from gold_etl.schema import (GAME_ADVANCED_NAMES, GAME_COURT_NAMES, GAME_PBP_NAMES, PBP_NAMES, DERIVED_NAMES, IDENTITY_TABLES, PLAYER_STATS, RECORDS_TABLES, ROUND_NAMES,
                              SEASON_DERIVED_NAMES, SOURCE_NAMES, count_sql)  # noqa: E402
 
@@ -66,10 +67,11 @@ def main(argv=None):
     parser = build_parser()
     args = parser.parse_args(argv)
     if args.list_tables:
-        print("\n".join(BUILD_NAMES))
+        print("\n".join(map(physical_name, BUILD_NAMES)))
         return 0
     if args.dry_run and args.quality_only:
         parser.error("--dry-run and --quality-only cannot be combined")
+    args.table = [LOGICAL_NAMES.get(name, name) for name in args.table]
     unknown = set(args.table) - {"all", *BUILD_NAMES}
     if unknown:
         parser.error("Unknown table(s): " + ", ".join(sorted(unknown)))
@@ -90,7 +92,7 @@ def main(argv=None):
             print("Not loaded in Silver; skipping: " + ", ".join(missing), flush=True)
         print(f"Competition: {args.competition}")
         print(f"Seasons: {', '.join(seasons)}")
-        print(f"Tables: {', '.join(tables)}")
+        print(f"Tables: {', '.join(map(physical_name, tables))}")
         if any(name in RECORDS_TABLES for name in tables):
             print("Records scope: all locally loaded EuroLeague seasons", flush=True)
         if any(name in IDENTITY_TABLES for name in tables):
@@ -108,7 +110,7 @@ def main(argv=None):
                     if args.dry_run:
                         with connection.cursor() as cursor:
                             count = len(read_series_rows(cursor, *scope))
-                        print(f"gold.{name} {season}: {count} derived rows", flush=True)
+                        print(f"gold.{physical_name(name)} {season}: {count} derived rows", flush=True)
                     elif args.quality_only:
                         with connection.cursor() as cursor:
                             issues = check_series_scope(cursor, *scope)
@@ -117,7 +119,7 @@ def main(argv=None):
                         passed &= not issues
                     else:
                         count = replace_series_scope(connection, *scope)
-                        print(f"gold.{name} {season}: {count} rows", flush=True)
+                        print(f"gold.{physical_name(name)} {season}: {count} rows", flush=True)
                     continue
                 if name == "app_standings":
                     if args.dry_run:
@@ -140,7 +142,7 @@ def main(argv=None):
                     if args.dry_run:
                         with connection.cursor() as cursor:
                             count = len(read_aggregate_rows(cursor, name, *scope))
-                        print(f"gold.{name} {season}: {count} derived rows", flush=True)
+                        print(f"gold.{physical_name(name)} {season}: {count} derived rows", flush=True)
                     elif args.quality_only:
                         with connection.cursor() as cursor:
                             issues = check_aggregate_scope(cursor, name, *scope)
@@ -177,7 +179,7 @@ def main(argv=None):
                         passed &= not issues
                     else:
                         count = replace_aggregate_scope(connection, name, *scope)
-                        print(f"gold.{name} {season}: {count} rows", flush=True)
+                        print(f"gold.{physical_name(name)} {season}: {count} rows", flush=True)
                     continue
                 if args.dry_run:
                     with connection.cursor() as cursor:
@@ -187,7 +189,7 @@ def main(argv=None):
                     if name in PS_TABLES:
                         with connection.cursor() as cursor:
                             derived = len(read_postseason_rows(cursor, *scope)[name])
-                        print(f"gold.{name} PS {season}: {derived} derived rows", flush=True)
+                        print(f"gold.{physical_name(name)} PS {season}: {derived} derived rows", flush=True)
                 elif args.quality_only:
                     with connection.cursor() as cursor:
                         issues = check_scope(cursor, name, *scope)
@@ -202,10 +204,10 @@ def main(argv=None):
                     passed &= not issues
                 else:
                     count = replace_scope(connection, name, *scope)
-                    print(f"gold.{name} {season}: {count} rows", flush=True)
+                    print(f"gold.{physical_name(name)} {season}: {count} rows", flush=True)
                     if name in PS_TABLES:
                         derived = replace_postseason_scope(connection, name, *scope)
-                        print(f"gold.{name} PS {season}: {derived} derived rows", flush=True)
+                        print(f"gold.{physical_name(name)} PS {season}: {derived} derived rows", flush=True)
         for name in tables:
             if name not in RECORDS_TABLES:
                 continue
@@ -213,7 +215,7 @@ def main(argv=None):
             if args.dry_run:
                 with connection.cursor() as cursor:
                     count = len(read_record_rows(cursor, name, competition_code))
-                print(f"gold.{name} all seasons: {count} derived rows", flush=True)
+                print(f"gold.{physical_name(name)} all seasons: {count} derived rows", flush=True)
             elif args.quality_only:
                 with connection.cursor() as cursor:
                     issues = check_records_scope(cursor, name, competition_code)
@@ -222,7 +224,7 @@ def main(argv=None):
                 passed &= not issues
             else:
                 count = replace_records_scope(connection, name, competition_code)
-                print(f"gold.{name} all seasons: {count} rows", flush=True)
+                print(f"gold.{physical_name(name)} all seasons: {count} rows", flush=True)
         for name in tables:
             if name not in IDENTITY_TABLES:
                 continue
@@ -230,7 +232,7 @@ def main(argv=None):
             if args.dry_run:
                 with connection.cursor() as cursor:
                     count = len(read_identity_rows(cursor, name, competition_code))
-                print(f"gold.{name} all seasons: {count} derived rows", flush=True)
+                print(f"gold.{physical_name(name)} all seasons: {count} derived rows", flush=True)
             elif args.quality_only:
                 with connection.cursor() as cursor:
                     issues = check_identity_scope(cursor, name, competition_code)
@@ -239,7 +241,7 @@ def main(argv=None):
                 passed &= not issues
             else:
                 count = replace_identity_scope(connection, name, competition_code)
-                print(f"gold.{name} all seasons: {count} rows", flush=True)
+                print(f"gold.{physical_name(name)} all seasons: {count} rows", flush=True)
         if args.quality_only:
             print("Gold quality: passed" if passed else "Gold quality: failed", flush=True)
             return 0 if passed else 1

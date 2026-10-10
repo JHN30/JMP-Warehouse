@@ -27,7 +27,7 @@ def _numpy():
     try:
         import numpy
     except ImportError as error:
-        raise ValueError("gold.player_rapm needs numpy; install it in the Python environment "
+        raise ValueError("gold.app_player_rapm needs numpy; install it in the Python environment "
                          "first") from error
     return numpy
 

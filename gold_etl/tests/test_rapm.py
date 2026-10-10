@@ -148,7 +148,7 @@ class InputTests(unittest.TestCase):
 
     def test_a_missing_numpy_stops_only_this_table_with_a_clear_message(self):
         with patch.dict(sys.modules, {"numpy": None}):
-            with self.assertRaisesRegex(ValueError, "gold.player_rapm needs numpy"):
+            with self.assertRaisesRegex(ValueError, "gold.app_player_rapm needs numpy"):
                 rapm.derive_rows(GAMES, STINTS, PLAYERS)
         self.assertEqual(rapm.derive_rows([], [], []), [])
 
@@ -172,7 +172,7 @@ class ReadAndStorageTests(unittest.TestCase):
                 patch("psycopg2.extras.execute_values") as insert:
             self.assertEqual(replace_aggregate_scope(db, "player_rapm", "E", "E2025"), 1)
         self.assertEqual((db.commits, db.rollbacks), (1, 0))
-        self.assertTrue(any(query.startswith('DELETE FROM gold."player_rapm"')
+        self.assertTrue(any(query.startswith('DELETE FROM gold."app_player_rapm"')
                             and params == ("E", "E2025") for query, params in db.queries))
         self.assertEqual(insert.call_args.args[2][0][:2], ("E", "E2025"))
 

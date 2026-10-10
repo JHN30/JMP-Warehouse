@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 from gold_etl.loader import replace_postseason_scope
 from gold_etl.quality import check_postseason_scope
+from gold_etl.schema import physical_name
 from gold_etl.schema import columns
 
 
@@ -23,7 +24,7 @@ class Cursor:
         self.connection.queries.append((query, params))
 
     def fetchone(self):
-        return ("gold.season_player_stats_misc" if self.connection.exists else None,)
+        return ("gold.app_season_player_stats_misc" if self.connection.exists else None,)
 
 
 class Connection:
@@ -65,7 +66,7 @@ class PostseasonStorageTests(unittest.TestCase):
             self.assertEqual(replace_postseason_scope(db, name, "E", "E2025"), 1)
         self.assertEqual(db.commits, 2)
         self.assertEqual(len(db.writes), 2)
-        self.assertIn('INSERT INTO gold."season_player_stats_misc"', db.writes[0][0])
+        self.assertIn('INSERT INTO gold."app_season_player_stats_misc"', db.writes[0][0])
         self.assertNotIn("load_id", db.writes[0][0])
         self.assertEqual(db.writes[0][1][0][columns(name).index("person_key")], "P1")
         deletes = [(q, p) for q, p in db.queries if q.startswith("DELETE")]
@@ -103,7 +104,7 @@ class PostseasonStorageTests(unittest.TestCase):
         with db.cursor() as cursor:
             db.exists = False
             self.assertEqual(check_postseason_scope(cursor, name, "E", "E2025"),
-                             [f"gold.{name} is missing"])
+                             [f"gold.{physical_name(name)} is missing"])
             db.exists = True
             with patch("gold_etl.quality.read_postseason_rows", return_value=expected), \
                     patch("gold_etl.quality._dict_rows", return_value=[]):

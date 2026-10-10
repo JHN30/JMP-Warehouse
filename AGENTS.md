@@ -315,6 +315,13 @@ committed; copy the `.example`). Publishing reads the direct non-pooled
   to `logs/refresh/refresh_<YYYYMMDD_HHMMSS>.log`.
 - `python pipeline.py --dry-run-publish` builds Gold and checks Neon without
   remote writes; pending state remains true for a later live retry.
+- Full local history including API fetch: `python pipeline.py --all`. Fetches
+  2000 through the current season using existing cache rules, rebuilds Silver
+  and Gold and checks Gold quality. Never connects to Neon; leaves the current
+  season publish pending. Also available as a VS Code task.
+- Full local history from existing Bronze only:
+  `python pipeline.py --all --skip-fetch`. Same local builds and checks, no API
+  fetch or Neon connection. Omit `-sc` and publishing flags in both full modes.
 - Fetch into bronze: `python api_requests/main.py -sc <seasons>` (for example `-sc 2000-2025`)
 - Load into local PostgreSQL: `python postgres_etl/main.py -sc <seasons>`
 - Load dry run (no database): `python postgres_etl/main.py -sc <seasons> --dry-run`

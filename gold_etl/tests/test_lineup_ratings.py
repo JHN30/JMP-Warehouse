@@ -120,7 +120,7 @@ class ReadAndStorageTests(unittest.TestCase):
                 patch("psycopg2.extras.execute_values") as insert:
             self.assertEqual(replace_aggregate_scope(db, "lineup_ratings", "E", "E2025"), 1)
         self.assertEqual((db.commits, db.rollbacks), (1, 0))
-        self.assertTrue(any(query.startswith('DELETE FROM gold."lineup_ratings"')
+        self.assertTrue(any(query.startswith('DELETE FROM gold."app_lineup_ratings"')
                             and params == ("E", "E2025") for query, params in db.queries))
         self.assertEqual(insert.call_args.args[2][0][:2], ("E", "E2025"))
 

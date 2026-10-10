@@ -146,7 +146,7 @@ class StorageTests(unittest.TestCase):
                 patch("psycopg2.extras.execute_values") as insert:
             self.assertEqual(replace_aggregate_scope(db, "player_round_ratings", "E", "E2025"), 1)
         self.assertEqual((db.commits, db.rollbacks), (1, 0))
-        self.assertTrue(any(query.startswith('DELETE FROM gold."player_round_ratings"')
+        self.assertTrue(any(query.startswith('DELETE FROM gold."app_player_round_ratings"')
                             and params == ("E", "E2025") for query, params in db.queries))
         self.assertEqual(insert.call_args.args[2][0][:2], ("E", "E2025"))
         failing = FakeConnection()

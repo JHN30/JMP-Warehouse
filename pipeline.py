@@ -1,4 +1,4 @@
-"""Refresh one season: fetch -> Silver -> Gold -> guarded Neon publish.
+"""Refresh one season through Neon, or all history locally.
 
 Run it from the VS Code terminal whenever you want (for example nightly and
 after each round). When the API returned nothing new, the run stops after the
@@ -8,6 +8,8 @@ writes one log file to logs/refresh/ and ends with a summary.
     python pipeline.py                     # current EuroLeague season
     python pipeline.py --dry-run-publish   # read-only Neon preview
     python pipeline.py -sc 2025
+    python pipeline.py --all               # fetch and rebuild full local history
+    python pipeline.py --all --skip-fetch  # rebuild from cached Bronze only
 """
 
 import argparse
@@ -271,6 +273,8 @@ def build_parser():
     parser.add_argument("-cp", "--competition", choices=COMPETITION_CODES, default="euroleague")
     parser.add_argument("-sc", "--season-code", default="current",
                         help="current (default), a start year such as 2026, or E2026.")
+    parser.add_argument("--all", dest="all_history", action="store_true",
+                        help="Fetch and rebuild all local history, with quality checks; never publish to Neon.")
     parser.add_argument("--force", action="store_true",
                         help="Load even if the fetch changed nothing.")
     parser.add_argument("--skip-fetch", action="store_true",
@@ -284,6 +288,51 @@ def build_parser():
     parser.add_argument("--request-interval", type=float, default=2.5,
                         help="Passed to the fetcher; minimum seconds between API requests.")
     return parser
+
+
+def refresh_history(args, log, state_file, facts, stage_runner=run_stage, environ=None):
+    """Run all-history local stages in order, stopping at the first failure."""
+    child_env = dict(os.environ if environ is None else environ, **CHILD_ENV)
+    python = sys.executable
+    log.line(f"Local history refresh {args.competition}: 2000-{current_season_year()}")
+    with tempfile.TemporaryDirectory() as temporary:
+        summary_path = Path(temporary) / "fetch_summary.json"
+        stages = [] if args.skip_fetch else [("Fetch", [python, "main.py", "-cp", args.competition,
+            "-sc", f"2000-{current_season_year()}", "--refresh-current",
+            "--hot-hours", str(args.hot_hours), "--request-interval", str(args.request_interval),
+            "--summary-file", str(summary_path)], None)]
+        gold = [python, "gold_etl/main.py", "-cp", args.competition, "-sc", "all"]
+        stages += [
+            ("Load", [python, "postgres_etl/main.py", "-cp", args.competition, "-sc", "all"], facts.load_lines),
+            ("Gold build", gold, facts.gold_lines),
+            ("Gold quality", gold + ["--quality-only"], facts.gold_lines),
+        ]
+        for title, command, into in stages:
+            if title == "Load":
+                write_state(state_file, publish_pending=True)
+            log.line(f"\n=== {title}: {' '.join(command[1:])}")
+
+            def emit(text, buffer=into):
+                log.line(text)
+                if buffer is not None:
+                    buffer.append(text)
+
+            cwd = ROOT / "api_requests" if title == "Fetch" else ROOT
+            code = stage_runner(command, cwd, child_env, emit)
+            if title == "Gold build":
+                facts.gold_status = "build failed" if code else "built; quality not checked"
+            elif title == "Gold quality":
+                facts.gold_status = "quality failed" if code else "built and quality checked"
+            if code:
+                return code, f"FAILED at {title} (exit {code})", "Check the log, fix the failed stage and retry."
+            if title == "Fetch":
+                summary = json.loads(summary_path.read_text(encoding="utf-8"))
+                facts.changed = sum(not resource.startswith("_catalog/")
+                                    for resource in summary["changed_resources"])
+                facts.failed_requests = summary["failed_requests"]
+                facts.kept = summary.get("kept_resources", [])
+                facts.behind = summary.get("behind_resources", [])
+    return 0, "LOCAL OK", "Local history refreshed; publish selected Neon seasons separately."
 
 
 def refresh(args, season_code, log, state_file, facts, stage_runner=run_stage,
@@ -385,9 +434,13 @@ def refresh(args, season_code, log, state_file, facts, stage_runner=run_stage,
     return 0, "OK", None
 
 def main(argv=None):
-    args = build_parser().parse_args(argv)
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    if args.all_history and (args.season_code != "current" or args.dry_run_publish or args.allow_shrink):
+        parser.error("--all refreshes local history only; omit -sc, --dry-run-publish and --allow-shrink")
     try:
-        season_code = season_code_for(args.competition, args.season_code)
+        season_code = "all" if args.all_history else season_code_for(args.competition, args.season_code)
+        state_season = season_code_for(args.competition, "current") if args.all_history else season_code
     except ValueError as error:
         print(error, file=sys.stderr)
         return 2
@@ -398,11 +451,17 @@ def main(argv=None):
     facts = StageFacts()
     with RunLog(log_path) as log:
         try:
-            code, result, next_step = refresh(
-                args, season_code, log, state_path(args.competition, season_code), facts)
+            if args.all_history:
+                code, result, next_step = refresh_history(
+                    args, log, state_path(args.competition, state_season), facts)
+            else:
+                code, result, next_step = refresh(
+                    args, season_code, log, state_path(args.competition, state_season), facts)
         except KeyboardInterrupt:
             code, result = 130, "INTERRUPTED (Ctrl+C)"
-            next_step = "Run again; finished downloads and committed publishes are kept."
+            next_step = ("Run again; finished downloads and committed local table scopes are kept."
+                         if args.all_history else
+                         "Run again; finished downloads and committed publishes are kept.")
         shown = log_path.relative_to(ROOT) if log_path.is_relative_to(ROOT) else log_path
         for text in build_summary(season_code, result, facts, time.monotonic() - started,
                                   shown, next_step):

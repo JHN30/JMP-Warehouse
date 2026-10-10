@@ -1,5 +1,6 @@
 """Replace one Gold table/season slice using registered Silver source columns."""
 
+from gold_etl.schema import physical_name
 from gold_etl.schema import (COPIED_TABLES, FLAG_DEFAULTS, GAME_ADVANCED_NAMES, IDENTITY_TABLES,
                              PLAYER_STATS, RECORDS_TABLES, SEASON_DERIVED_NAMES,
                              add_flag_columns_sql, columns, create_table_sql, scope_predicate,
@@ -42,7 +43,7 @@ def replace_scope(connection, name, competition_code, season_code):
             for statement in add_flag_columns_sql(name):
                 cursor.execute(statement)
             cursor.execute(
-                f'DELETE FROM gold."{name}" WHERE {scope_predicate(name)}',
+                f'DELETE FROM gold."{physical_name(name)}" WHERE {scope_predicate(name)}',
                 (competition_code, season_code),
             )
             source = set(source_columns(name))
@@ -50,7 +51,7 @@ def replace_scope(connection, name, competition_code, season_code):
             select_list = ", ".join(f'"{column}"' if column in source else FLAG_DEFAULTS[column]
                                     for column in columns(name))
             cursor.execute(
-                f'INSERT INTO gold."{name}" ({field_list}) '
+                f'INSERT INTO gold."{physical_name(name)}" ({field_list}) '
                 f'SELECT {select_list} FROM silver."{name}" '
                 f'WHERE {scope_predicate(name)}',
                 (competition_code, season_code),
@@ -71,7 +72,7 @@ def replace_postseason_scope(connection, name, competition_code, season_code):
         with connection.cursor() as cursor:
             rows = read_postseason_rows(cursor, competition_code, season_code)[name]
             cursor.execute(
-                f'DELETE FROM gold."{name}" WHERE competition_code = %s '
+                f'DELETE FROM gold."{physical_name(name)}" WHERE competition_code = %s '
                 "AND season_code = %s AND phase_code = 'PS'",
                 (competition_code, season_code),
             )
@@ -81,7 +82,7 @@ def replace_postseason_scope(connection, name, competition_code, season_code):
                 values = [tuple(competition_code if field == "competition_code" else
                                 season_code if field == "season_code" else row.get(field)
                                 for field in fields) for row in rows]
-                execute_values(cursor, f'INSERT INTO gold."{name}" ({names}) VALUES %s',
+                execute_values(cursor, f'INSERT INTO gold."{physical_name(name)}" ({names}) VALUES %s',
                                values, page_size=1000)
             return len(rows)
 
@@ -106,7 +107,7 @@ def replace_standings_scope(connection, competition_code, season_code):
                 names = ", ".join(f'"{field}"' for field in fields)
                 values = [tuple(Json(row[field]) if field in {"form", "streak_history"}
                                 else row[field] for field in fields) for row in rows]
-                execute_values(cursor, f'INSERT INTO gold."{name}" ({names}) VALUES %s',
+                execute_values(cursor, f'INSERT INTO gold."{physical_name(name)}" ({names}) VALUES %s',
                                values, page_size=1000)
             return len(rows)
 
@@ -157,7 +158,7 @@ def replace_aggregate_scope(connection, name, competition_code, season_code):
             cursor.execute("CREATE SCHEMA IF NOT EXISTS gold")
             cursor.execute(create_table_sql(name))
             cursor.execute(
-                f'DELETE FROM gold."{name}" '
+                f'DELETE FROM gold."{physical_name(name)}" '
                 'WHERE competition_code = %s AND season_code = %s',
                 (competition_code, season_code),
             )
@@ -168,7 +169,7 @@ def replace_aggregate_scope(connection, name, competition_code, season_code):
                                 season_code if field == "season_code" else
                                 Json(row[field]) if field == "items" else row.get(field)
                                 for field in fields) for row in rows]
-                execute_values(cursor, f'INSERT INTO gold."{name}" ({names}) VALUES %s',
+                execute_values(cursor, f'INSERT INTO gold."{physical_name(name)}" ({names}) VALUES %s',
                                values, page_size=1000)
             return len(rows)
 
@@ -184,13 +185,13 @@ def replace_records_scope(connection, name, competition_code):
             rows = read_record_rows(cursor, name, competition_code)
             cursor.execute("CREATE SCHEMA IF NOT EXISTS gold")
             cursor.execute(create_table_sql(name))
-            cursor.execute(f'DELETE FROM gold."{name}" WHERE competition_code = %s',
+            cursor.execute(f'DELETE FROM gold."{physical_name(name)}" WHERE competition_code = %s',
                            (competition_code,))
             if rows:
                 fields = columns(name)
                 names = ", ".join(f'"{field}"' for field in fields)
                 values = [tuple(row[field] for field in fields) for row in rows]
-                execute_values(cursor, f'INSERT INTO gold."{name}" ({names}) VALUES %s',
+                execute_values(cursor, f'INSERT INTO gold."{physical_name(name)}" ({names}) VALUES %s',
                                values, page_size=1000)
             return len(rows)
 
@@ -206,14 +207,14 @@ def replace_identity_scope(connection, name, competition_code):
             rows = read_identity_rows(cursor, name, competition_code)
             cursor.execute("CREATE SCHEMA IF NOT EXISTS gold")
             cursor.execute(create_table_sql(name))
-            cursor.execute(f'DELETE FROM gold."{name}" WHERE competition_code = %s',
+            cursor.execute(f'DELETE FROM gold."{physical_name(name)}" WHERE competition_code = %s',
                            (competition_code,))
             if rows:
                 fields = columns(name)
                 names = ", ".join(f'"{field}"' for field in fields)
                 values = [tuple(Json(row[field]) if field == "clubs" else row[field]
                                 for field in fields) for row in rows]
-                execute_values(cursor, f'INSERT INTO gold."{name}" ({names}) VALUES %s',
+                execute_values(cursor, f'INSERT INTO gold."{physical_name(name)}" ({names}) VALUES %s',
                                values, page_size=1000)
             return len(rows)
 
@@ -229,7 +230,7 @@ def replace_series_scope(connection, competition_code, season_code):
             cursor.execute("CREATE SCHEMA IF NOT EXISTS gold")
             cursor.execute(create_table_sql(name))
             cursor.execute(
-                f'DELETE FROM gold."{name}" WHERE competition_code = %s '
+                f'DELETE FROM gold."{physical_name(name)}" WHERE competition_code = %s '
                 'AND season_code = %s', (competition_code, season_code))
             if rows:
                 fields = columns(name)
@@ -238,6 +239,6 @@ def replace_series_scope(connection, competition_code, season_code):
                                 season_code if field == "season_code" else
                                 Json(row[field]) if field == "games" else row[field]
                                 for field in fields) for row in rows]
-                execute_values(cursor, f'INSERT INTO gold."{name}" ({names}) VALUES %s',
+                execute_values(cursor, f'INSERT INTO gold."{physical_name(name)}" ({names}) VALUES %s',
                                values, page_size=1000)
             return len(rows)

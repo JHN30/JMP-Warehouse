@@ -326,7 +326,8 @@ committed; copy the `.example`). Publishing reads the direct non-pooled
 - Load into local PostgreSQL: `python postgres_etl/main.py -sc <seasons>`
 - Load dry run (no database): `python postgres_etl/main.py -sc <seasons> --dry-run`
 - Quality report only: `python postgres_etl/main.py -sc <seasons> --quality-only`
-- Per-game advanced stats (also run after every Silver load of game tables):
+- Per-game advanced stats, with on-court player rates from play-by-play (also run after every
+  Silver load of game tables or `play_by_play`):
   `python postgres_etl/advanced.py -sc <seasons>`; `--dry-run` counts rows without
   writing, `--quality-only` checks the stored rows.
 - Counted possessions from play-by-play (also run after a load of `games` or `play_by_play`):

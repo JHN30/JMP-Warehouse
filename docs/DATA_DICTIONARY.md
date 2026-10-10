@@ -152,8 +152,34 @@ no rows.
 | `true_shooting_pct` | `points / (2 x (field_goals_attempted + 0.44 x free_throws_attempted))` |
 | `assist_ratio` | `assists / field_goals_made` |
 | `game_score` (player) | Hollinger: `points + 0.4 FGM - 0.7 FGA - 0.4 (FTA - FTM) + 0.7 OREB + 0.3 DREB + steals + 0.7 assists + 0.7 blocks - 0.4 fouls_committed - turnovers` |
-| `usage_pct`, `assist_pct`, `orb_pct`, `drb_pct`, `trb_pct`, `steal_pct`, `block_pct` (player) | Basketball-Reference forms using `seconds_played` and the club's official `total` row; NULL for zero minutes. `steal_pct` uses the game's possessions, `block_pct` the opponent's two-point attempts |
+| `usage_pct`, `assist_pct`, `orb_pct`, `drb_pct`, `trb_pct`, `steal_pct`, `block_pct` (player) | Rates over what happened while the player was on court (`rate_source = 'on_court'`, below) when the game has play-by-play; otherwise Basketball-Reference box-score estimates using `seconds_played` and the club's official `total` row, NULL below 180 seconds. NULL for zero minutes either way |
+| `rate_source` (player, Silver only) | `on_court` or `estimate`: which form the seven time-dependent rates use |
 | `tov_pct`, `efg_pct`, `true_shooting_pct` (player) | Same forms as the club columns, from the player's own line |
+
+On-court rates (feature 32). For every box-score player of a side whose game has play-by-play
+and starters, events are attributed by event order to the lineups on court, exactly as
+`game_team_lineup_stints` does. The player's own events count only while the walk has him on
+court; team and opponent events count for every player on court at the event. Plays are
+field-goal attempts (`2FGM 3FGM LAYUPMD DUNK 2FGA 3FGA LAYUPATT 2FGAB 3FGAB`) plus 0.44 x free
+throws (`FTM FTA`) plus turnovers (`TO`); team rebounds without a person count for the lineups.
+
+| Column | On-court form |
+| --- | --- |
+| `usage_pct` | Player plays / team plays |
+| `assist_pct` | Player `AS` / (team field goals made - player field goals made) |
+| `orb_pct`, `drb_pct`, `trb_pct` | Player `O`, `D`, both / (team rebounds of that type + opponent rebounds of the other type), or all four for `trb_pct` |
+| `steal_pct` | Player `ST` / opponent possessions closed while he was on court (19a's counter) |
+| `block_pct` | Player `FV` / opponent two-point attempts |
+
+The codes `AS`, `ST`, `FV`, `TO`, `O` and `D` match the box score's assists, steals, blocks,
+turnovers and rebounds for every E2025 player-game and 99.7-99.9% in E2007 and E2015.
+EuroLeague also credits assists on fouls that lead to free throws (about 7-9% of `AS`
+events precede free throws), so `assist_pct` can exceed 1 in a short stint; the Silver check
+warns about any on-court rate outside 0-1 (16 rows over E2007-E2026, all `assist_pct`). A
+player in the box score whom the walk never puts on court gets NULL rates. Before E2007, and in
+E2018 game 21, which has no play-by-play, `rate_source` is `estimate`. For E2025 players with at
+least 10 minutes, on-court usage differs from the estimate by 0.006 at the median and 0.020 at
+the 90th percentile.
 
 Published to Neon as `public.app_game_player_advanced` / `public.app_game_team_advanced`
 (E2025 and E2026) once the reviewed 30h migration is applied. Build:
@@ -169,13 +195,17 @@ The Gold tables drop `load_id` and `loaded_at`; the team table also drops
 | `game_aper` | `game_uper` x league pace (same scope, through the round) / the game's own team pace |
 | `game_per` | `game_aper` x 15 / the seconds-weighted mean `game_aper` of the games in the same scope and round, so the league mean is 15 per scope and round |
 
-NULL when `seconds_played` is 0 or missing, an input is missing or a denominator is zero;
-there is no minutes cutoff, so a few minutes can give an extreme value. Zero-minute rows keep
-Silver's `game_score` but have NULL rates and PER. Season PER is not an average of game PER:
+NULL when `seconds_played` is 0 or missing, an input is missing or a denominator is zero.
+`game_per` is also NULL below 180 seconds (feature 32), where a few seconds give extreme
+values; those lines keep `game_uper` and `game_aper` and still count toward the league mean,
+so the other lines keep their values. Zero-minute rows keep Silver's `game_score` but have
+NULL rates and PER. Season PER is not an average of game PER:
 use `player_round_ratings` (last round of the season). A player's first game ties `player_round_ratings.per`
 (scope `RS`, round 1) exactly; `--quality-only` checks the round-1 ties against the round tables
-(to 0.00001, since those divide rounded sums), the league mean, row shape and null handling, and
-warns where a percentage is below 0 or above 2.
+(to 0.00001, since those divide rounded sums; `usage_pct` only for `estimate` rows), that every
+`game_per` is `game_aper` x 15 / the seconds-weighted mean `game_aper` of its scope and round,
+that no line under 180 seconds has a `game_per`, row shape and null handling, and warns where a
+percentage is below 0 or above 2.
 
 These are box-score estimates. Counted play-by-play possessions sit next to them in
 `game_team_possessions` (below) and never replace them.

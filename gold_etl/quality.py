@@ -5,6 +5,7 @@ from collections import defaultdict
 from gold_etl.schema import physical_name
 from gold_etl.schema import (COPIED_TABLES, PLAYER_STATS, columns, count_sql, scope_predicate,
                              source_columns)
+from gold_etl.game_advanced import PER_FLOOR_SECONDS
 from gold_etl.per_game_rows import OWN_COLUMNS, derive_per_game
 from gold_etl.qualification import scope_min_games, scope_rounds
 from gold_etl.postseason import TABLES as PS_TABLES, _dict_rows, read_rows as read_postseason_rows
@@ -629,6 +630,7 @@ def check_round_player_api_scope(cursor, competition_code, season_code):
 # The cumulative round tables divide already rounded sums, so a player with a couple of
 # minutes can differ from the exact single-game value by a few millionths.
 TIE_TOLERANCE = 0.00001
+PER_TOLERANCE = 0.0001
 GAME_PLAYER_RATES = ("usage_pct", "assist_pct", "orb_pct", "drb_pct", "trb_pct", "steal_pct",
                      "block_pct", "tov_pct", "efg_pct", "true_shooting_pct",
                      "game_uper", "game_aper", "game_per")
@@ -695,31 +697,48 @@ def check_game_advanced_invariants(cursor, name, competition_code, season_code):
                    f'OR seconds_played = 0) AND "{column}" IS NOT NULL', scope)[0][0]
         if bad:
             issues.append(prefix + f"{bad} zero-minute rows have a {column} value")
+    # game_per = game_aper * 15 / A, where A is the seconds-weighted mean game_aper of every
+    # line of the phase round, including the lines under the floor whose game_per is NULL.
     groups = _one(cursor,
-                  'SELECT g.phase_code, g.round_number, sum(a.game_per * a.seconds_played) / '
-                  'sum(a.seconds_played) FROM gold."app_game_player_advanced" a JOIN gold."app_games" g '
-                  'USING (competition_code, season_code, game_code) WHERE a.competition_code = %s '
-                  'AND a.season_code = %s AND a.game_per IS NOT NULL '
-                  'GROUP BY g.phase_code, g.round_number', scope)
-    for phase, number, mean in groups:
-        if abs(float(mean) - 15) > 1e-4:
-            issues.append(prefix + f"{phase} round {number}: seconds-weighted mean game_per "
-                          f"is {float(mean):g}, not 15")
-    ties = (("usage_pct", "player_round_stats", "all", "usg_pct"),
-            ("true_shooting_pct", "player_round_stats", "all", "ts_pct"),
-            ("efg_pct", "player_round_stats", "all", "efg_pct"),
-            ("game_score", "player_round_stats", "all", "game_score_total"),
-            ("game_per", "player_round_ratings", "RS", "per"))
-    for column, table, round_scope, other in ties:
+                  'SELECT g.phase_code, g.round_number, count(*) FILTER (WHERE a.game_per IS NOT '
+                  f'NULL AND abs(a.game_per - a.game_aper * 15 / m.mean) > {PER_TOLERANCE}) FROM '
+                  'gold."app_game_player_advanced" a JOIN gold."app_games" g USING (competition_code, '
+                  'season_code, game_code) JOIN (SELECT g2.phase_code, g2.round_number, '
+                  'sum(a2.game_aper * a2.seconds_played) / sum(a2.seconds_played) AS mean '
+                  'FROM gold."app_game_player_advanced" a2 JOIN gold."app_games" g2 USING '
+                  '(competition_code, season_code, game_code) WHERE a2.competition_code = %s '
+                  'AND a2.season_code = %s AND a2.game_aper IS NOT NULL AND a2.seconds_played > 0 '
+                  'GROUP BY g2.phase_code, g2.round_number) m ON m.phase_code = g.phase_code '
+                  'AND m.round_number = g.round_number WHERE a.competition_code = %s '
+                  'AND a.season_code = %s GROUP BY g.phase_code, g.round_number', scope * 2)
+    for phase, number, bad in groups:
+        if bad:
+            issues.append(prefix + f"{phase} round {number}: {bad} game_per values are not "
+                          "game_aper scaled to a seconds-weighted mean of 15")
+    short = _one(cursor, 'SELECT count(*) FROM gold."app_game_player_advanced" WHERE '
+                 'competition_code = %s AND season_code = %s AND game_per IS NOT NULL '
+                 f'AND seconds_played < {PER_FLOOR_SECONDS}', scope)[0][0]
+    if short:
+        issues.append(prefix + f"{short} rows under {PER_FLOOR_SECONDS} seconds have a game_per")
+    # Usage only ties where Silver kept the box-score estimate (no on-court counts).
+    estimate_only = ('JOIN silver."game_player_advanced" s USING (competition_code, season_code, '
+                     "game_code, side, person_key) ", " AND s.rate_source = 'estimate'")
+    ties = (("usage_pct", "player_round_stats", "all", "usg_pct", estimate_only),
+            ("true_shooting_pct", "player_round_stats", "all", "ts_pct", ("", "")),
+            ("efg_pct", "player_round_stats", "all", "efg_pct", ("", "")),
+            ("game_score", "player_round_stats", "all", "game_score_total", ("", "")),
+            ("game_per", "player_round_ratings", "RS", "per", ("", "")))
+    for column, table, round_scope, other, (join, condition) in ties:
         extra_filter = " AND t.games_played = 1" if table == "player_round_stats" else ""
         bad = _one(cursor,
                    f'SELECT count(*) FROM gold."app_game_player_advanced" a JOIN gold."app_games" g '
-                   'USING (competition_code, season_code, game_code) '
+                   f'USING (competition_code, season_code, game_code) {join}'
                    f'JOIN gold."{physical_name(table)}" t ON t.competition_code = a.competition_code '
                    "AND t.season_code = a.season_code AND t.round_number = 1 "
                    f"AND t.scope = '{round_scope}' AND t.person_key = a.person_key{extra_filter} "
                    'WHERE a.competition_code = %s AND a.season_code = %s AND g.round_number = 1 '
-                   f'AND abs(a."{column}" - t."{other}") > {TIE_TOLERANCE}', scope)[0][0]
+                   f'AND abs(a."{column}" - t."{other}") > {TIE_TOLERANCE}{condition}',
+                   scope)[0][0]
         if bad:
             issues.append(prefix + f"{bad} round-1 rows differ from {table}.{other}")
     return issues

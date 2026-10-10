@@ -527,7 +527,7 @@ ADVANCED_TABLES = {
     ), _derived(
         "seconds_played game_score true_shooting_pct efg_pct usage_pct assist_pct "
         "orb_pct drb_pct trb_pct steal_pct block_pct tov_pct",
-    ), indexes=(("person_key",), ("club_code",))),
+    ), (f("rate_source", "TEXT"),), indexes=(("person_key",), ("club_code",))),
 }
 
 ALL_TABLES = {**TABLES, **ADVANCED_TABLES}

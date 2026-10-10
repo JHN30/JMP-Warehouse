@@ -1,5 +1,9 @@
 """Per-game advanced stats (feature 25): box-score estimates derived from Silver.
 
+Player usage, assist, rebound, steal and block % use the events counted while the player
+was on court (feature 32) when the game has play-by-play, else the estimate with a
+3-minute floor.
+
 `derive_rows` is pure. `read_rows` and `replace_season` talk to the `silver`
 schema, one season at a time; nothing reads Gold or Neon.
 """
@@ -14,12 +18,18 @@ from uuid import uuid4
 
 from flat_schema import (ADVANCED_TABLES, add_column_sql, create_index_sql,
                          create_load_log_sql, create_table_sql)
+from lineups import EVENT_COLUMNS
+from on_court_rates import derive_counts
 from shared import COMPETITION_CODES as PREFIX, DEFAULT_CONFIG, connect, elapsed
 
 FT_WEIGHT = Decimal("0.44")
 PLACES = Decimal("0.000001")
 SOURCE_TABLES = ("games", "game_period_scores", "game_team_stats",
-                 "game_player_stats", "game_stat_gaps")
+                 "game_player_stats", "game_stat_gaps", "play_by_play")
+# Box-score estimates of the time-dependent rates are NULL below this many seconds.
+ESTIMATE_FLOOR_SECONDS = 180
+TIME_RATES = ("usage_pct", "assist_pct", "orb_pct", "drb_pct", "trb_pct", "steal_pct",
+              "block_pct")
 
 
 def _num(value):
@@ -114,7 +124,26 @@ def _game_score(s):
             + Decimal("0.7") * s["blk"] - Decimal("0.4") * s["pf"] - s["tov"]).quantize(PLACES)
 
 
-def _player_row(game_code, side, row, own, opp, opp_possessions, game_seconds):
+def _on_court_rates(counts):
+    """The time-dependent rates from the events counted while the player was on court."""
+    mine, team, opp = counts["own"], counts["team"], counts["opp"]
+
+    def plays(s):
+        return s["fga"] + FT_WEIGHT * s["fta"] + s["tov"]
+
+    return {
+        "usage_pct": _div(plays(mine), plays(team)),
+        "assist_pct": _div(mine["ast"], team["fgm"] - mine["fgm"]),
+        "orb_pct": _div(mine["oreb"], team["oreb"] + opp["dreb"]),
+        "drb_pct": _div(mine["dreb"], team["dreb"] + opp["oreb"]),
+        "trb_pct": _div(mine["oreb"] + mine["dreb"],
+                        team["oreb"] + team["dreb"] + opp["oreb"] + opp["dreb"]),
+        "steal_pct": _div(mine["stl"], counts["opp_possessions"]),
+        "block_pct": _div(mine["blk"], opp["two_pa"]),
+    }
+
+
+def _player_row(game_code, side, row, own, opp, opp_possessions, game_seconds, counts=None):
     p = _stats(row)
     seconds = _num(row.get("seconds_played"))
     share = _div(seconds, game_seconds)  # None for zero or unknown minutes
@@ -132,7 +161,7 @@ def _player_row(game_code, side, row, own, opp, opp_possessions, game_seconds):
 
     team_assisted = None if share is None or own["fgm"] is None else share * own["fgm"]
     two_attempts = _sum(opp["fga"], None if opp["tpa"] is None else -opp["tpa"])
-    return {
+    result = {
         "game_code": game_code, "side": side, "person_key": row["person_key"],
         "club_code": row.get("club_code"), "seconds_played": seconds,
         "game_score": _game_score(p),
@@ -145,11 +174,21 @@ def _player_row(game_code, side, row, own, opp, opp_possessions, game_seconds):
         "steal_pct": rate(p["stl"], opp_possessions),
         "block_pct": rate(p["blk"], two_attempts),
         "tov_pct": _tov_pct(p),
+        "rate_source": "estimate" if counts is None else "on_court",
     }
+    if counts is not None:
+        rates = _on_court_rates(counts) if share else dict.fromkeys(TIME_RATES)
+    elif seconds is None or seconds < ESTIMATE_FLOOR_SECONDS:
+        rates = dict.fromkeys(TIME_RATES)
+    else:
+        rates = {}
+    result.update(rates)
+    return result
 
 
-def derive_rows(games, periods, team_stats, player_stats, gaps):
+def derive_rows(games, periods, team_stats, player_stats, gaps, events=()):
     """Return (team rows, player rows) for the played games with a full box score."""
+    on_court = derive_counts(games, player_stats, events)
     no_box_score = {row["game_code"] for row in gaps if row["stat_name"] == "*"}
     totals = {(row["game_code"], row["side"]): row for row in team_stats
               if row["stats_kind"] == "total"}
@@ -173,8 +212,9 @@ def derive_rows(games, periods, team_stats, player_stats, gaps):
                             estimates[other], minutes, other)
             team_rows.append(row)
             for player in players.get((code, side), []):
-                player_rows.append(_player_row(code, side, player, stats[side], stats[other],
-                                               row["possessions"], minutes * 60))
+                player_rows.append(_player_row(
+                    code, side, player, stats[side], stats[other], row["possessions"],
+                    minutes * 60, on_court.get((code, side, player["person_key"]))))
     return team_rows, player_rows
 
 
@@ -186,12 +226,14 @@ def _dict_rows(cursor):
 def read_rows(cursor, competition_code, season_code):
     scope = (competition_code, season_code)
     data = []
-    for table in SOURCE_TABLES:
+    for table in SOURCE_TABLES[:-1]:
         cursor.execute(f'SELECT * FROM "{table}" WHERE competition_code = %s '
                        'AND season_code = %s', scope)
         data.append(_dict_rows(cursor))
-    games, periods, team_stats, player_stats, gaps = data
-    return derive_rows(games, periods, team_stats, player_stats, gaps)
+    cursor.execute(f'SELECT {", ".join(EVENT_COLUMNS)} FROM "play_by_play" '
+                   'WHERE competition_code = %s AND season_code = %s', scope)
+    data.append(_dict_rows(cursor))
+    return derive_rows(*data)
 
 
 def replace_season(connection, competition_code, season_code, team_rows, player_rows):
@@ -254,6 +296,15 @@ CHECKS = (
         'SELECT count(*) FROM (SELECT game_code FROM "game_team_advanced" '
         f'WHERE {SCOPED} GROUP BY game_code HAVING count(DISTINCT possessions) > 1 '
         'OR (count(*) = 2 AND count(possessions) = 1)) AS mismatched')),
+    ("ERROR", "estimate_rate_below_floor", "game_player_advanced", (
+        'SELECT count(*) FROM "game_player_advanced" '
+        f"WHERE {SCOPED} AND rate_source = 'estimate' AND (seconds_played IS NULL "
+        f"OR seconds_played < {ESTIMATE_FLOOR_SECONDS}) AND num_nonnulls("
+        + ", ".join(TIME_RATES) + ") > 0")),
+    ("WARN", "on_court_rate_out_of_range", "game_player_advanced", (
+        'SELECT count(*) FROM "game_player_advanced" '
+        f"WHERE {SCOPED} AND rate_source = 'on_court' AND ("
+        + " OR ".join(f"{name} NOT BETWEEN 0 AND 1" for name in TIME_RATES) + ")")),
     ("WARN", "implausible_pace_or_rating", "game_team_advanced", (
         'SELECT count(*) FROM "game_team_advanced" '
         f'WHERE {SCOPED} AND (pace NOT BETWEEN 30 AND 150 '

@@ -4,7 +4,8 @@
 published column set. Game PER reuses the round-table functions: league constants are
 cumulative over the game's phase scope through the game's round, the player's line and team
 context are that one game, and `game_per` is scaled so the seconds-weighted mean `game_aper`
-of the scope's round is 15.
+of the scope's round is 15. Below `PER_FLOOR_SECONDS` the line still counts toward that mean,
+but `game_per` is NULL: a few seconds of play give meaningless ratings (feature 32).
 """
 
 from collections import defaultdict
@@ -20,6 +21,7 @@ from gold_etl.team_rounds import _counted_games, read_tables
 TEAM_KEY = ("game_code", "side", "club_code")
 PLAYER_KEY = ("game_code", "side", "person_key", "club_code", "seconds_played")
 PER_COLUMNS = ("game_uper", "game_aper", "game_per")
+PER_FLOOR_SECONDS = 180
 
 
 def team_rows(advanced):
@@ -76,7 +78,8 @@ def player_rows(games, team_stats, advanced, player_stats, player_advanced):
         if found is not None:
             scope, number, uper, aper, _ = found
             average = _div(*weighted[(scope, number)])
-            if aper is not None and average:
+            seconds = source.get("seconds_played")
+            if aper is not None and average and seconds is not None                     and seconds >= PER_FLOOR_SECONDS:
                 per = aper * AVERAGE / average
         for name, value in zip(PER_COLUMNS, (uper, aper, per)):
             row[name] = None if value is None else value.quantize(PLACES)

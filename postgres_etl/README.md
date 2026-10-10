@@ -26,9 +26,12 @@ python postgres_etl/lineups.py -sc 2025 --dry-run
 
 `advanced.py` derives two more `silver` tables, `game_team_advanced` and
 `game_player_advanced`, from the loaded box scores of one season (possessions,
-pace, ratings, four factors, Game Score, player rates). `main.py` runs it after
-any real load that includes a game table, and it fails the run when its own
-checks report an error. `--dry-run` derives and counts rows; `--quality-only`
+pace, ratings, four factors, Game Score, player rates). Player usage, assist,
+rebound, steal and block % count the events of `play_by_play` while the player was
+on court (`on_court_rates.py`, feature 32), or use the box-score estimate with a
+3-minute floor where a game has no play-by-play; `rate_source` records which.
+`main.py` runs it after any real load that includes a game table or `play_by_play`,
+and it fails the run when its own checks report an error. `--dry-run` derives and counts rows; `--quality-only`
 checks stored rows. Each table and season is replaced in one transaction with
 a `load_log` entry (empty `bronze_versions`, since the source is Silver).
 

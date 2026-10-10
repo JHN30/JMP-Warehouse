@@ -75,12 +75,68 @@ class PlayerTests(unittest.TestCase):
         self.assertIsNone(pick(rows, "P2")["game_per"])
         self.assertIsNotNone(pick(rows, "P1")["game_per"])
 
+    def test_a_cameo_under_three_minutes_has_no_game_per_but_still_weighs_in_the_mean(self):
+        games, boxes, players = one_game()
+        without = pick(derive(games, boxes, players), "P1")["game_per"]
+        players.append(player(1, "CAMEO", **dict(LOCAL, seconds_played=179)))
+        rows = derive(games, boxes, players)
+        cameo = pick(rows, "CAMEO")
+        self.assertIsNone(cameo["game_per"])
+        self.assertIsNotNone(cameo["game_aper"])
+        scaled = [r for r in rows if r["game_aper"] is not None]
+        mean = (sum(r["game_aper"] * r["seconds_played"] for r in scaled)
+                / sum(r["seconds_played"] for r in scaled))
+        p1 = pick(rows, "P1")
+        self.assertAlmostEqual(float(p1["game_per"]), float(p1["game_aper"] * 15 / mean), places=4)
+        self.assertNotEqual(p1["game_per"], without)        # the cameo still moves the mean
+        players[-1]["seconds_played"] = 180
+        self.assertIsNotNone(pick(derive(games, boxes, players), "CAMEO")["game_per"])
+
     def test_row_without_a_counted_game_has_no_per(self):
         games, boxes, players = one_game()
         boxes[0] = (boxes[0][0][:1], boxes[0][1])               # road totals missing
         rows = derive(games, boxes, players)
         self.assertEqual({r["game_per"] for r in rows}, {None})
         self.assertEqual(len(rows), len(players))
+
+
+class QualityTests(unittest.TestCase):
+    """The PER scaling, floor and usage-tie checks of `check_game_advanced_invariants`."""
+
+    def issues(self, ratio_bad=0, short=0):
+        from gold_etl.quality import check_game_advanced_invariants
+
+        queries = []
+
+        class Cursor:
+            def execute(self, query, params=None):
+                queries.append(query)
+                self.query = query
+
+            def fetchall(self):
+                if "15 / m.mean" in self.query:
+                    return [("RS", 1, ratio_bad)]
+                if "game_per IS NOT NULL AND seconds_played <" in self.query:
+                    return [(short,)]
+                return [(0,)]
+
+        return check_game_advanced_invariants(Cursor(), "game_player_advanced", "E", "E2025"), queries
+
+    def test_clean_rows_pass_and_scaled_or_short_rows_are_reported(self):
+        self.assertEqual(self.issues()[0], [])
+        issues = self.issues(ratio_bad=2, short=1)[0]
+        self.assertEqual(len(issues), 2)
+        self.assertIn("RS round 1: 2 game_per values", issues[0])
+        self.assertIn("1 rows under 180 seconds have a game_per", issues[1])
+
+    def test_only_the_usage_tie_is_limited_to_estimate_rows(self):
+        ties = [q for q in self.issues()[1] if "round_number = 1" in q and "a.\"" in q]
+        usage = [q for q in ties if 'a."usage_pct"' in q]
+        self.assertEqual(len(usage), 1)
+        self.assertIn("rate_source = 'estimate'", usage[0])
+        self.assertIn('JOIN silver."game_player_advanced" s', usage[0])
+        self.assertTrue(all("rate_source" not in q for q in ties if q not in usage))
+        self.assertEqual(len(ties), 5)
 
 
 class TeamTests(unittest.TestCase):

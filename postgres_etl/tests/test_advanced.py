@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import advanced
 from flat_schema import ADVANCED_TABLES
+from test_lineups import event
 
 LOCAL = dict(points=83, field_goals_made=30, field_goals_attempted=60,
              three_pointers_made=8, three_pointers_attempted=20, free_throws_made=15,
@@ -42,10 +43,10 @@ def player(person_key, seconds, side="local", **stats):
                 seconds_played=seconds)
 
 
-def derive(games=(GAME,), periods=(), team_stats=None, players=(), gaps=()):
+def derive(games=(GAME,), periods=(), team_stats=None, players=(), gaps=(), events=()):
     return advanced.derive_rows(list(games), list(periods),
                                 totals() if team_stats is None else team_stats,
-                                list(players), list(gaps))
+                                list(players), list(gaps), list(events))
 
 
 class TeamTests(unittest.TestCase):
@@ -139,6 +140,43 @@ class PlayerTests(unittest.TestCase):
         row = derive(players=[player("P3", 2400, assists=4, field_goals_made=1)])[1][0]
         # Player sum (1 FGM) disagrees with the team total (30 FGM); the total is used.
         self.assertAlmostEqual(float(row["assist_pct"]), 4 / (1.0 * 30 - 1), places=4)
+
+
+class OnCourtTests(unittest.TestCase):
+    STARTERS = ("a1", "a2", "a3", "a4", "a5")
+
+    def lines(self, **cameo):
+        rows = [dict(player(key, 2399), started=True) for key in self.STARTERS]
+        rows.append(dict(player("k", 1, **cameo), started=False))
+        return rows + [dict(player(f"b{n}", 2400, side="road"), started=True) for n in range(5)]
+
+    def test_one_shot_in_one_second_is_full_usage_not_a_blown_up_estimate(self):
+        events = [event("OUT", "AAA", "05:00", 1, "a1"), event("IN", "AAA", "05:00", 2, "k"),
+                  event("2FGA", "AAA", "05:00", 3, "k"),
+                  event("OUT", "AAA", "04:59", 4, "k"), event("IN", "AAA", "04:59", 5, "a1"),
+                  event("2FGM", "BBB", "04:00", 6, "b0", 0, 2)]
+        players = self.lines(field_goals_attempted=1)
+        rows = {r["person_key"]: r for r in derive(players=players, events=events)[1]}
+        cameo = rows["k"]
+        self.assertEqual(cameo["rate_source"], "on_court")
+        self.assertEqual(cameo["usage_pct"], Decimal("1.000000"))
+        self.assertIsNone(cameo["assist_pct"])                    # no team basket on court
+        self.assertEqual(rows["a2"]["block_pct"], Decimal("0.000000"))  # one road two, no block
+        self.assertEqual(rows["b0"]["rate_source"], "on_court")
+        estimate = {r["person_key"]: r for r in derive(players=players)[1]}["k"]
+        self.assertEqual(estimate["rate_source"], "estimate")
+        self.assertIsNone(estimate["usage_pct"])                  # under the 3-minute floor
+
+    def test_estimate_floor_is_three_minutes_and_spares_time_free_measures(self):
+        stats = dict(points=2, field_goals_made=1, field_goals_attempted=2, assists=1,
+                     defensive_rebounds=1, total_rebounds=1, steals=1, blocks=1, turnovers=1)
+        below, at = (derive(players=[player("P", seconds, **stats)])[1][0] for seconds in (179, 180))
+        for column in advanced.TIME_RATES:
+            self.assertIsNone(below[column], column)
+            self.assertIsNotNone(at[column], column)
+        for column in ("game_score", "efg_pct", "true_shooting_pct", "tov_pct"):
+            self.assertEqual(below[column], at[column], column)
+        self.assertEqual((below["rate_source"], at["rate_source"]), ("estimate", "estimate"))
 
 
 class FakeCursor:
@@ -238,7 +276,8 @@ class RunTests(unittest.TestCase):
         issues = advanced.check_season(connection, "E", "E2025")
         self.assertEqual([issue[1] for issue in issues],
                          ["missing_team_rows", "missing_player_rows",
-                          "possessions_differ_between_sides", "implausible_pace_or_rating"])
+                          "possessions_differ_between_sides", "estimate_rate_below_floor",
+                          "on_court_rate_out_of_range", "implausible_pace_or_rating"])
         self.assertTrue(all(issue[3] == 2 for issue in issues))
         cursor.exists = False
         self.assertEqual({issue[1] for issue in advanced.check_season(connection, "E", "E2025")},
@@ -263,6 +302,11 @@ class MainWiringTests(unittest.TestCase):
         self.assertEqual(code, 0)
         run.assert_called_once()
         self.assertEqual(run.call_args.args[2], ["E2025"])
+
+    def test_a_play_by_play_load_rederives_the_on_court_rates(self):
+        code, run = self.run_main(["-sc", "2025", "-tb", "play_by_play"])
+        self.assertEqual(code, 0)
+        run.assert_called_once()
 
     def test_skipped_for_dry_run_quality_only_and_unrelated_tables(self):
         for argv in (["-sc", "2025", "--dry-run"], ["-sc", "2025", "--quality-only"],

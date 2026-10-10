@@ -167,6 +167,18 @@ class OnCourtTests(unittest.TestCase):
         self.assertEqual(estimate["rate_source"], "estimate")
         self.assertIsNone(estimate["usage_pct"])                  # under the 3-minute floor
 
+    def test_an_assist_on_free_throws_counts_the_trip_as_a_chance(self):
+        events = [event("2FGM", "AAA", "09:00", 1, "a2", 2, 0), event("AS", "AAA", "09:00", 2, "a1"),
+                  event("AS", "AAA", "08:00", 3, "a1"), event("RV", "AAA", "08:00", 4, "a3"),
+                  event("FTM", "AAA", "08:00", 5, "a3", 3, 0),
+                  event("FTM", "AAA", "08:00", 6, "a3", 4, 0)]
+        players = [dict(player(key, 2399, assists=2 if key == "a1" else 0), started=True)
+                   for key in self.STARTERS]
+        rows = {r["person_key"]: r for r in derive(players=players, events=events)[1]}
+        # One basket and one trip by teammates: 2 / (1 + 1), not 2 / 1.
+        self.assertEqual(rows["a1"]["assist_pct"], Decimal("1.000000"))
+        self.assertEqual(rows["a3"]["assist_pct"], Decimal("0.000000"))   # his own trip excluded
+
     def test_estimate_floor_is_three_minutes_and_spares_time_free_measures(self):
         stats = dict(points=2, field_goals_made=1, field_goals_attempted=2, assists=1,
                      defensive_rebounds=1, total_rebounds=1, steals=1, blocks=1, turnovers=1)

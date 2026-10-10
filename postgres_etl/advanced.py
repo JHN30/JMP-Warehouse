@@ -133,7 +133,9 @@ def _on_court_rates(counts):
 
     return {
         "usage_pct": _div(plays(mine), plays(team)),
-        "assist_pct": _div(mine["ast"], team["fgm"] - mine["fgm"]),
+        # EuroLeague credits assists on made field goals and on free-throw trips.
+        "assist_pct": _div(mine["ast"], team["fgm"] - mine["fgm"]
+                           + team["ft_trips"] - mine["ft_trips"]),
         "orb_pct": _div(mine["oreb"], team["oreb"] + opp["dreb"]),
         "drb_pct": _div(mine["dreb"], team["dreb"] + opp["oreb"]),
         "trb_pct": _div(mine["oreb"] + mine["dreb"],

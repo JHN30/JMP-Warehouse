@@ -3,14 +3,16 @@
 For every box-score player of a side whose game has play-by-play and starters, count the
 team's and the opponent's events while the player was on court, and his own events in those
 stretches. Events are attributed by event order to the lineup on court, as feature 29b's
-stints are; opponent possessions come from feature 19a's counted possessions. `derive_counts`
+stints are; opponent possessions come from feature 19a's counted possessions. Free-throw
+trips (`ft_trips`) are the chances, besides made field goals, that EuroLeague credits
+assists on. `derive_counts`
 is pure; `advanced.read_rows` reads the inputs. Nothing reads Gold or Neon.
 """
 
 from decimal import Decimal
 
 from lineups import _walk
-from possessions import FREE_THROWS, MADE, MISSED, _count, _game_end, _sort_key
+from possessions import FREE_THROWS, MADE, MISSED, PLAYS, _count, _game_end, _sort_key
 
 THREES = {"3FGM", "3FGA", "3FGAB"}
 # Count names per play type; `two_pa` is added for field-goal attempts that are not threes.
@@ -18,7 +20,7 @@ KINDS = {**{kind: ("fga", "fgm") for kind in MADE}, **{kind: ("fga",) for kind i
          **{kind: ("fta",) for kind in FREE_THROWS},
          "TO": ("tov",), "O": ("oreb",), "D": ("dreb",),
          "AS": ("ast",), "ST": ("stl",), "FV": ("blk",)}
-NAMES = ("fga", "fgm", "two_pa", "fta", "tov", "oreb", "dreb", "ast", "stl", "blk")
+NAMES = ("fga", "fgm", "two_pa", "fta", "ft_trips", "tov", "oreb", "dreb", "ast", "stl", "blk")
 
 
 def _blank():
@@ -31,6 +33,27 @@ def _names(kind):
     if "fga" in names and kind not in THREES:
         names += ("two_pa",)
     return names
+
+
+def _moment(event):
+    return event.get("club_code"), event["period"], event.get("marker_time")
+
+
+def _trip_starts(ordered):
+    """`id`s of the free throws that start a trip: a run of one club's free throws at one
+    period and clock, with no other play between them. A run right after the club's made
+    field goal at the same clock is an and-one, not a trip."""
+    starts, previous = set(), None
+    for event in ordered:
+        kind = event["play_type"]
+        if kind not in PLAYS:
+            continue
+        if kind in FREE_THROWS:
+            same = previous is not None and _moment(previous) == _moment(event)
+            if not (same and previous["play_type"] in FREE_THROWS | MADE):
+                starts.add(id(event))
+        previous = event
+    return starts
 
 
 def derive_counts(games, players, events):
@@ -60,6 +83,7 @@ def derive_counts(games, players, events):
         ordered = sorted(by_game[code], key=_sort_key)
         lineup_starters = {side: starters.get((code, side), []) for side in clubs}
         _, stint_of = _walk(ordered, clubs, lineup_starters, _game_end(ordered))
+        trips = _trip_starts(ordered)
         counts = {side: {person: _blank() for person in roster[(code, side)]} for side in sides}
         index = {clubs["local"]: 0, clubs["road"]: 1}
         names = ("local", "road")
@@ -67,6 +91,8 @@ def derive_counts(games, players, events):
             stint = stint_of.get(id(event))
             own_index = index.get(event.get("club_code"))
             kinds = _names(event["play_type"])
+            if id(event) in trips:
+                kinds += ("ft_trips",)
             if stint is None or own_index is None or not kinds:
                 continue
             for side_index, role in ((own_index, "team"), (1 - own_index, "opp")):

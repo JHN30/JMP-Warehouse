@@ -166,7 +166,7 @@ throws (`FTM FTA`) plus turnovers (`TO`); team rebounds without a person count f
 | Column | On-court form |
 | --- | --- |
 | `usage_pct` | Player plays / team plays |
-| `assist_pct` | Player `AS` / (team field goals made - player field goals made) |
+| `assist_pct` | Player `AS` / (team field goals made - player field goals made + team free-throw trips - player free-throw trips) |
 | `orb_pct`, `drb_pct`, `trb_pct` | Player `O`, `D`, both / (team rebounds of that type + opponent rebounds of the other type), or all four for `trb_pct` |
 | `steal_pct` | Player `ST` / opponent possessions closed while he was on court (19a's counter) |
 | `block_pct` | Player `FV` / opponent two-point attempts |
@@ -174,8 +174,13 @@ throws (`FTM FTA`) plus turnovers (`TO`); team rebounds without a person count f
 The codes `AS`, `ST`, `FV`, `TO`, `O` and `D` match the box score's assists, steals, blocks,
 turnovers and rebounds for every E2025 player-game and 99.7-99.9% in E2007 and E2015.
 EuroLeague also credits assists on fouls that lead to free throws (about 7-9% of `AS`
-events precede free throws), so `assist_pct` can exceed 1 in a short stint; the Silver check
-warns about any on-court rate outside 0-1 (16 rows over E2007-E2026, all `assist_pct`). A
+events precede free throws), so `assist_pct` counts free-throw trips as chances too. A trip is
+a run of one club's `FTM`/`FTA` at one period and clock with no other play between them
+(substitutions and fouls do not split it); it belongs to the lineup at its first free throw and
+to the player who shoots that one. A run right after the club's made field goal at the same
+clock is an and-one and adds no trip. The Silver check warns about any on-court rate outside
+0-1: one row over E2007-E2026, E2012 game 237 (Ponkrashov, 2 assists in 163 seconds), where an
+`AS` at 01:50 has no basket or trip of his club after it. A
 player in the box score whom the walk never puts on court gets NULL rates. Before E2007, and in
 E2018 game 21, which has no play-by-play, `rate_source` is `estimate`. For E2025 players with at
 least 10 minutes, on-court usage differs from the estimate by 0.006 at the median and 0.020 at

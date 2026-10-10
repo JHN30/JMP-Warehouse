@@ -42,6 +42,24 @@ class CountTests(unittest.TestCase):
         self.assertEqual((local(result, "a2")["team"]["fta"], local(result, "a2")["own"]["fta"]),
                          (2, 2))
 
+    def test_a_free_throw_trip_split_by_a_substitution_is_one_trip_for_the_first_lineup(self):
+        events = [event("FTM", "A", "05:00", 1, "a2", 1, 0),
+                  event("OUT", "A", "05:00", 2, "a1"), event("IN", "A", "05:00", 3, "a6"),
+                  event("FTM", "A", "05:00", 4, "a2", 2, 0)]
+        result = counts(events)
+        self.assertEqual(local(result, "a1")["team"]["ft_trips"], 1)
+        self.assertEqual(local(result, "a6")["team"]["ft_trips"], 0)
+        self.assertEqual(local(result, "a2")["own"]["ft_trips"], 1)
+        self.assertEqual(result[(1, "road", "b1")]["opp"]["ft_trips"], 1)
+
+    def test_an_and_one_is_not_a_trip_but_trips_at_other_clocks_are(self):
+        events = [event("2FGM", "A", "06:00", 1, "a2", 2, 0), event("RV", "A", "06:00", 2, "a2"),
+                  event("FTM", "A", "06:00", 3, "a2", 3, 0),
+                  event("FTA", "A", "05:00", 4, "a3"), event("FTM", "A", "05:00", 5, "a3", 4, 0),
+                  event("FTM", "A", "04:00", 6, "a4", 5, 0)]
+        a1 = local(counts(events), "a1")
+        self.assertEqual((a1["team"]["ft_trips"], a1["team"]["fta"]), (2, 4))
+
     def test_a_team_rebound_counts_for_the_lineups_but_nobody_owns_it(self):
         result = counts([event("D", "A", "08:00", 1)])
         for person in LOCAL:

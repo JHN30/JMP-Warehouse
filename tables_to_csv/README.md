@@ -6,8 +6,8 @@ CSV file per table, so the data can be imported into SQL Server Management Studi
 APIs or change database rows. Run it after loading Silver and building Gold.
 
 Tables are discovered from the database itself, so new derived tables (possessions,
-lineups, RAPM and so on) are included without a code change. That is currently 75
-tables, about 10.8 million rows for EuroLeague; `play_by_play`, `shots` and the lineup
+lineups, RAPM and so on) are included without a code change. That is currently 84
+tables (37 Silver, 47 Gold), about 11.9 million rows for EuroLeague; `play_by_play`, `shots` and the lineup
 tables are the large files.
 
 ## Run from the repository root
@@ -25,14 +25,15 @@ Other selections:
 
 ```powershell
 python tables_to_csv/main.py --layer gold
-python tables_to_csv/main.py -tb games player_rapm
+python tables_to_csv/main.py -tb games app_player_rapm
 python tables_to_csv/main.py -sc 2020-2025 -tb games shots
 python tables_to_csv/main.py -cp eurocup
 ```
 
 - `--layer silver|gold|all` (default `all`) selects the schema.
-- `-tb/--table` takes table names; a name that exists in both layers (for example
-  `games`) exports both. Unknown names are an error.
+- `-tb/--table` takes table names. Gold tables carry the Neon names with an `app_`
+  prefix (`app_games`, `app_player_rapm`), so `games` exports only the Silver table.
+  Unknown names are an error.
 - `-sc/--season-code` defaults to `all` and accepts a year, full code, inclusive
   range, `current`, `latest` or `all`. It filters tables that have a `season_code`
   column; other tables are exported whole. Seasons come from `silver.seasons`.
@@ -47,8 +48,8 @@ python tables_to_csv/main.py -cp eurocup
 ```text
 data/csv_export/euroleague/silver/games.csv
 data/csv_export/euroleague/silver/play_by_play.csv
-data/csv_export/euroleague/gold/team_round_stats.csv
-data/csv_export/euroleague/gold/player_rapm.csv
+data/csv_export/euroleague/gold/app_team_round_stats.csv
+data/csv_export/euroleague/gold/app_player_rapm.csv
 ```
 
 Each file has a header row, all database columns (Silver tables include `load_id`

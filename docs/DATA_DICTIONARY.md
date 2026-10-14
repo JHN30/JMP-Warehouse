@@ -741,6 +741,10 @@ published until the approved cutover. This table is season-scoped.
   clean names such as `two_pointers_made`, `assists` and `pir`; Gold preserves
   the historical output names. A missing measure or opponent total makes the
   affected aggregate NULL.
+- Games without a box score (`game_stat_gaps` `*`: the forfeits E2001 game 264
+  and E2003 game 200) are not counted in the totals or `games_played`, so
+  `games_played` can be one lower than the API's (5 instead of 6 for those
+  clubs' `TS` rows). The result still counts in `app_standings`.
 - One row per phase actually present in that season's games (`RS`, `PI`,
   `PO`, `FF`, or older `TS`) — no synthetic "all phases" row; Express has
   none either.

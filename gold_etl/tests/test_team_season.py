@@ -59,6 +59,23 @@ class TeamSeasonTests(unittest.TestCase):
                          ["games_played"], 1)
         self.assertEqual(derive_rows([game(3)], [], []), [])
 
+    def test_forfeit_without_box_score_is_not_counted(self):
+        empty = {source: None for _, source in TEAM_MEASURE_COLUMNS if source != "points"}
+        boxes = [stats(1, "local", 80), stats(1, "road", 70),
+                 stats(2, "local", None, **empty), stats(2, "road", None, **empty)]
+        rows = derive_rows([game(1), game(2)], boxes, [], no_box_score=[2])
+        for club, own, opp in (("MAD", 80, 70), ("BAR", 70, 80)):
+            row = next(row for row in rows if row["club_code"] == club)
+            self.assertEqual(row["games_played"], 1)
+            self.assertEqual((row["own_points"], row["opp_points"]),
+                             (Decimal(own), Decimal(opp)))
+            self.assertTrue(all(row[f"{side}_{target}"] is not None
+                                for target, _ in TEAM_MEASURE_COLUMNS
+                                for side in ("own", "opp")))
+        counted = derive_rows([game(1), game(2)], boxes, [])
+        self.assertIsNone(next(row for row in counted
+                               if row["club_code"] == "MAD")["own_points"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -11,15 +11,19 @@ def _number(value):
     return Decimal(str(value))
 
 
-def derive_rows(games, team_stats, clubs):
+def derive_rows(games, team_stats, clubs, no_box_score=()):
+    """Sum played games per phase and club; games without a box score (a
+    forfeit's `*` stat gap) are not counted."""
     names = {club["club_code"]: club.get("name") for club in clubs}
     totals = {(row["game_code"], row["side"]): row for row in team_stats
               if row["stats_kind"] == "total"}
+    skipped = set(no_box_score)
     groups = defaultdict(list)
     fallback = {}
     for game in sorted(games, key=lambda row: (str(row.get("scheduled_at") or ""),
                                                row["game_code"])):
-        if game.get("played") is not True or not game.get("phase_code"):
+        if (game.get("played") is not True or not game.get("phase_code")
+                or game["game_code"] in skipped):
             continue
         for side, other in (("local", "road"), ("road", "local")):
             club_code = game.get(f"{side}_club_code")
@@ -54,4 +58,8 @@ def read_rows(cursor, competition_code, season_code):
     team_stats = _dict_rows(cursor)
     cursor.execute('SELECT club_code, name FROM silver.clubs '
                    'WHERE competition_code = %s AND season_code = %s', scope)
-    return derive_rows(games, team_stats, _dict_rows(cursor))
+    clubs = _dict_rows(cursor)
+    cursor.execute("SELECT game_code FROM silver.game_stat_gaps "
+                   "WHERE competition_code = %s AND season_code = %s AND stat_name = '*'",
+                   scope)
+    return derive_rows(games, team_stats, clubs, [row[0] for row in cursor.fetchall()])

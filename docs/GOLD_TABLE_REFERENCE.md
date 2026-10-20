@@ -8,6 +8,8 @@ No live schema, data refresh or Neon publish was performed for this document.
 Use the [catalog](DATA_CATALOG.md) to choose a table and the
 [player/team stats glossary](STAT_GLOSSARY.md) for calculation details.
 The [pipeline dictionary](DATA_DICTIONARY.md) retains Silver and operational notes.
+For upstream EuroLeague lineage and columns, see the [Bronze catalog](BRONZE_CATALOG.md),
+[Silver catalog](SILVER_CATALOG.md), and [Silver reference](SILVER_TABLE_REFERENCE.md).
 
 ## Reading the reference
 
@@ -1540,14 +1542,14 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 
 **Definition / implementation:** [postgres_etl/flat_schema.py](../postgres_etl/flat_schema.py).
 
-**Usage and limitations:** Order by period, event_ordinal, never play_number alone. person_code is the resolved box-score person_key; player_code is the raw live identity. Available from E2007 where the feed exists.
+**Usage and limitations:** Order by explicit period rank, overtime number from minute, then event_ordinal. Alphabetical period order and play_number are unsuitable. person_code is the resolved box-score person_key; player_code is the raw live identity. Available from E2007 where the feed exists.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
 | `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (support is deferred). |
 | `season_code` | `TEXT` | No | PK | Starting-year season code, for example E2025 for 2025-26. |
 | `game_code` | `INTEGER` | No | PK | Game identifier within competition and season, not globally unique. |
-| `period` | `TEXT` | No | PK | Chronological period number in the transformed event stream. |
+| `period` | `TEXT` | No | PK | Source period label: FirstQuarter, SecondQuarter, ThirdQuarter, ForthQuarter or ExtraTime. Sort using period rank and overtime number from minute, not alphabetically. |
 | `event_ordinal` | `INTEGER` | No | PK | Event order within the period; use with period for chronology. |
 | `play_number` | `INTEGER` | Yes |  | Source event/shot link number; it is not a reliable chronological sort key. |
 | `club_code` | `TEXT` | Yes |  | Club identifier, text; join season profiles on competition, season and club. |

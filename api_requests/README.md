@@ -1,5 +1,9 @@
 # API extraction cache
 
+See the [EuroLeague Bronze catalog](../docs/BRONZE_CATALOG.md) for response
+containers, version identity, manifest fields and lineage into Silver, and the
+[Silver catalog](../docs/SILVER_CATALOG.md) for the resulting tables.
+
 This tool stores the exact API responses from the EuroLeague and EuroCup APIs in
 the **bronze** layer (`data/bronze/`, see [common/bronze.py](../common/bronze.py)). It uses v2
 and v3 as the primary sources, then adds the only data the live API has

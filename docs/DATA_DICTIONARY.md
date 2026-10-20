@@ -6,6 +6,11 @@ The [Gold table reference](GOLD_TABLE_REFERENCE.md) lists every column of all
 [statistics glossary](STAT_GLOSSARY.md) separates player and team measures,
 including formulas, units, source tables and calculation limits.
 
+For upstream EuroLeague data, use the [Bronze resource catalog](BRONZE_CATALOG.md),
+[Silver catalog](SILVER_CATALOG.md), and complete
+[Silver column reference](SILVER_TABLE_REFERENCE.md). These describe resource
+containers, source paths, all 36 Silver data tables and the separate load log.
+
 This document retains the Silver contract, provenance and historical pipeline
 verification notes. Historical counts, storage measurements and publication
 milestones below describe their recorded checkpoints, not current live coverage.
@@ -242,7 +247,8 @@ rows). Extra key `game_code`, `side`; one row per club per played game with even
 | `avg_possession_seconds` | `possession_seconds` / the number of possessions with a measurable length (NULL when none) |
 | `estimated_possessions` | The box-score `possessions` of `game_team_advanced`, copied for comparison |
 
-Rules. Events are ordered by period, then `event_ordinal` (which restarts each period;
+Rules. Events are ordered by explicit period rank, overtime number from `minute`,
+then `event_ordinal` (which restarts each source period array;
 `play_number` is not chronological). `marker_time` is the time left in the period, turned
 into elapsed game seconds (10:00 per quarter, 5:00 per overtime; every overtime carries the
 period label `ExtraTime`, the overtime number comes from `minute`). Shots are `2FGM`,

@@ -1,5 +1,10 @@
 # PostgreSQL silver loader
 
+Documentation: [EuroLeague Silver catalog](../docs/SILVER_CATALOG.md),
+[complete Silver column reference](../docs/SILVER_TABLE_REFERENCE.md),
+[Bronze resources](../docs/BRONZE_CATALOG.md), and the shared
+[player/team stats glossary](../docs/STAT_GLOSSARY.md).
+
 `main.py` reads the latest version of each resource in the local bronze store
 and builds 28 source-derived tables in the PostgreSQL `silver` schema. The
 connection uses `search_path = silver`, so SQL and `-tb` use bare table names.

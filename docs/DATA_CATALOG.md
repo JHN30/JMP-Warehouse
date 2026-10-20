@@ -5,8 +5,14 @@ Gold tables**, what one row represents, and which table serves each use case.
 The names, columns and keys were checked against the repository on 2026-10-20.
 This is a code contract, not a live database or frontend completeness audit.
 
+This catalog currently documents EuroLeague coverage. EuroCup coverage and rule
+differences will be added when that implementation begins.
+
 | Document | Use it for |
 | --- | --- |
+| [Bronze catalog](BRONZE_CATALOG.md) | API resource inventory, response shapes, versioned storage and source lineage. |
+| [Silver catalog](SILVER_CATALOG.md) | Source/calculated table purposes, row grains, provenance and Gold lineage. |
+| [Silver column reference](SILVER_TABLE_REFERENCE.md) | Every Silver column, type, key, nullable flag and source path. |
 | [Gold data catalog](DATA_CATALOG.md) | Choose tables, understand row grain and joins, find frontend sources. |
 | [Gold table reference](GOLD_TABLE_REFERENCE.md) | Every column of every Gold table: PostgreSQL type, nullability, key and meaning. |
 | [Statistics glossary](STAT_GLOSSARY.md) | All documented player and team measures, formulas, units and limitations. |
@@ -61,7 +67,7 @@ live publication requires owner approval.
 | Team-game advanced to team-game box score | Game key plus `side`, with box score `stats_kind = 'total'`. |
 | Player-game advanced to player box score | Game key plus `side`, `person_key`. |
 | Season person profile to box score | `competition_code`, `season_code`, `person_key`. |
-| Live event/shot to person profile | Live `person_code` equals `app_people.person_key` in the same competition/season. Raw `player_code` is not the join key. |
+| Live event/shot to person profile | Resolved non-NULL live `person_code` equals `app_people.person_key` in the same competition/season. Raw `player_code` is not the join key. |
 | Season person to career identity | `app_people.person_code = app_players.person_code`, plus competition. |
 | Club profile | Competition, season and `club_code`; `app_club_identities` uses competition and club only. |
 | Player round stats/PER/Win Shares | Competition, season, `scope`, `round_number`, `person_key`; `club_code` is latest context, not part of the key. |
@@ -83,6 +89,9 @@ rows or the explicitly club-keyed on/off table.
 The season player feeds have `entry_ordinal` in the key. It is a feed position,
 not a career identity. Do not assume the SQL schema guarantees one row per
 person/club just because a feed normally returns it that way.
+Transferred players can also have a semicolon-separated source club code such
+as `BAS;TEL` in season feeds. That value does not join one `app_clubs` profile;
+use the registration history or player game rows for club-specific attribution.
 
 Calculated rates are generally fractions (`0.55` displays as `55%`); API player
 percentage columns use percentage points (`55.0` displays as `55%`). Source

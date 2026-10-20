@@ -127,6 +127,8 @@ Key concepts:
 
 Start with the [Gold data catalog](docs/DATA_CATALOG.md) to find tables for the frontend. The [Gold table reference](docs/GOLD_TABLE_REFERENCE.md) documents every column, type and key across all 47 tables. The [statistics glossary](docs/STAT_GLOSSARY.md) separates player and team measures, from points, rebounds and assists to Game Score, PER, Win Shares and RAPM, with formulas, units and source tables.
 
+Trace upstream data with the [Bronze resource catalog](docs/BRONZE_CATALOG.md), [Silver table catalog](docs/SILVER_CATALOG.md), and [Silver column reference](docs/SILVER_TABLE_REFERENCE.md). These catalogs currently document EuroLeague; EuroCup coverage and rule differences will be added when implemented.
+
 Silver, provenance, historical checks and publishing rules remain in the [pipeline data dictionary](docs/DATA_DICTIONARY.md).
 
 JMP Rating, win probabilities, and prediction work belong to the separate [JMP Rating](https://github.com/JHN30/JMP-Rating) project. EuroCup expansion, broader historical publishing, dependency packaging and CI, and scheduled refreshes remain planned work.
@@ -284,6 +286,9 @@ Both credential files are ignored by Git. Live Neon publishing and applying migr
 | [neon_publish/](neon_publish/README.md) | Guarded publishing contracts and reviewed migrations |
 | [tables_to_csv/](tables_to_csv/README.md) | CSV exports of local tables |
 | `common/` | Shared Bronze, database, and season helpers |
+| [docs/BRONZE_CATALOG.md](docs/BRONZE_CATALOG.md) | EuroLeague API resources, response containers, storage, versioning and Silver lineage |
+| [docs/SILVER_CATALOG.md](docs/SILVER_CATALOG.md) | Source/calculated Silver tables, row grains, provenance and Gold uses |
+| [docs/SILVER_TABLE_REFERENCE.md](docs/SILVER_TABLE_REFERENCE.md) | Every Silver column, type, key, nullability and source path |
 | [docs/DATA_CATALOG.md](docs/DATA_CATALOG.md) | Gold table purposes, frontend sources, joins and query examples |
 | [docs/GOLD_TABLE_REFERENCE.md](docs/GOLD_TABLE_REFERENCE.md) | Every Gold column, PostgreSQL type, nullable flag, primary key and description |
 | [docs/STAT_GLOSSARY.md](docs/STAT_GLOSSARY.md) | Player and team statistics, formulas, units and source tables |

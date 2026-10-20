@@ -1,5 +1,9 @@
 # Local Gold stage
 
+Documentation: [table catalog](../docs/DATA_CATALOG.md),
+[complete column reference](../docs/GOLD_TABLE_REFERENCE.md), and
+[player/team statistics glossary](../docs/STAT_GLOSSARY.md).
+
 `gold_etl/main.py` builds `gold` from the local PostgreSQL `silver` schema. It copies the 16
 source tables, plus seven per-game tables (below). It reads only the registered Silver columns,
 leaving `load_id` and `loaded_at` in Silver. It keeps source values, NULLs,

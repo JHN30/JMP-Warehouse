@@ -125,7 +125,9 @@ Key concepts:
 - Box-score possession estimates and possessions counted from play-by-play are kept separately.
 - Player season statistics include calculated per-game rows where needed, a minimum-games threshold, and a `qualified` flag for rankings.
 
-Table definitions, formulas, coverage rules, and published names are documented in [docs/DATA_DICTIONARY.md](docs/DATA_DICTIONARY.md).
+Start with the [Gold data catalog](docs/DATA_CATALOG.md) to find tables for the frontend. The [Gold table reference](docs/GOLD_TABLE_REFERENCE.md) documents every column, type and key across all 47 tables. The [statistics glossary](docs/STAT_GLOSSARY.md) separates player and team measures, from points, rebounds and assists to Game Score, PER, Win Shares and RAPM, with formulas, units and source tables.
+
+Silver, provenance, historical checks and publishing rules remain in the [pipeline data dictionary](docs/DATA_DICTIONARY.md).
 
 JMP Rating, win probabilities, and prediction work belong to the separate [JMP Rating](https://github.com/JHN30/JMP-Rating) project. EuroCup expansion, broader historical publishing, dependency packaging and CI, and scheduled refreshes remain planned work.
 
@@ -282,6 +284,9 @@ Both credential files are ignored by Git. Live Neon publishing and applying migr
 | [neon_publish/](neon_publish/README.md) | Guarded publishing contracts and reviewed migrations |
 | [tables_to_csv/](tables_to_csv/README.md) | CSV exports of local tables |
 | `common/` | Shared Bronze, database, and season helpers |
-| [docs/DATA_DICTIONARY.md](docs/DATA_DICTIONARY.md) | Table contracts, statistical definitions, and data rules |
+| [docs/DATA_CATALOG.md](docs/DATA_CATALOG.md) | Gold table purposes, frontend sources, joins and query examples |
+| [docs/GOLD_TABLE_REFERENCE.md](docs/GOLD_TABLE_REFERENCE.md) | Every Gold column, PostgreSQL type, nullable flag, primary key and description |
+| [docs/STAT_GLOSSARY.md](docs/STAT_GLOSSARY.md) | Player and team statistics, formulas, units and source tables |
+| [docs/DATA_DICTIONARY.md](docs/DATA_DICTIONARY.md) | Silver, provenance, historical checks and publishing rules |
 | `blueprint/` | Project plans, workflow context, and completed-work history |
 | `data/`, `logs/` | Local data and run output, ignored by Git |

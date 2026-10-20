@@ -1,5 +1,17 @@
 # EuroLeague data dictionary
 
+For frontend work, start with the [Gold data catalog](DATA_CATALOG.md).
+The [Gold table reference](GOLD_TABLE_REFERENCE.md) lists every column of all
+47 Gold tables, with types, nullability, keys and descriptions. The
+[statistics glossary](STAT_GLOSSARY.md) separates player and team measures,
+including formulas, units, source tables and calculation limits.
+
+This document retains the Silver contract, provenance and historical pipeline
+verification notes. Historical counts, storage measurements and publication
+milestones below describe their recorded checkpoints, not current live coverage.
+The new reference and glossary were checked against the code on 2026-10-20;
+frontend implementation and current Neon contents were not inspected.
+
 The current local database has 28 source-derived tables in the PostgreSQL
 `silver` schema. The loader and CSV exporter use `search_path = silver`, so
 a bare name such as `games` means `silver.games`. Exact SQL columns, types,
@@ -8,8 +20,9 @@ source JSON paths, and keys are defined in
 responses. Silver contains cleaned source data. The local `gold` schema holds
 16 source projections from Silver, derived postseason player stats, the
 page-shaped standings table, team-season totals, two coverage tables, the three
-record leaderboards, postseason series, and the two identity tables. The 30f
-publisher maps these 26 tables to Neon's `public.app_*` tables. The one-time
+record leaderboards, postseason series, and the two identity tables, plus the
+round, event, lineup and game-level derivations cataloged in the new reference.
+The publisher maps all 47 Gold tables to Neon's `public.app_*` tables. The one-time
 in-place Neon migration and first E2026 publish completed on 2026-09-28.
 
 ## Neon app-table contract

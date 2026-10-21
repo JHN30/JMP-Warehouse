@@ -634,6 +634,8 @@ PER_TOLERANCE = 0.0001
 GAME_PLAYER_RATES = ("usage_pct", "assist_pct", "orb_pct", "drb_pct", "trb_pct", "steal_pct",
                      "block_pct", "tov_pct", "efg_pct", "true_shooting_pct",
                      "game_uper", "game_aper", "game_per")
+# Shot and turnover ratios need no minutes; old box scores have 0-second lines with real stats.
+SHOT_RATES = ("tov_pct", "efg_pct", "true_shooting_pct")
 
 
 def _one(cursor, sql, params):
@@ -691,7 +693,7 @@ def check_game_advanced_invariants(cursor, name, competition_code, season_code):
         scope * 2)[0][0]
     if missing or extra:
         issues.append(prefix + f"{missing} box-score rows missing, {extra} not in game_player_stats")
-    for column in GAME_PLAYER_RATES:
+    for column in (c for c in GAME_PLAYER_RATES if c not in SHOT_RATES):
         bad = _one(cursor, f'SELECT count(*) FROM gold."app_game_player_advanced" WHERE '
                    'competition_code = %s AND season_code = %s AND (seconds_played IS NULL '
                    f'OR seconds_played = 0) AND "{column}" IS NOT NULL', scope)[0][0]
@@ -735,7 +737,8 @@ def check_game_advanced_invariants(cursor, name, competition_code, season_code):
                    f'USING (competition_code, season_code, game_code) {join}'
                    f'JOIN gold."{physical_name(table)}" t ON t.competition_code = a.competition_code '
                    "AND t.season_code = a.season_code AND t.round_number = 1 "
-                   f"AND t.scope = '{round_scope}' AND t.person_key = a.person_key{extra_filter} "
+                   f"AND t.scope = '{round_scope}' AND t.person_key = a.person_key "
+                   f"AND t.club_code = a.club_code{extra_filter} "
                    'WHERE a.competition_code = %s AND a.season_code = %s AND g.round_number = 1 '
                    f'AND abs(a."{column}" - t."{other}") > {TIE_TOLERANCE}{condition}',
                    scope)[0][0]

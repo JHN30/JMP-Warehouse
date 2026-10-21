@@ -138,6 +138,17 @@ class QualityTests(unittest.TestCase):
         self.assertTrue(all("rate_source" not in q for q in ties if q not in usage))
         self.assertEqual(len(ties), 5)
 
+    def test_round_one_ties_match_the_players_own_club(self):
+        ties = [q for q in self.issues()[1] if "round_number = 1" in q and "a.\"" in q]
+        self.assertTrue(all("t.club_code = a.club_code" in q for q in ties))
+
+    def test_zero_minute_check_skips_only_the_shot_and_turnover_ratios(self):
+        from gold_etl.quality import GAME_PLAYER_RATES
+
+        zero = [q for q in self.issues()[1] if "seconds_played = 0)" in q]
+        checked = {column for column in GAME_PLAYER_RATES for q in zero if f'"{column}" IS NOT NULL' in q}
+        self.assertEqual(checked, set(GAME_PLAYER_RATES) - {"tov_pct", "efg_pct", "true_shooting_pct"})
+
 
 class TeamTests(unittest.TestCase):
     def test_projection_keeps_the_published_columns_only(self):

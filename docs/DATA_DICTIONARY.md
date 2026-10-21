@@ -170,7 +170,7 @@ no rows.
 | `true_shooting_pct` | `points / (2 x (field_goals_attempted + 0.44 x free_throws_attempted))` |
 | `assist_ratio` | `assists / field_goals_made` |
 | `game_score` (player) | Hollinger: `points + 0.4 FGM - 0.7 FGA - 0.4 (FTA - FTM) + 0.7 OREB + 0.3 DREB + steals + 0.7 assists + 0.7 blocks - 0.4 fouls_committed - turnovers` |
-| `usage_pct`, `assist_pct`, `orb_pct`, `drb_pct`, `trb_pct`, `steal_pct`, `block_pct` (player) | Rates over what happened while the player was on court (`rate_source = 'on_court'`, below) when the game has play-by-play; otherwise Basketball-Reference box-score estimates using `seconds_played` and the club's official `total` row, NULL below 180 seconds. NULL for zero minutes either way |
+| `usage_pct`, `assist_pct`, `orb_pct`, `drb_pct`, `trb_pct`, `steal_pct`, `block_pct` (player) | Rates over what happened while the player was on court (`rate_source = 'on_court'`, below) when the game has play-by-play; otherwise Basketball-Reference box-score estimates using `seconds_played` and the club's official `total` row, NULL below 180 seconds; the estimated `assist_pct` is also NULL when the player's minutes share of team baskets minus his own is below one teammate basket. NULL for zero minutes either way |
 | `rate_source` (player, Silver only) | `on_court` or `estimate`: which form the seven time-dependent rates use |
 | `tov_pct`, `efg_pct`, `true_shooting_pct` (player) | Same forms as the club columns, from the player's own line |
 

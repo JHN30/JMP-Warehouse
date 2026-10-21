@@ -28,6 +28,8 @@ SOURCE_TABLES = ("games", "game_period_scores", "game_team_stats",
                  "game_player_stats", "game_stat_gaps", "play_by_play")
 # Box-score estimates of the time-dependent rates are NULL below this many seconds.
 ESTIMATE_FLOOR_SECONDS = 180
+# Below one estimated teammate basket on court the assist % estimate is noise (or negative).
+ESTIMATE_MIN_TEAMMATE_FGM = 1
 TIME_RATES = ("usage_pct", "assist_pct", "orb_pct", "drb_pct", "trb_pct", "steal_pct",
               "block_pct")
 
@@ -162,6 +164,7 @@ def _player_row(game_code, side, row, own, opp, opp_possessions, game_seconds, c
         return rate(p[kind], _sum(own[kind], opp[opposing]))
 
     team_assisted = None if share is None or own["fgm"] is None else share * own["fgm"]
+    teammate_fgm = None if team_assisted is None or p["fgm"] is None else team_assisted - p["fgm"]
     two_attempts = _sum(opp["fga"], None if opp["tpa"] is None else -opp["tpa"])
     result = {
         "game_code": game_code, "side": side, "person_key": row["person_key"],
@@ -169,8 +172,8 @@ def _player_row(game_code, side, row, own, opp, opp_possessions, game_seconds, c
         "game_score": _game_score(p),
         "true_shooting_pct": _true_shooting(p), "efg_pct": _efg(p),
         "usage_pct": rate(used, team_used),
-        "assist_pct": _div(p["ast"], None if team_assisted is None or p["fgm"] is None
-                           else team_assisted - p["fgm"]),
+        "assist_pct": None if teammate_fgm is None or teammate_fgm < ESTIMATE_MIN_TEAMMATE_FGM
+                      else _div(p["ast"], teammate_fgm),
         "orb_pct": rebound("oreb", "dreb"), "drb_pct": rebound("dreb", "oreb"),
         "trb_pct": rate(p["reb"], _sum(own["reb"], opp["reb"])),
         "steal_pct": rate(p["stl"], opp_possessions),

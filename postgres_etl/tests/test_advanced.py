@@ -141,6 +141,18 @@ class PlayerTests(unittest.TestCase):
         # Player sum (1 FGM) disagrees with the team total (30 FGM); the total is used.
         self.assertAlmostEqual(float(row["assist_pct"]), 4 / (1.0 * 30 - 1), places=4)
 
+    def test_estimate_assist_pct_needs_one_teammate_basket_on_court(self):
+        def assist_pct(seconds, fgm):
+            return derive(players=[player("P", seconds, assists=2, field_goals_made=fgm,
+                                          field_goals_attempted=fgm)])[1][0]
+        negative = assist_pct(600, 8)      # 0.25 * 30 - 8 = -0.5 (E2000 Jennings shape)
+        small = assist_pct(300, 3)         # 0.125 * 30 - 3 = 0.75 (E2004 Morovic shape)
+        exact = assist_pct(480, 5)         # 0.2 * 30 - 5 = 1
+        self.assertIsNone(negative["assist_pct"])
+        self.assertIsNone(small["assist_pct"])
+        self.assertIsNotNone(negative["usage_pct"])                # other rates are kept
+        self.assertEqual(exact["assist_pct"], Decimal("2.000000"))
+
 
 class OnCourtTests(unittest.TestCase):
     STARTERS = ("a1", "a2", "a3", "a4", "a5")
@@ -178,6 +190,17 @@ class OnCourtTests(unittest.TestCase):
         # One basket and one trip by teammates: 2 / (1 + 1), not 2 / 1.
         self.assertEqual(rows["a1"]["assist_pct"], Decimal("1.000000"))
         self.assertEqual(rows["a3"]["assist_pct"], Decimal("0.000000"))   # his own trip excluded
+
+    def test_the_teammate_basket_threshold_leaves_on_court_rows_alone(self):
+        events = [event("2FGM", "AAA", "09:00", 1, "a2", 2, 0), event("AS", "AAA", "09:00", 2, "a1")]
+        # a1's box score claims all 30 team baskets, so the estimate has no teammate basket.
+        players = [dict(player(key, 2399, **({"assists": 1, "field_goals_made": 30}
+                                              if key == "a1" else {})), started=True)
+                   for key in self.STARTERS]
+        on_court = {r["person_key"]: r for r in derive(players=players, events=events)[1]}["a1"]
+        estimate = {r["person_key"]: r for r in derive(players=players)[1]}["a1"]
+        self.assertEqual(on_court["assist_pct"], Decimal("1.000000"))
+        self.assertIsNone(estimate["assist_pct"])
 
     def test_estimate_floor_is_three_minutes_and_spares_time_free_measures(self):
         stats = dict(points=2, field_goals_made=1, field_goals_attempted=2, assists=1,

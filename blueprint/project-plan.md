@@ -113,9 +113,11 @@ warnings explain every known source gap.
 
 ## 8. Deployment - Where and how will this ship?
 
-- Runs on the owner's Windows PC. For now the owner starts the refresh manually
-  with one command (feature 10), typically nightly and after each round.
-  Automatic scheduling (Task Scheduler or GitHub Actions) comes later (feature 20).
+- Runs on the owner's Windows PC. A Windows Task Scheduler task (feature 20)
+  runs the refresh daily at 06:00 while the owner is logged on and catches up
+  after a missed start; the owner can still run it manually with one command
+  (feature 10). GitHub Actions is not used: the pipeline needs the local Bronze
+  cache and the local PostgreSQL warehouse.
 - Needs `NEON_DATABASE_URL` (direct, non-pooled) in the environment and
   `postgres_etl/config_connection.json` for local PostgreSQL (not committed).
 - Neon plan storage is limited; only app-facing tables go there.

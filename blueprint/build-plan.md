@@ -75,7 +75,7 @@ Items 1-8 were already shipped when the Blueprint was adopted (2026-09-24).
 - [ ] 15. **Historical seasons in Neon** - publish older seasons once Neon storage allows (app tables for all seasons are about 237 MB)
 - [ ] 17. **Dependencies and CI** - `requirements.txt` and an automatic test run so the project installs and verifies anywhere
 - [ ] 18. **EuroCup** - download, load and publish EuroCup seasons
-- [ ] 20. **Scheduled refresh** - run the refresh command automatically (Windows Task Scheduler or GitHub Actions), nightly and after each round
+- [x] 20. **Scheduled refresh** - run the refresh command automatically (Windows Task Scheduler or GitHub Actions), nightly and after each round
 
 > Item 15 depends on your Neon plan's storage limit.
 >

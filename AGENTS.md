@@ -313,6 +313,12 @@ committed; copy the `.example`). Publishing reads the direct non-pooled
 - Refresh the current season (fetch, load, quality checks): `python pipeline.py`
   (VS Code task "Refresh current season"). Ends with a summary; each run is logged
   to `logs/refresh/refresh_<YYYYMMDD_HHMMSS>.log`.
+- Daily 06:00 refresh (Windows Task Scheduler task `JMP Warehouse refresh`, runs
+  `python pipeline.py` while the owner is logged on; its live publish is the owner's
+  standing approval): register or update with
+  `powershell -ExecutionPolicy Bypass -File register_refresh_task.ps1`, remove with
+  `... -Remove`, check with `Get-ScheduledTaskInfo -TaskName "JMP Warehouse refresh"`.
+  Never start or register it without the owner's yes.
 - `python pipeline.py --dry-run-publish` builds Gold and checks Neon without
   remote writes; pending state remains true for a later live retry.
 - Full local history including API fetch: `python pipeline.py --all`. Fetches

@@ -1,6 +1,6 @@
 # EuroLeague Data ETL - Project Overview
 
-<!-- blueprint:source-hash 3ed25cd46fba61202ee32b5150e70251a18ce1a5a9b125c754ed4fdcb04c62e3 -->
+<!-- blueprint:source-hash a1faea46badf5fb36b4d826f2817b1779d3462dd0ab86c9647a758dbe764ef68 -->
 
 > The data pipeline behind the JMP EuroLeague web app: EuroLeague API data into
 > exact bronze files, typed tables in local PostgreSQL, advanced statistics, and
@@ -164,7 +164,7 @@ a short run summary, and a quality report that explains every known source gap.
 
 ## Deployment
 
-- Runs on the owner's Windows PC. The owner starts the refresh manually with one command, typically nightly and after each round. Automatic scheduling is feature 20.
+- Runs on the owner's Windows PC. A Task Scheduler task (`register_refresh_task.ps1`) runs the refresh daily at 06:00 while the owner is logged on, catching up after a missed start; the owner can also run it manually with one command.
 - Env: `NEON_DATABASE_URL` (direct, non-pooled). Local DB via `postgres_etl/config_connection.json` (not committed).
 - Neon storage is limited; only app-facing tables go there.
 

@@ -131,7 +131,7 @@ Trace upstream data with the [Bronze resource catalog](docs/BRONZE_CATALOG.md), 
 
 Silver, provenance, historical checks and publishing rules remain in the [pipeline data dictionary](docs/DATA_DICTIONARY.md).
 
-JMP Rating, win probabilities, and prediction work belong to the separate [JMP Rating](https://github.com/JHN30/JMP-Rating) project. EuroCup expansion, broader historical publishing, dependency packaging and CI, and scheduled refreshes remain planned work.
+JMP Rating, win probabilities, and prediction work belong to the separate [JMP Rating](https://github.com/JHN30/JMP-Rating) project. EuroCup expansion, broader historical publishing, and dependency packaging and CI remain planned work.
 
 ---
 
@@ -173,6 +173,26 @@ python tables_to_csv/main.py
 After explicit owner approval, `python pipeline.py` runs the current-season refresh through live Neon publishing. It skips downstream work when nothing changed and no publish is pending, and finishes with a summary and a log in `logs/refresh/`.
 
 Individual fetch and local load/build stages accept season codes, years, ranges such as `2000-2025`, and selectors such as `current` or `all`. The Neon publisher handles one season per invocation. See each stage's README for its exact selectors and options.
+
+### Scheduled Refresh
+
+A Windows Task Scheduler task named `JMP Warehouse refresh` can run `python pipeline.py` every day at 06:00. It runs only while you are logged on, with no stored password or admin rights. If the computer was off or asleep at 06:00, it runs as soon as possible afterwards. It also runs on battery and is stopped after 2 hours. Each run publishes the current season to Neon live, so registering the task is the owner's standing approval for that daily publish. Removing the task withdraws it.
+
+```powershell
+# Register the task, or update it after Python or the folder moves
+powershell -ExecutionPolicy Bypass -File register_refresh_task.ps1
+
+# Last run time, last result (0 = OK) and next run time
+Get-ScheduledTaskInfo -TaskName "JMP Warehouse refresh"
+
+# Run it now (a live Neon publish)
+Start-ScheduledTask -TaskName "JMP Warehouse refresh"
+
+# Remove the task
+powershell -ExecutionPolicy Bypass -File register_refresh_task.ps1 -Remove
+```
+
+The task runs hidden, using the Python found on `PATH` when you registered it, from the repository folder, so `.env` and `postgres_etl/config_connection.json` are read as in a manual run. Each run writes its log to `logs/refresh/` like a manual run. The last result is the pipeline's exit code. `0` means OK. Any other number means the run failed (usually `1`): see the newest log, or, if no new log was written, check that the registered Python still exists and register again. `0x41301` means it is still running, and `0x41306` means it hit the 2-hour limit. A failed run is not retried the same day. The next day's run picks up any changes, and a pending publish is retried automatically. If `NEON_DATABASE_URL` is missing from the environment and `.env`, the run fails at Publish instead of waiting for input.
 
 ---
 
@@ -280,6 +300,7 @@ Both credential files are ignored by Git. Live Neon publishing and applying migr
 | Path | Purpose |
 | --- | --- |
 | [pipeline.py](pipeline.py) | Current-season refresh and full local history rebuild |
+| [register_refresh_task.ps1](register_refresh_task.ps1) | Registers or removes the daily 06:00 refresh task |
 | [api_requests/](api_requests/README.md) | API extraction, caching, and refresh rules |
 | [postgres_etl/](postgres_etl/README.md) | Silver loading, provenance, per-game analytics, and quality checks |
 | [gold_etl/](gold_etl/README.md) | Gold projections, aggregates, and advanced statistics |

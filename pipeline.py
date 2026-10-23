@@ -1,8 +1,8 @@
 """Refresh one season through Neon, or all history locally.
 
-Run it from the VS Code terminal whenever you want (for example nightly and
-after each round). When the API returned nothing new, the run stops after the
-fetch unless a publish is pending. Every run
+Run it from the VS Code terminal whenever you want; register_refresh_task.ps1
+schedules the current-season refresh daily at 06:00. When the API returned
+nothing new, the run stops after the fetch unless a publish is pending. Every run
 writes one log file to logs/refresh/ and ends with a summary.
 
     python pipeline.py                     # current EuroLeague season

@@ -42,10 +42,10 @@ established by the warehouse remains marked as such.
 
 - **Season, clubs, people and registration:** [seasons](#seasons), [clubs](#clubs), [people](#people), [registrations](#registrations), [rounds](#rounds).
 - **Fixtures and official box scores:** [games](#games), [game_officials](#game_officials), [game_period_scores](#game_period_scores), [game_player_stats](#game_player_stats), [game_team_stats](#game_team_stats), [game_stat_gaps](#game_stat_gaps).
-- **API player and team season statistics:** [season_player_stats_traditional](#season_player_stats_traditional), [season_player_stats_advanced](#season_player_stats_advanced), [season_player_stats_scoring](#season_player_stats_scoring), [season_player_stats_misc](#season_player_stats_misc), [season_team_stats_traditional](#season_team_stats_traditional), [season_team_stats_advanced](#season_team_stats_advanced), [season_team_stats_opponents_traditional](#season_team_stats_opponents_traditional), [season_team_stats_opponents_advanced](#season_team_stats_opponents_advanced).
+- **API player and team season statistics:** [season_player_stats_traditional](#season_player_stats_traditional), [season_player_stats_advanced](#season_player_stats_advanced), [season_player_stats_scoring](#season_player_stats_scoring), [season_player_stats_misc](#season_player_stats_misc), [season_team_stats_traditional](#season_team_stats_traditional), [season_team_stats_advanced](#season_team_stats_advanced).
 - **Official standings and child rows:** [standings_basic](#standings_basic), [standings_calendar](#standings_calendar), [standings_streaks](#standings_streaks), [standings_ahead_behind](#standings_ahead_behind), [standings_margins](#standings_margins), [standings_calendar_streaks](#standings_calendar_streaks), [standings_basic_form](#standings_basic_form).
 - **Live events and shots:** [play_by_play](#play_by_play), [shots](#shots).
-- **Calculated game tables:** [game_team_advanced](#game_team_advanced), [game_player_advanced](#game_player_advanced), [game_team_possessions](#game_team_possessions), [game_team_score_flow](#game_team_score_flow), [game_team_shot_splits](#game_team_shot_splits), [game_team_shot_zones](#game_team_shot_zones), [game_player_on_court](#game_player_on_court), [game_team_lineup_stints](#game_team_lineup_stints).
+- **Calculated game tables:** [game_team_advanced](#game_team_advanced), [game_player_advanced](#game_player_advanced), [game_team_possessions](#game_team_possessions), [game_team_score_flow](#game_team_score_flow), [game_team_shot_splits](#game_team_shot_splits), [game_player_on_court](#game_player_on_court), [game_team_lineup_stints](#game_team_lineup_stints).
 - **Load metadata:** [load_log](#load_log).
 
 ## seasons
@@ -135,7 +135,7 @@ established by the warehouse remains marked as such.
 
 **Primary key:** `competition_code`, `season_code`, `person_key`.
 
-**Upstream:** `v2/season_people_pages/offset_* and v2/rosters/{club}`.
+**Upstream:** `v2/season_people_pages/offset_*`.
 
 **Producer:** [postgres_etl/raw_transform.py](../postgres_etl/raw_transform.py).
 
@@ -180,7 +180,7 @@ established by the warehouse remains marked as such.
 
 **Primary key:** `competition_code`, `season_code`, `registration_key`.
 
-**Upstream:** `v2/season_people_pages/offset_* and v2/rosters/{club}`.
+**Upstream:** `v2/season_people_pages/offset_*`.
 
 **Producer:** [postgres_etl/raw_transform.py](../postgres_etl/raw_transform.py).
 
@@ -259,7 +259,7 @@ established by the warehouse remains marked as such.
 
 **Producer:** [postgres_etl/raw_transform.py](../postgres_etl/raw_transform.py).
 
-**Gold use:** [`app_games`](GOLD_TABLE_REFERENCE.md#app_games); team/player round tables, standings_stats, coverage, records, postseason_series and event/lineup aggregates.
+**Gold use:** [`app_games`](GOLD_TABLE_REFERENCE.md#app_games); team/player round tables, standings_stats, records, postseason_series and event/lineup aggregates.
 
 **Notes:** Unknown attendance zero becomes NULL with a note. Future scores stay NULL. Source local/road does not imply a non-neutral venue.
 
@@ -748,20 +748,20 @@ established by the warehouse remains marked as such.
 
 **Primary key:** `competition_code`, `season_code`, `phase_code`, `mode`, `club_code`.
 
-**Upstream:** `v3/season_stats/teams_traditional_{phase}_{mode}`.
+**Upstream:** `v3/season_stats/teams_traditional_{phase}_accumulated` (the per-game mode is not loaded).
 
 **Producer:** [postgres_etl/raw_transform.py](../postgres_etl/raw_transform.py).
 
 **Gold use:** No direct projection; API cross-checks for calculated round statistics.
 
-**Notes:** Local-only API reference feed, no direct Gold/Neon table. Current Gold cross-checks read own-team traditional/advanced accumulated feeds; opponent feeds are retained references. Do not substitute source ratio definitions for calculated Gold ratios.
+**Notes:** Local-only API reference feed, no direct Gold/Neon table. Gold's API cross-check reads it; only the accumulated mode is loaded. Do not substitute source ratio definitions for calculated Gold ratios.
 
 | Column | PostgreSQL type | Nullable | Key | Source / derivation | Description |
 | --- | --- | --- | --- | --- | --- |
 | `competition_code` | `TEXT` | No | PK | `@competition_code` | Competition identifier; this catalog covers EuroLeague rows with E. |
 | `season_code` | `TEXT` | No | PK | `@season_code` | Starting-year EuroLeague season code, for example E2025 for 2025-26. |
 | `phase_code` | `TEXT` | No | PK | `@phase_code` | Source phase code such as RS, TS, PI, PO or FF; season statistics also have all. Silver adds no synthetic PS rows. |
-| `mode` | `TEXT` | No | PK | `@mode` | accumulated or perGame as provided by the API; Silver does not synthesize missing perGame rows. |
+| `mode` | `TEXT` | No | PK | `@mode` | Always `accumulated`; the per-game team feed is not loaded. |
 | `club_code` | `TEXT` | No | PK | `@club_code` | Club code for this row; joins clubs using competition_code, season_code and club_code. |
 | `club_name` | `TEXT` | Yes |  | `team.name` | Club display name for this season or row. |
 | `club_tv_codes` | `TEXT` | Yes |  | `team.tvCodes` | Source team television abbreviations. |
@@ -803,122 +803,20 @@ established by the warehouse remains marked as such.
 
 **Primary key:** `competition_code`, `season_code`, `phase_code`, `mode`, `club_code`.
 
-**Upstream:** `v3/season_stats/teams_advanced_{phase}_{mode}`.
+**Upstream:** `v3/season_stats/teams_advanced_{phase}_accumulated` (the per-game mode is not loaded).
 
 **Producer:** [postgres_etl/raw_transform.py](../postgres_etl/raw_transform.py).
 
 **Gold use:** No direct projection; API cross-checks for calculated round statistics.
 
-**Notes:** Local-only API reference feed, no direct Gold/Neon table. Current Gold cross-checks read own-team traditional/advanced accumulated feeds; opponent feeds are retained references. Do not substitute source ratio definitions for calculated Gold ratios.
+**Notes:** Local-only API reference feed, no direct Gold/Neon table. Gold's API cross-check reads it; only the accumulated mode is loaded. Do not substitute source ratio definitions for calculated Gold ratios.
 
 | Column | PostgreSQL type | Nullable | Key | Source / derivation | Description |
 | --- | --- | --- | --- | --- | --- |
 | `competition_code` | `TEXT` | No | PK | `@competition_code` | Competition identifier; this catalog covers EuroLeague rows with E. |
 | `season_code` | `TEXT` | No | PK | `@season_code` | Starting-year EuroLeague season code, for example E2025 for 2025-26. |
 | `phase_code` | `TEXT` | No | PK | `@phase_code` | Source phase code such as RS, TS, PI, PO or FF; season statistics also have all. Silver adds no synthetic PS rows. |
-| `mode` | `TEXT` | No | PK | `@mode` | accumulated or perGame as provided by the API; Silver does not synthesize missing perGame rows. |
-| `club_code` | `TEXT` | No | PK | `@club_code` | Club code for this row; joins clubs using competition_code, season_code and club_code. |
-| `club_name` | `TEXT` | Yes |  | `team.name` | Club display name for this season or row. |
-| `club_tv_codes` | `TEXT` | Yes |  | `team.tvCodes` | Source team television abbreviations. |
-| `club_image_url` | `TEXT` | Yes |  | `team.imageUrl` | Source team image URL for the season feed. |
-| `team_ranking` | `INTEGER` | Yes |  | `teamRanking` | API team leaderboard ranking in the selected feed, phase and mode. |
-| `games_played` | `NUMERIC` | Yes |  | `gamesPlayed` | Source games count within the selected phase and mode; no Silver-derived season snapshots. |
-| `effective_field_goal_percentage` | `NUMERIC` | Yes |  | `effectiveFieldGoalPercentage` | API eFG percentage on the 0-100 scale; calculated efg_pct uses a fraction instead. |
-| `true_shooting_percentage` | `NUMERIC` | Yes |  | `trueShootingPercentage` | API true-shooting percentage on the 0-100 scale; calculated ts_pct/true_shooting_pct use fractions. |
-| `offensive_rebounds_percentage` | `NUMERIC` | Yes |  | `offensiveReboundsPercentage` | API offensive rebound percentage on the 0-100 scale, retaining source team-minute conventions. |
-| `defensive_rebounds_percentage` | `NUMERIC` | Yes |  | `defensiveReboundsPercentage` | API defensive rebound percentage on the 0-100 scale, retaining source team-minute conventions. |
-| `rebounds_percentage` | `NUMERIC` | Yes |  | `reboundsPercentage` | API total rebound percentage on the 0-100 scale, retaining source team-minute conventions. |
-| `assists_to_turnovers_ratio` | `NUMERIC` | Yes |  | `assistsToTurnoversRatio` | API assists-to-turnovers ratio (AST/TOV), retained as supplied including source zero-denominator handling. |
-| `assists_ratio` | `NUMERIC` | Yes |  | `assistsRatio` | API assists ratio, retained without recomputation; denominator differs from calculated assist_ratio/ast_pct. |
-| `turnovers_ratio` | `NUMERIC` | Yes |  | `turnoversRatio` | API turnovers ratio, retained without recomputation; not calculated tov_pct. |
-| `two_point_rate` | `NUMERIC` | Yes |  | `twoPointRate` | API two-point rate; denominator and scale are not established by the warehouse. |
-| `three_point_rate` | `NUMERIC` | Yes |  | `threePointRate` | API three-point rate; denominator and scale are not established by the warehouse. |
-| `free_throws_rate` | `NUMERIC` | Yes |  | `freeThrowsRate` | API free-throw rate; definition differs from calculated FTM/FGA ft_rate. Do not substitute it. |
-| `points_from_two_pointers_percentage` | `NUMERIC` | Yes |  | `pointsFromTwoPointersPercentage` | API percentage of points from two-pointers, 0-100 scale. |
-| `points_from_three_pointers_percentage` | `NUMERIC` | Yes |  | `pointsFromThreePointersPercentage` | API percentage of points from three-pointers, 0-100 scale. |
-| `points_from_free_throws_percentage` | `NUMERIC` | Yes |  | `pointsFromFreeThrowsPercentage` | API percentage of points from free throws, 0-100 scale. |
-| `load_id` | `UUID` | No |  | Load writer | UUID of the successful table/competition/season replacement; joins load_log with the table name and scope. |
-| `loaded_at` | `TIMESTAMPTZ` | No |  | Load writer | UTC load timestamp shared by rows written by this replacement; not the source fetch time. |
-
-[Silver catalog](SILVER_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
-
-## season_team_stats_opponents_traditional
-
-**Purpose:** Source opponent traditional reference statistics.
-
-**Grain:** one club-phase-mode.
-
-**Primary key:** `competition_code`, `season_code`, `phase_code`, `mode`, `club_code`.
-
-**Upstream:** `v3/season_stats/teams_opponents_traditional_{phase}_{mode}`.
-
-**Producer:** [postgres_etl/raw_transform.py](../postgres_etl/raw_transform.py).
-
-**Gold use:** No direct projection; retained opponent reference, not read by current Gold round API checks.
-
-**Notes:** Local-only API reference feed, no direct Gold/Neon table. Current Gold cross-checks read own-team traditional/advanced accumulated feeds; opponent feeds are retained references. Do not substitute source ratio definitions for calculated Gold ratios.
-
-| Column | PostgreSQL type | Nullable | Key | Source / derivation | Description |
-| --- | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | `@competition_code` | Competition identifier; this catalog covers EuroLeague rows with E. |
-| `season_code` | `TEXT` | No | PK | `@season_code` | Starting-year EuroLeague season code, for example E2025 for 2025-26. |
-| `phase_code` | `TEXT` | No | PK | `@phase_code` | Source phase code such as RS, TS, PI, PO or FF; season statistics also have all. Silver adds no synthetic PS rows. |
-| `mode` | `TEXT` | No | PK | `@mode` | accumulated or perGame as provided by the API; Silver does not synthesize missing perGame rows. |
-| `club_code` | `TEXT` | No | PK | `@club_code` | Club code for this row; joins clubs using competition_code, season_code and club_code. |
-| `club_name` | `TEXT` | Yes |  | `team.name` | Club display name for this season or row. |
-| `club_tv_codes` | `TEXT` | Yes |  | `team.tvCodes` | Source team television abbreviations. |
-| `club_image_url` | `TEXT` | Yes |  | `team.imageUrl` | Source team image URL for the season feed. |
-| `team_ranking` | `INTEGER` | Yes |  | `teamRanking` | API team leaderboard ranking in the selected feed, phase and mode. |
-| `games_played` | `NUMERIC` | Yes |  | `gamesPlayed` | Source games count within the selected phase and mode; no Silver-derived season snapshots. |
-| `minutes_played` | `NUMERIC` | Yes |  | `minutesPlayed` | Playing time in minutes in season feeds; traditional perGame rows use minutes per appearance. |
-| `points` | `NUMERIC` | Yes |  | `pointsScored` | Scored points; in shots this is points awarded for that shot, and in zone tables points from the zone. |
-| `two_pointers_made` | `NUMERIC` | Yes |  | `twoPointersMade` | Successful two-point field goals (2PM). |
-| `two_pointers_attempted` | `NUMERIC` | Yes |  | `twoPointersAttempted` | Two-point field-goal attempts (2PA), including makes. |
-| `two_pointers_percentage` | `NUMERIC` | Yes |  | `twoPointersPercentage` | Two-point shooting percentage, 100 * 2PM / 2PA, on the feed's 0-100 scale. |
-| `three_pointers_made` | `NUMERIC` | Yes |  | `threePointersMade` | Successful three-point field goals (3PM). |
-| `three_pointers_attempted` | `NUMERIC` | Yes |  | `threePointersAttempted` | Three-point field-goal attempts (3PA), including makes. |
-| `three_pointers_percentage` | `NUMERIC` | Yes |  | `threePointersPercentage` | Three-point shooting percentage, 100 * 3PM / 3PA, on the feed's 0-100 scale. |
-| `free_throws_made` | `NUMERIC` | Yes |  | `freeThrowsMade` | Successful free throws (FTM). |
-| `free_throws_attempted` | `NUMERIC` | Yes |  | `freeThrowsAttempted` | Free-throw attempts (FTA), including makes. |
-| `free_throws_percentage` | `NUMERIC` | Yes |  | `freeThrowsPercentage` | Free-throw shooting percentage, 100 * FTM / FTA, on the feed's 0-100 scale. |
-| `offensive_rebounds` | `NUMERIC` | Yes |  | `offensiveRebounds` | Rebounds recovered after the player's or club's missed shot (OREB). |
-| `defensive_rebounds` | `NUMERIC` | Yes |  | `defensiveRebounds` | Rebounds recovered after the opponent's missed shot (DREB). |
-| `total_rebounds` | `NUMERIC` | Yes |  | `totalRebounds` | Offensive plus defensive rebounds (REB); official team totals can include team rebounds. |
-| `assists` | `NUMERIC` | Yes |  | `assists` | Official credited assists (AST), including EuroLeague assists that lead to free throws. |
-| `steals` | `NUMERIC` | Yes |  | `steals` | Official credited steals (STL). |
-| `turnovers` | `NUMERIC` | Yes |  | `turnovers` | Lost possessions charged to the player or team (TOV). |
-| `blocks` | `NUMERIC` | Yes |  | `blocks` | Opponent field-goal attempts blocked by the player or team (BLK). |
-| `blocks_against` | `NUMERIC` | Yes |  | `blocksAgainst` | The player's or team's field-goal attempts blocked by opponents. |
-| `fouls_committed` | `NUMERIC` | Yes |  | `foulsCommited` | Personal fouls charged to the player or team (PF). |
-| `fouls_drawn` | `NUMERIC` | Yes |  | `foulsDrawn` | Opponent fouls drawn by the player or team. |
-| `pir` | `NUMERIC` | Yes |  | `pir` | Official Performance Index Rating; source valuation, distinct from PER and Game Score. See player glossary. |
-| `load_id` | `UUID` | No |  | Load writer | UUID of the successful table/competition/season replacement; joins load_log with the table name and scope. |
-| `loaded_at` | `TIMESTAMPTZ` | No |  | Load writer | UTC load timestamp shared by rows written by this replacement; not the source fetch time. |
-
-[Silver catalog](SILVER_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
-
-## season_team_stats_opponents_advanced
-
-**Purpose:** Source opponent advanced reference statistics.
-
-**Grain:** one club-phase-mode.
-
-**Primary key:** `competition_code`, `season_code`, `phase_code`, `mode`, `club_code`.
-
-**Upstream:** `v3/season_stats/teams_opponents_advanced_{phase}_{mode}`.
-
-**Producer:** [postgres_etl/raw_transform.py](../postgres_etl/raw_transform.py).
-
-**Gold use:** No direct projection; retained opponent reference, not read by current Gold round API checks.
-
-**Notes:** Local-only API reference feed, no direct Gold/Neon table. Current Gold cross-checks read own-team traditional/advanced accumulated feeds; opponent feeds are retained references. Do not substitute source ratio definitions for calculated Gold ratios.
-
-| Column | PostgreSQL type | Nullable | Key | Source / derivation | Description |
-| --- | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | `@competition_code` | Competition identifier; this catalog covers EuroLeague rows with E. |
-| `season_code` | `TEXT` | No | PK | `@season_code` | Starting-year EuroLeague season code, for example E2025 for 2025-26. |
-| `phase_code` | `TEXT` | No | PK | `@phase_code` | Source phase code such as RS, TS, PI, PO or FF; season statistics also have all. Silver adds no synthetic PS rows. |
-| `mode` | `TEXT` | No | PK | `@mode` | accumulated or perGame as provided by the API; Silver does not synthesize missing perGame rows. |
+| `mode` | `TEXT` | No | PK | `@mode` | Always `accumulated`; the per-game team feed is not loaded. |
 | `club_code` | `TEXT` | No | PK | `@club_code` | Club code for this row; joins clubs using competition_code, season_code and club_code. |
 | `club_name` | `TEXT` | Yes |  | `team.name` | Club display name for this season or row. |
 | `club_tv_codes` | `TEXT` | Yes |  | `team.tvCodes` | Source team television abbreviations. |
@@ -1520,37 +1418,6 @@ established by the warehouse remains marked as such.
 
 [Silver catalog](SILVER_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
 
-## game_team_shot_zones
-
-**Purpose:** Field-goal attempts, makes and points by source zone.
-
-**Grain:** one side-zone-game.
-
-**Primary key:** `competition_code`, `season_code`, `game_code`, `side`, `zone`.
-
-**Upstream:** `games, shots`.
-
-**Producer:** [postgres_etl/shot_zones.py](../postgres_etl/shot_zones.py).
-
-**Gold use:** [`app_game_team_shot_zones`](GOLD_TABLE_REFERENCE.md#app_game_team_shot_zones); app_team_shot_zone_stats.
-
-**Notes:** Field goals with a nonempty zone only. Zones with no attempts have no row.
-
-| Column | PostgreSQL type | Nullable | Key | Source / derivation | Description |
-| --- | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | Derived from Silver | Competition identifier; this catalog covers EuroLeague rows with E. |
-| `season_code` | `TEXT` | No | PK | Derived from Silver | Starting-year EuroLeague season code, for example E2025 for 2025-26. |
-| `game_code` | `INTEGER` | No | PK | Derived from Silver | Game identifier within competition and season, not globally unique. |
-| `side` | `TEXT` | No | PK | Derived from Silver | Source side, local or road; local is not proof of a non-neutral home venue. |
-| `zone` | `TEXT` | No | PK | Derived from Silver | Source shot-zone label, preserved without a warehouse court taxonomy. |
-| `club_code` | `TEXT` | Yes |  | Derived from Silver | Club code for this row; joins clubs using competition_code, season_code and club_code. |
-| `attempts` | `INTEGER` | Yes |  | Derived from Silver | Field-goal attempts in this source zone, including makes. |
-| `made` | `INTEGER` | Yes |  | Derived from Silver | Successful field goals in this source zone. |
-| `points` | `INTEGER` | Yes |  | Derived from Silver | Scored points; in shots this is points awarded for that shot, and in zone tables points from the zone. |
-| `load_id` | `UUID` | No |  | Load writer | UUID of the successful table/competition/season replacement; joins load_log with the table name and scope. |
-| `loaded_at` | `TIMESTAMPTZ` | No |  | Load writer | UTC load timestamp shared by rows written by this replacement; not the source fetch time. |
-
-[Silver catalog](SILVER_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
 
 ## game_player_on_court
 

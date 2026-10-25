@@ -24,9 +24,9 @@ PLAYER_STATS_FLAGS = (
 )
 FLAG_DEFAULTS = {"is_calculated": "false", "min_games": "0", "qualified": "false"}
 TABLES = {name: SILVER_TABLES[name] for name in SOURCE_NAMES}
-# Feature 30i: the per-game play-by-play Silver tables, copied to Gold unchanged.
-GAME_PBP_NAMES = ("game_team_possessions", "game_team_score_flow",
-                  "game_team_shot_splits", "game_team_shot_zones")
+# Feature 30i: the per-game play-by-play Silver tables, copied to Gold unchanged. The
+# official A-J shot zones are no longer copied; the app derives its zones from app_shots.
+GAME_PBP_NAMES = ("game_team_possessions", "game_team_score_flow", "game_team_shot_splits")
 GAME_PBP_TABLES = {name: ADVANCED_TABLES[name] for name in GAME_PBP_NAMES}
 # Feature 30j: on-court intervals, lineup stints and stat gaps, copied the same way.
 GAME_COURT_NAMES = ("game_player_on_court", "game_team_lineup_stints", "game_stat_gaps")
@@ -99,15 +99,6 @@ TEAM_FIELDS = SCOPE + (
 TEAM_SEASON_TABLE = Table(
     "team_season_stats", ("competition_code", "season_code", "phase_code", "club_code"),
     TEAM_FIELDS,
-)
-COVERAGE_SEASON_TABLE = Table(
-    "coverage_seasons", ("competition_code", "season_code"),
-    SCOPE + (Field("items", "JSONB NOT NULL", "silver"),),
-)
-COVERAGE_GAME_TABLE = Table(
-    "coverage_games", ("competition_code", "season_code", "game_code"),
-    SCOPE + (Field("game_code", "INTEGER NOT NULL", "games.game_code"),
-             Field("items", "JSONB NOT NULL", "silver")),
 )
 RECORDS_KEY = ("competition_code", "metric", "rank_ordinal")
 RECORDS_BASE = (
@@ -188,8 +179,7 @@ IDENTITY_TABLES = {
         Field("seasons_played", "INTEGER NOT NULL", "clubs"),
     )),
 }
-AGGREGATE_NAMES = ("app_team_season_stats", "app_coverage_seasons",
-                   "app_coverage_games")
+AGGREGATE_NAMES = ("app_team_season_stats",)
 # The Gold tables of features 26-29: excluded from DERIVED_NAMES, added to the Neon
 # allowlist in neon_publish/contract.py as NEW_TABLES (feature 30g).
 ROUND_MEASURES = (
@@ -197,17 +187,18 @@ ROUND_MEASURES = (
     "free_throws_made", "free_throws_attempted", "offensive_rebounds",
     "defensive_rebounds", "turnovers", "assists",
 )
-ROUND_NAMES = ("team_round_stats", "team_round_ratings", "team_round_splits",
-               "player_round_stats", "player_round_ratings", "player_round_win_shares",
-               "app_standings_stats", "team_pbp_stats", "team_shot_zone_stats",
+ROUND_NAMES = ("player_round_stats", "player_round_ratings", "player_round_win_shares",
+               "app_standings_stats", "team_pbp_stats",
                "player_on_off", "lineup_ratings", "player_rapm")
-PBP_NAMES = ("team_pbp_stats", "team_shot_zone_stats")
+PBP_NAMES = ("team_pbp_stats",)
 WINDOWS = (5, 10)
 SPLIT_GROUPS = ("home", "away", *(f"last{size}" for size in WINDOWS))
 SPLIT_MEASURES = ("mov", "offensive_rating", "defensive_rating", "net_rating", "pace")
 # Feature 30h: per-game advanced tables, published to Neon as app_game_*_advanced.
 GAME_ADVANCED_NAMES = ("game_player_advanced", "game_team_advanced")
 SEASON_DERIVED_NAMES = AGGREGATE_NAMES + ROUND_NAMES + GAME_ADVANCED_NAMES
+# The three team round tables are intermediate steps of app_standings_stats: their rows are
+# derived in memory and merged, and they are neither stored in Gold nor published.
 TEAM_ROUND_TABLE = Table(
     "team_round_stats",
     ("competition_code", "season_code", "scope", "round_number", "club_code"),
@@ -364,17 +355,6 @@ TEAM_PBP_TABLE = Table(
     ) + tuple(Field(name, "INTEGER" if name in TEAM_PBP_INTEGERS else "NUMERIC", "derived")
               for name in TEAM_PBP_COLUMNS),
 )
-ZONE_ADDITIVE = ("attempts", "made", "points")
-TEAM_ZONE_TABLE = Table(
-    "team_shot_zone_stats",
-    ("competition_code", "season_code", "scope", "club_code", "zone"),
-    SCOPE + (
-        Field("scope", "TEXT NOT NULL", "games.phase_code"),
-        Field("club_code", "TEXT NOT NULL", "game_team_shot_zones.club_code"),
-        Field("zone", "TEXT NOT NULL", "game_team_shot_zones.zone"),
-    ) + tuple(Field(name, "INTEGER", "game_team_shot_zones") for name in ZONE_ADDITIVE)
-      + tuple(Field(name, "NUMERIC", "derived") for name in ("fg_pct", "attempt_share")),
-)
 
 # Player on/off (feature 29b): per club and scope from the lineup stints of 29b.
 ON_OFF_ADDITIVE = tuple(f"{state}_{column}" for state in ("on", "off") for column in (
@@ -397,7 +377,6 @@ PLAYER_ON_OFF_TABLE = Table(
 # Lineup ratings (feature 29c): 2, 3 and 5-man groups per club and scope from the same stints.
 LINEUP_MEASURES = ("seconds", "possessions_for", "possessions_against", "points_for",
                    "points_against")
-LINEUP_SIZES = (2, 3, 5)
 LINEUP_RATINGS_TABLE = Table(
     "lineup_ratings",
     ("competition_code", "season_code", "scope", "club_code", "lineup_size", "lineup"),
@@ -464,17 +443,12 @@ DERIVED_NAMES = ("app_standings", *AGGREGATE_NAMES,
                  *RECORDS_TABLES, "app_postseason_series", *IDENTITY_TABLES)
 GOLD_TABLES = {**COPIED_TABLES, "app_standings": STANDINGS_TABLE,
                "app_team_season_stats": TEAM_SEASON_TABLE,
-               "app_coverage_seasons": COVERAGE_SEASON_TABLE,
-               "app_coverage_games": COVERAGE_GAME_TABLE,
                **RECORDS_TABLES, "app_postseason_series": SERIES_TABLE,
-               **IDENTITY_TABLES, "team_round_stats": TEAM_ROUND_TABLE,
-               "team_round_ratings": TEAM_RATINGS_TABLE,
-               "team_round_splits": TEAM_SPLITS_TABLE,
-               "player_round_stats": PLAYER_ROUND_TABLE,
+               **IDENTITY_TABLES, "player_round_stats": PLAYER_ROUND_TABLE,
                "player_round_ratings": PLAYER_RATINGS_TABLE,
                "player_round_win_shares": PLAYER_WIN_SHARES_TABLE,
                "app_standings_stats": STANDINGS_STATS_TABLE,
-               "team_pbp_stats": TEAM_PBP_TABLE, "team_shot_zone_stats": TEAM_ZONE_TABLE,
+               "team_pbp_stats": TEAM_PBP_TABLE,
                "player_on_off": PLAYER_ON_OFF_TABLE,
                "lineup_ratings": LINEUP_RATINGS_TABLE,
                "player_rapm": PLAYER_RAPM_TABLE,

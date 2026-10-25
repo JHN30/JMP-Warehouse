@@ -32,8 +32,8 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(APP_TABLES,
                          SOURCE_NAMES + DERIVED_NAMES + ROUND_NAMES + GAME_ADVANCED_NAMES
                          + GAME_PBP_NAMES + GAME_COURT_NAMES)
-        self.assertEqual(len(APP_TABLES), 47)
-        self.assertEqual(len({target_name(name) for name in APP_TABLES}), 47)
+        self.assertEqual(len(APP_TABLES), 40)
+        self.assertEqual(len({target_name(name) for name in APP_TABLES}), 40)
         self.assertEqual(len(GLOBAL_TABLES), 5)
         self.assertEqual(set(APP_TABLES), set(GOLD_TABLES))
         for name in APP_TABLES:
@@ -128,8 +128,11 @@ class NewTableTests(unittest.TestCase):
              "TIMESTAMPTZ": "timestamp with time zone"}
 
     def test_targets_and_scopes(self):
-        self.assertEqual(len(NEW_TABLES), 12)
-        self.assertEqual(target_name("app_team_round_stats"), "app_team_round_stats")
+        self.assertEqual(len(NEW_TABLES), 8)
+        for retired in ("app_team_round_stats", "app_team_round_ratings",
+                        "app_team_round_splits", "app_team_shot_zone_stats"):
+            with self.assertRaises(ValueError):
+                target_name(retired)
         self.assertEqual(target_name("app_standings_stats"), "app_standings_stats")
         self.assertEqual(target_name("app_player_rapm"), "app_player_rapm")
         for name in NEW_TABLES:
@@ -139,16 +142,20 @@ class NewTableTests(unittest.TestCase):
                              ("public", target_name(name)))
             self.assertEqual(publish._relation(name, "gold").strings, ("gold", name))
 
-    def test_the_migration_file_equals_the_generated_ddl(self):
+    def test_the_migration_file_still_creates_every_current_table(self):
+        # The file also created the retired tables; it stays the record of feature 30g.
         path = Path(__file__).resolve().parents[1] / "migrations" / "30g_new_tables.sql"
-        self.assertEqual(path.read_text(encoding="utf-8"), migration_sql())
+        text = path.read_text(encoding="utf-8")
+        for statement in migration_sql().split("\n\n"):
+            if statement.startswith("CREATE TABLE"):
+                self.assertIn(statement, text)
         self.assertIn("main.py --print-migration; review", migration_sql())
 
     def test_the_ddl_creates_every_new_table_with_its_columns_and_key(self):
         ddl = migration_sql()
         self.assertTrue(ddl.startswith("-- Neon migration for feature 30g"))
         self.assertTrue(ddl.rstrip().endswith("COMMIT;"))
-        self.assertEqual(ddl.count("CREATE TABLE"), 12)
+        self.assertEqual(ddl.count("CREATE TABLE"), 8)
         for name in NEW_TABLES:
             spec = GOLD_TABLES[name]
             self.assertIn(f"CREATE TABLE public.{target_name(name)} (", ddl)
@@ -523,19 +530,23 @@ class GameAdvancedTests(unittest.TestCase):
 
 
 class GamePbpTests(unittest.TestCase):
-    """The four per-game play-by-play tables added in 30i."""
+    """The per-game play-by-play tables added in 30i, less the retired shot zones."""
 
     def test_targets_scope_and_migration_file(self):
         self.assertEqual([target_name(name) for name in GAME_PBP_TABLES],
                          ["app_game_team_possessions", "app_game_team_score_flow",
-                          "app_game_team_shot_splits", "app_game_team_shot_zones"])
+                          "app_game_team_shot_splits"])
         for name in GAME_PBP_TABLES:
             self.assertEqual(scope(name, "E", "E2026"), ("E", "E2026"))
         path = Path(__file__).resolve().parents[1] / "migrations" / "30i_game_play_by_play.sql"
+        text = path.read_text(encoding="utf-8")
         ddl = migration_sql(GAME_PBP_TABLES, "30i")
-        self.assertEqual(path.read_text(encoding="utf-8"), ddl)
-        self.assertEqual(ddl.count("CREATE TABLE"), 4)
-        self.assertIn("PRIMARY KEY (competition_code, season_code, game_code, side, zone)", ddl)
+        for statement in ddl.split("\n\n"):
+            if statement.startswith("CREATE TABLE"):
+                self.assertIn(statement, text)
+        self.assertEqual(ddl.count("CREATE TABLE"), 3)
+        self.assertNotIn("app_game_team_shot_zones", ddl)
+        self.assertIn("CREATE TABLE public.app_game_team_shot_zones (", text)
         self.assertIn("main.py --print-migration 30i; review", ddl)
         self.assertNotIn("GRANT", ddl)
 
@@ -580,7 +591,7 @@ class CliTests(unittest.TestCase):
               mock.patch("neon_publish.main.neon_connect") as remote,
               mock.patch("sys.stdout", new_callable=io.StringIO) as output):
             self.assertEqual(publish_main(["--list-tables"]), 0)
-        self.assertEqual(len(output.getvalue().splitlines()), 47)
+        self.assertEqual(len(output.getvalue().splitlines()), 40)
         local.assert_not_called()
         remote.assert_not_called()
 

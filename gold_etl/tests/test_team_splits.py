@@ -4,7 +4,8 @@ import unittest
 from decimal import Decimal
 from unittest.mock import patch
 
-from gold_etl.schema import columns
+from gold_etl.schema import TEAM_SPLITS_TABLE
+from gold_etl.standings_stats import derive_rows as standings_rows
 from gold_etl.team_rounds import derive_rows as stats_rows
 from gold_etl.team_splits import derive_rows
 
@@ -46,7 +47,7 @@ class HomeAwayTests(unittest.TestCase):
         self.assertEqual([(r["scope"], r["round_number"], r["club_code"]) for r in rows],
                          [(r["scope"], r["round_number"], r["club_code"]) for r in expected])
         self.assertEqual(set(rows[0]) | {"competition_code", "season_code"},
-                         set(columns("team_round_splits")))
+                         {field.name for field in TEAM_SPLITS_TABLE.fields})
         self.assertEqual({r["scope"] for r in rows}, {"all", "RS", "PO", "PS"})
 
     def test_home_and_away_values_from_the_local_and_road_sides(self):
@@ -153,29 +154,7 @@ class FakeConnection:
         return False
 
 
-def stored_row():
-    return dict(derive(BASIC)[0], competition_code="E", season_code="E2025")
-
-
-class StorageTests(unittest.TestCase):
-    def test_replace_is_scoped_atomic_and_rolls_back(self):
-        from gold_etl.loader import replace_aggregate_scope
-
-        db = FakeConnection()
-        with patch("gold_etl.loader.read_aggregate_rows", return_value=[stored_row()]), \
-                patch("psycopg2.extras.execute_values") as insert:
-            self.assertEqual(replace_aggregate_scope(db, "team_round_splits", "E", "E2025"), 1)
-        self.assertEqual((db.commits, db.rollbacks), (1, 0))
-        self.assertTrue(any(query.startswith('DELETE FROM gold."app_team_round_splits"')
-                            and params == ("E", "E2025") for query, params in db.queries))
-        self.assertEqual(insert.call_args.args[2][0][:2], ("E", "E2025"))
-        failing = FakeConnection()
-        with patch("gold_etl.loader.read_aggregate_rows", return_value=[stored_row()]), \
-                patch("psycopg2.extras.execute_values", side_effect=RuntimeError("failed")):
-            with self.assertRaisesRegex(RuntimeError, "failed"):
-                replace_aggregate_scope(failing, "team_round_splits", "E", "E2025")
-        self.assertEqual((failing.commits, failing.rollbacks), (0, 1))
-
+class ReadTests(unittest.TestCase):
     def test_read_rows_uses_the_shared_silver_reader(self):
         from gold_etl import team_splits
 
@@ -183,56 +162,31 @@ class StorageTests(unittest.TestCase):
             rows = team_splits.read_rows(object(), "E", "E2025")
         self.assertEqual(len(rows), len(derive(BASIC)))
 
-    def test_quality_compares_a_fresh_derivation(self):
-        from gold_etl.quality import check_aggregate_scope
-
-        db, expected = FakeConnection(), stored_row()
-        cursor = db.cursor()
-        db.exists = False
-        self.assertEqual(check_aggregate_scope(cursor, "team_round_splits", "E", "E2025"),
-                         ["gold.app_team_round_splits is missing"])
-        db.exists = True
-        with patch("gold_etl.quality.read_aggregate_rows", return_value=[expected]):
-            for actual, message in (([], "keys differ"),
-                                    ([dict(expected, home_wins=9)], "values differ"),
-                                    ([expected], None)):
-                with patch("gold_etl.quality._dict_rows", return_value=actual):
-                    issues = check_aggregate_scope(cursor, "team_round_splits", "E", "E2025")
-                    self.assertEqual(issues == [], message is None)
-                    if message:
-                        self.assertIn(message, issues[0])
-
-
 class ConsistencyTests(unittest.TestCase):
-    def check(self, splits, stats):
+    def check(self, rows):
         from gold_etl.quality import check_round_split_invariants
 
-        with patch("gold_etl.quality._dict_rows", side_effect=[splits, stats]):
+        with patch("gold_etl.quality._dict_rows", return_value=rows):
             return check_round_split_invariants(FakeConnection().cursor(), "E", "E2025")
 
     def data(self):
-        games, stats_input, advanced = season(BASIC)
-        splits = [r for r in derive_rows(games, stats_input, advanced) if r["scope"] == "RS"]
-        stats = stats_rows(games, stats_input, advanced, [])
-        return splits, [r for r in stats if r["scope"] == "RS"]
+        """app_standings_stats rows: splits and cumulative totals in one row."""
+        return [r for r in standings_rows(*season(BASIC), []) if r["scope"] == "RS"]
 
     def test_consistent_rows_pass(self):
-        self.assertEqual(self.check(*self.data()), [])
+        self.assertEqual(self.check(self.data()), [])
 
     def test_games_wins_window_and_mov_mismatches_are_reported(self):
-        splits, stats = self.data()
-        bad = next(r for r in splits if r["round_number"] == 3 and r["club_code"] == "A")
+        rows = self.data()
+        bad = next(r for r in rows if r["round_number"] == 3 and r["club_code"] == "A")
         bad.update(home_games=5, home_wins=5, last5_games=1, last10_mov=Decimal("99"))
-        issues = self.check(splits, stats)
+        issues = self.check(rows)
         text = " | ".join(issues)
         for fragment in ("home + away games", "home + away wins", "last5_games",
                          "last10_mov differs"):
             self.assertIn(fragment, text)
         self.assertTrue(all("RS round 3 A" in issue for issue in issues))
 
-    def test_missing_cumulative_row_is_reported(self):
-        splits, stats = self.data()
-        self.assertIn("no matching team_round_stats row", self.check(splits, stats[1:])[0])
 
 
 if __name__ == "__main__":

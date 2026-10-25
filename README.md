@@ -72,13 +72,13 @@ These commands build the local database. Neon configuration is needed only for t
 ### Core Features
 
 - **API extraction and refresh**
-  Download fixtures, clubs, people, rosters, box scores, standings, season statistics, play-by-play, and shots. Refresh changing current-season data and retain earlier snapshots when the API returns an older or less complete statistics feed.
+  Download fixtures, clubs, people, box scores, standings, season statistics, play-by-play, and shots. Refresh changing current-season data and retain earlier snapshots when the API returns an older or less complete statistics feed.
 
 - **Bronze archive**
   Keep exact response bytes in compressed, versioned files with request manifests. A new version is stored only when the response changes.
 
 - **Silver tables and provenance**
-  Load 28 typed source tables with consistent column names, load IDs, timestamps, and references to the Bronze versions used. Record missing statistics and source problems so they remain visible.
+  Load 26 typed source tables with consistent column names, load IDs, timestamps, and references to the Bronze versions used. Record missing statistics and source problems so they remain visible.
 
 - **Advanced player and team statistics**
   Calculate per-game and cumulative per-round statistics, including possessions, pace, ratings, four factors, player rates, Game Score, PIE, PER, Win Shares, strength-adjusted ratings, and home/away and recent-game splits.
@@ -87,10 +87,10 @@ These commands build the local database. Neon configuration is needed only for t
   Count possessions, measure score flow and clutch results, build shot splits and zones, reconstruct on-court intervals and lineup stints, and calculate on/off, 2/3/5-man lineup ratings, and RAPM.
 
 - **App-ready Gold tables**
-  Build standings, team-season totals, coverage, all-time records, postseason series, cross-season player and club identities, and player ranking qualification fields. Gold also includes the per-game tables needed for game detail pages.
+  Build standings, team-season totals, all-time records, postseason series, cross-season player and club identities, and player ranking qualification fields. Gold also includes the per-game tables needed for game detail pages.
 
 - **Guarded Neon publishing**
-  Publish through 47 fixed Gold-to-Neon mappings, where each local Gold table has the same name as its Neon table, with schema checks, Gold quality checks, row-count checks, and a shrink guard. All selected scopes commit together; a failed publish rolls back.
+  Publish through 40 fixed Gold-to-Neon mappings, where each local Gold table has the same name as its Neon table, with schema checks, Gold quality checks, row-count checks, and a shrink guard. All selected scopes commit together; a failed publish rolls back.
 
 - **CSV export**
   Export every local Silver and Gold table to one CSV file per table, with optional season and table filters, for analysis and import into SQL Server Management Studio.
@@ -119,13 +119,13 @@ CSV export reads both local Silver and Gold tables.
 Key concepts:
 
 - Local EuroLeague history covers E2000 onward, including the current season. Play-by-play and shot-based analytics start at E2007 and depend on source coverage.
-- Local historical coverage is broader than the season data published to Neon. The newer advanced and per-game publishing work was scoped to E2025 and E2026; older-season publishing depends on storage and an approved publishing scope.
+- Neon holds the same seasons as local Gold: E2000 onward, and E2007 onward for play-by-play, shot and lineup tables. The daily refresh publishes the current season.
 - `competition_code` and `season_code` identify season data. Player and club identity tables connect records across seasons.
 - Missing or unrecorded values stay `NULL`. Known gaps and source inconsistencies are reported rather than silently filled with zero.
 - Box-score possession estimates and possessions counted from play-by-play are kept separately.
 - Player season statistics include calculated per-game rows where needed, a minimum-games threshold, and a `qualified` flag for rankings.
 
-Start with the [Gold data catalog](docs/DATA_CATALOG.md) to find tables for the frontend. The [Gold table reference](docs/GOLD_TABLE_REFERENCE.md) documents every column, type and key across all 47 tables. The [statistics glossary](docs/STAT_GLOSSARY.md) separates player and team measures, from points, rebounds and assists to Game Score, PER, Win Shares and RAPM, with formulas, units and source tables.
+Start with the [Gold data catalog](docs/DATA_CATALOG.md) to find tables for the frontend. The [Gold table reference](docs/GOLD_TABLE_REFERENCE.md) documents every column, type and key across all 40 tables. The [statistics glossary](docs/STAT_GLOSSARY.md) separates player and team measures, from points, rebounds and assists to Game Score, PER, Win Shares and RAPM, with formulas, units and source tables.
 
 Trace upstream data with the [Bronze resource catalog](docs/BRONZE_CATALOG.md), [Silver table catalog](docs/SILVER_CATALOG.md), and [Silver column reference](docs/SILVER_TABLE_REFERENCE.md). These catalogs currently document EuroLeague; EuroCup coverage and rule differences will be added when implemented.
 
@@ -155,7 +155,7 @@ python gold_etl/main.py -sc all --dry-run
 python gold_etl/main.py -sc all --quality-only
 
 # Build selected Gold tables
-python gold_etl/main.py -sc E2025 -tb app_team_round_stats app_player_round_stats
+python gold_etl/main.py -sc E2025 -tb app_standings_stats app_player_round_stats
 
 # Inspect publishing mappings and preview one season
 python neon_publish/main.py --list-tables

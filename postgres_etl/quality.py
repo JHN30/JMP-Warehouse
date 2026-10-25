@@ -55,10 +55,11 @@ def scoped_count(table, predicate=None):
     return query + (f" AND ({predicate})" if predicate else "")
 
 
-def season_stats_missing_query(table):
+def season_stats_missing_query(table, modes=("accumulated", "perGame")):
     """Count expected (phase, mode) feeds with no rows. The fetcher requests
-    'all' plus every phase with played games in both modes, and an empty API
+    'all' plus every phase with played games in the given modes, and an empty API
     answer (E2026 'all' perGame) would otherwise load silently."""
+    values = ", ".join(f"('{mode}')" for mode in modes)
     return (
         "WITH scope AS (SELECT %s::text AS competition_code, %s::text AS season_code), "
         "expected AS (SELECT scope.competition_code, scope.season_code, phase.phase_code, "
@@ -68,7 +69,7 @@ def season_stats_missing_query(table):
         "WHERE g.competition_code = scope.competition_code "
         "AND g.season_code = scope.season_code "
         "AND g.played IS TRUE AND g.phase_code IS NOT NULL) AS phase "
-        "CROSS JOIN (VALUES ('accumulated'), ('perGame')) AS mode(mode)) "
+        f"CROSS JOIN (VALUES {values}) AS mode(mode)) "
         "SELECT count(*) FROM expected "
         f'WHERE NOT EXISTS (SELECT 1 FROM "{physical_name(table)}" AS row '
         "WHERE row.competition_code = expected.competition_code "
@@ -235,8 +236,9 @@ def anomaly_checks(names):
                 name, "row.person_key LIKE 'unknown-%%'"), "WARN"))
     for name in (*SEASON_STATS_TABLES, *TEAM_STATS_TABLES):
         if {"games", name} <= names:
+            modes = ("accumulated",) if name in TEAM_STATS_TABLES else ("accumulated", "perGame")
             checks.append(Check("season_stats_phase_mode_missing", name,
-                                season_stats_missing_query(name), "WARN"))
+                                season_stats_missing_query(name, modes), "WARN"))
             checks.append(Check("season_stats_feed_partial", name,
                                 season_stats_partial_query(name), "WARN"))
     if "people" in names:

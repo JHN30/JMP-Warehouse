@@ -66,7 +66,7 @@ class FakeConnection:
 
 class QualityRulesTests(unittest.TestCase):
     def test_partial_stats_feeds_are_warned_for_player_and_team_tables(self):
-        for name in ("season_player_stats_traditional", "season_team_stats_opponents_traditional"):
+        for name in ("season_player_stats_traditional", "season_team_stats_traditional"):
             checks = [check for check in checks_for_tables(["games", name])
                       if check.code == "season_stats_feed_partial"]
             self.assertEqual([(check.table, check.severity) for check in checks],
@@ -79,11 +79,12 @@ class QualityRulesTests(unittest.TestCase):
         self.assertNotIn("season_stats_feed_partial",
                          {check.code for check in checks_for_tables(["season_player_stats_misc"])})
 
-    def test_missing_team_stats_feeds_are_warned_when_games_are_checked(self):
-        checks = [(check.code, check.table, check.severity) for check in
-                  checks_for_tables(["games", "season_team_stats_opponents_advanced"])]
-        self.assertIn(("season_stats_phase_mode_missing", "season_team_stats_opponents_advanced",
-                       "WARN"), checks)
+    def test_missing_team_stats_feeds_expect_only_the_accumulated_mode(self):
+        checks = [check for check in checks_for_tables(["games", "season_team_stats_advanced"])
+                  if check.code == "season_stats_phase_mode_missing"]
+        self.assertEqual([(check.table, check.severity) for check in checks],
+                         [("season_team_stats_advanced", "WARN")])
+        self.assertIn("(VALUES ('accumulated')) AS mode(mode)", checks[0].query)
 
     def test_missing_season_player_stats_feeds_are_warned_when_games_are_checked(self):
         checks = [check for check in checks_for_tables(["games", "season_player_stats_misc"])
@@ -167,7 +168,6 @@ class QualityRulesTests(unittest.TestCase):
         with patch.object(etl_main, "available_seasons", return_value=["E2025"]), \
                 patch.object(etl_main, "FlatDatabaseLoader") as loader, \
                 patch.object(etl_main, "validate_loaded", return_value=True) as validate,                 patch.object(etl_main, "run_advanced", return_value=True),                 patch.object(etl_main, "run_possessions", return_value=True),                 patch.object(etl_main, "run_shot_splits", return_value=True), \
-                patch.object(etl_main, "run_shot_zones", return_value=True), \
                 patch.object(etl_main, "run_score_flow", return_value=True), \
                 patch.object(etl_main, "run_on_court", return_value=True), \
                 patch.object(etl_main, "run_lineups", return_value=True):

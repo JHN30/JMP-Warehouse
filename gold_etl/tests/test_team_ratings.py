@@ -4,7 +4,7 @@ import unittest
 from decimal import Decimal
 from unittest.mock import patch
 
-from gold_etl.schema import columns
+from gold_etl.schema import TEAM_RATINGS_TABLE
 from gold_etl.team_ratings import _solve, derive_rows
 from gold_etl.team_rounds import derive_rows as stats_rows
 
@@ -58,7 +58,7 @@ class RelativeTests(unittest.TestCase):
         self.assertEqual([(r["scope"], r["round_number"], r["club_code"]) for r in rows],
                          [(r["scope"], r["round_number"], r["club_code"]) for r in expected])
         self.assertEqual(set(rows[0]) | {"competition_code", "season_code"},
-                         set(columns("team_round_ratings")))
+                         {field.name for field in TEAM_RATINGS_TABLE.fields})
         self.assertEqual({r["scope"] for r in rows}, {"all", "RS", "PO", "PS"})
 
     def test_league_and_relative_values(self):
@@ -209,29 +209,7 @@ class FakeConnection:
         return False
 
 
-def stored_row():
-    return dict(derive(THREE)[0], competition_code="E", season_code="E2025")
-
-
-class StorageTests(unittest.TestCase):
-    def test_replace_is_scoped_and_atomic_and_rolls_back(self):
-        from gold_etl.loader import replace_aggregate_scope
-
-        db = FakeConnection()
-        with patch("gold_etl.loader.read_aggregate_rows", return_value=[stored_row()]), \
-                patch("psycopg2.extras.execute_values") as insert:
-            self.assertEqual(replace_aggregate_scope(db, "team_round_ratings", "E", "E2025"), 1)
-        self.assertEqual((db.commits, db.rollbacks), (1, 0))
-        self.assertTrue(any(query.startswith('DELETE FROM gold."app_team_round_ratings"')
-                            and params == ("E", "E2025") for query, params in db.queries))
-        self.assertEqual(insert.call_args.args[2][0][:2], ("E", "E2025"))
-        failing = FakeConnection()
-        with patch("gold_etl.loader.read_aggregate_rows", return_value=[stored_row()]), \
-                patch("psycopg2.extras.execute_values", side_effect=RuntimeError("failed")):
-            with self.assertRaisesRegex(RuntimeError, "failed"):
-                replace_aggregate_scope(failing, "team_round_ratings", "E", "E2025")
-        self.assertEqual((failing.commits, failing.rollbacks), (0, 1))
-
+class ReadTests(unittest.TestCase):
     def test_read_rows_uses_the_shared_silver_reader(self):
         from gold_etl import team_ratings
 
@@ -239,57 +217,34 @@ class StorageTests(unittest.TestCase):
             rows = team_ratings.read_rows(object(), "E", "E2025")
         self.assertEqual(len(rows), len(derive(THREE)))
 
-    def test_quality_compares_a_fresh_derivation(self):
-        from gold_etl.quality import check_aggregate_scope
-
-        db, expected = FakeConnection(), stored_row()
-        cursor = db.cursor()
-        db.exists = False
-        self.assertEqual(check_aggregate_scope(cursor, "team_round_ratings", "E", "E2025"),
-                         ["gold.app_team_round_ratings is missing"])
-        db.exists = True
-        with patch("gold_etl.quality.read_aggregate_rows", return_value=[expected]):
-            for actual, message in (([], "keys differ"),
-                                    ([dict(expected, srs=Decimal(9))], "values differ"),
-                                    ([expected], None)):
-                with patch("gold_etl.quality._dict_rows", return_value=actual):
-                    issues = check_aggregate_scope(cursor, "team_round_ratings", "E", "E2025")
-                    self.assertEqual(issues == [], message is None)
-                    if message:
-                        self.assertIn(message, issues[0])
-
-
 class InvariantTests(unittest.TestCase):
-    def check(self, ratings, stats):
+    def check(self, rows):
         from gold_etl.quality import check_round_rating_invariants
 
-        with patch("gold_etl.quality._dict_rows", side_effect=[ratings, stats]):
+        with patch("gold_etl.quality._dict_rows", return_value=rows):
             return check_round_rating_invariants(FakeConnection().cursor(), "E", "E2025")
 
     def rows(self, **changes):
-        ratings = [dict(scope="RS", round_number=3, club_code=club, connected=True,
-                        srs=Decimal(value), adj_net_rating=Decimal(value))
-                   for club, value in (("A", 5), ("B", 0), ("C", -5))]
-        for row in ratings:
+        rows = [dict(scope="RS", round_number=3, club_code=club, connected=True,
+                     srs=Decimal(value), adj_net_rating=Decimal(value), possessions=Decimal(200))
+                for club, value in (("A", 5), ("B", 0), ("C", -5))]
+        for row in rows:
             row.update(changes)
-        stats = [dict(scope="RS", round_number=3, club_code=club, possessions=Decimal(200))
-                 for club in "ABC"]
-        return ratings, stats
+        return rows
 
     def test_balanced_ratings_pass(self):
-        self.assertEqual(self.check(*self.rows()), [])
+        self.assertEqual(self.check(self.rows()), [])
 
     def test_unbalanced_sums_are_reported(self):
-        ratings, stats = self.rows()
-        ratings[0]["srs"] = Decimal(7)
-        ratings[0]["adj_net_rating"] = Decimal(7)
-        issues = self.check(ratings, stats)
+        rows = self.rows()
+        rows[0]["srs"] = Decimal(7)
+        rows[0]["adj_net_rating"] = Decimal(7)
+        issues = self.check(rows)
         self.assertEqual(len(issues), 2)
         self.assertTrue(any("srs" in issue and "RS round 3" in issue for issue in issues))
 
     def test_disconnected_scope_rounds_are_skipped(self):
-        ratings, stats = self.rows(connected=False, srs=None, adj_net_rating=None)
-        self.assertEqual(self.check(ratings, stats), [])
+        self.assertEqual(self.check(self.rows(connected=False, srs=None, adj_net_rating=None)), [])
 
 
 if __name__ == "__main__":

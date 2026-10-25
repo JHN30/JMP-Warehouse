@@ -84,7 +84,7 @@ contains command and refresh details.
 | `v2/clubs` | `clubs`: `GET /v2/competitions/E/seasons/{s}/clubs` | `data[]`: club names, codes, crests, country, contact, venue and sponsor details. | [`clubs`](SILVER_TABLE_REFERENCE.md#clubs) |
 | `v2/rounds` | `rounds`: `GET /v2/competitions/E/seasons/{s}/rounds` | `data[]`: phase, round, index, source name and first/last game dates. | [`rounds`](SILVER_TABLE_REFERENCE.md#rounds) |
 | `v2/season_people_pages/offset_NNNNNN` | `season_people`: `GET /v2/competitions/E/seasons/{s}/people?offset={offset}&limit=1000` | `data[]` plus `total`: registration entries containing person profiles and club/role context. Includes coaches, staff and officials, not only players. | [`people`](SILVER_TABLE_REFERENCE.md#people), [`registrations`](SILVER_TABLE_REFERENCE.md#registrations) |
-| `v2/rosters/{club}` | `rosters`: `GET /v2/competitions/E/seasons/{s}/clubs/{club}/people` | Registration/person entries as `data[]` or a list accepted by the loader. Jersey, position, club, role and registration dates supplement season people. | [`people`](SILVER_TABLE_REFERENCE.md#people), [`registrations`](SILVER_TABLE_REFERENCE.md#registrations) |
+| `v2/rosters/{club}` (archive only; no longer fetched or loaded) | `rosters`: `GET /v2/competitions/E/seasons/{s}/clubs/{club}/people` | Registration/person entries as `data[]` or a list accepted by the loader. Jersey, position, club, role and registration dates supplement season people. | [`people`](SILVER_TABLE_REFERENCE.md#people), [`registrations`](SILVER_TABLE_REFERENCE.md#registrations) |
 | `v2/game_stats/{g}` | `game_stats`: `GET /v2/competitions/E/seasons/{s}/games/{g}/stats` | `local` and `road` objects with `players[]`, `team`, `total`, `coach`. Player entries contain `player` registration/profile context and `stats`. | [`game_player_stats`](SILVER_TABLE_REFERENCE.md#game_player_stats), [`game_team_stats`](SILVER_TABLE_REFERENCE.md#game_team_stats), [`game_stat_gaps`](SILVER_TABLE_REFERENCE.md#game_stat_gaps) |
 
 These sources support E2000 onward subject to actual data. Fixture lists retain
@@ -94,14 +94,17 @@ and Silver records `stat_name = '*'` rather than manufacturing player rows.
 
 People pagination matters: the endpoint can return 500 entries even when asked
 for 1000, so the extractor advances by received entries and checks the reported
-total. Each page has its own exact response version. The loader combines pages
-and club rosters, deduplicates people/registrations and ignores page offsets
-beyond the current reported total. Player-only rosters cannot replace this
-season-wide person inventory.
+total. Each page has its own exact response version. The loader combines the pages,
+deduplicates people/registrations and ignores page offsets beyond the current
+reported total.
+
+Club rosters (`v2/rosters/{club}`) are no longer fetched or loaded. In every season
+E2000-E2026 each roster entry was already in the people pages with identical values, and
+rosters had no extra fields. Older roster versions remain in the archive.
 
 ## v3 player and team season statistics
 
-All eight feeds use dataset `season_stats` and resource pattern
+All six feeds use dataset `season_stats` and resource pattern
 `v3/season_stats/{feed}_{phase}_{mode}`. Responses use `players[]` or `teams[]`;
 each entry combines profile/team context with category measures. The source
 entry order is retained as player `entry_ordinal`; it is not a permanent ID.
@@ -116,8 +119,6 @@ That retained source value is not a single club identity for a direct profile jo
 | `players_misc` | `players/misc` | Games, starts, wins/losses, minutes, double/triple doubles. | [`season_player_stats_misc`](SILVER_TABLE_REFERENCE.md#season_player_stats_misc) |
 | `teams_traditional` | `teams/traditional` | Team traditional totals/averages and shooting percentages. | [`season_team_stats_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_traditional) |
 | `teams_advanced` | `teams/advanced` | Team API efficiency, rebound, assist/turnover, shooting mix and scoring-source measures. | [`season_team_stats_advanced`](SILVER_TABLE_REFERENCE.md#season_team_stats_advanced) |
-| `teams_opponents_traditional` | `teams/opponentsTraditional` | What opponents did against the keyed club, traditional measures. | [`season_team_stats_opponents_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_opponents_traditional) |
-| `teams_opponents_advanced` | `teams/opponentsAdvanced` | What opponents did against the keyed club, advanced measures. | [`season_team_stats_opponents_advanced`](SILVER_TABLE_REFERENCE.md#season_team_stats_opponents_advanced) |
 
 Primary query parameters are `SeasonMode=Single`, `SeasonCode={s}`,
 `StatisticMode={mode}`, `Limit=1000`, plus `PhaseTypeCode` for a specific phase.
@@ -125,8 +126,12 @@ The `all` request omits that phase filter. Player queries use `Statistic=timePla
 for traditional/advanced and `gamesPlayed` for scoring/misc, with descending sort
 and `StatisticSortMode={mode}`. Team queries omit those three player sort keys.
 
-The extractor requests all phases and each phase present in played fixtures,
-in both modes, after the season has played games. It can try equivalent Range
+The extractor requests all phases and each phase present in played fixtures
+after the season has played games: the player feeds in both modes, the team feeds
+in accumulated mode only (their only reader is Gold's accumulated API cross-check).
+The opponents feeds (`teams/opponentsTraditional`, `teams/opponentsAdvanced`) and
+team per-game files fetched before 2026-10-25 remain in the archive and are not
+loaded; `app_team_season_stats` holds opponent totals from the box scores. The extractor can try equivalent Range
 query keys when a source snapshot is stale; the resource identity is unchanged.
 The archive retains the response and the request parameters actually used.
 There is no independent pagination loop for these v3 statistics feeds: `Limit=1000`
@@ -184,23 +189,11 @@ Missing clocks, unrecorded flags and unmatched player identities can prevent
 some derived measures even when a response exists. The archive does not fill
 these gaps or standardize a coordinate system.
 
-### Optional live resources (Bronze only)
+### Other live endpoints (not requested)
 
-These four datasets are fetched only when explicitly named with `-ds`, not by
-the default `all`. The current Silver loader has no consumer for them. Their
-payloads are archived without an extracted field contract; inspect the version
-before relying on any nested field. No fabricated SQL table or schema is implied.
-
-| Resource | Dataset | Endpoint | Intended contents |
-| --- | --- | --- | --- |
-| `live/{g}/live_boxscores` | `live_boxscores` | `Boxscore` | Alternate live box-score representation. |
-| `live/{g}/live_evolution` | `live_evolution` | `Evolution` | Score progression representation. |
-| `live/{g}/live_comparison` | `live_comparison` | `Comparison` | Live comparison summaries. |
-| `live/{g}/live_scoring` | `live_scoring` | `ShootingGraphic` | Live scoring-context summaries. |
-
-Game headers, officials, venue and period scores already come from v2 fixtures;
-box scores, score progression and scoring context have primary v2/event/shot
-sources. The extractor does not normally fetch the live Header endpoint.
+The live API's `Boxscore`, `Evolution`, `Comparison`, `ShootingGraphic` and `Header`
+endpoints repeat v2 game data, play-by-play or shots (checked on every E2025 game) and
+are not requested; the extractor has no dataset for them.
 
 ## Refresh and source-quality behavior
 
@@ -208,7 +201,7 @@ sources. The extractor does not normally fetch the live Header endpoint.
 | --- | --- |
 | Season catalog | Cached; refreshed with the extractor's refresh-current option. |
 | Current-season fixtures | Refetched every run to observe schedule and played-status changes. |
-| Clubs, rounds, people and rosters | Current-season refresh while a game is hot, at least every 20 hours, or when refresh-current is requested. |
+| Clubs, rounds and people | Current-season refresh while a game is hot, at least every 20 hours, or when refresh-current is requested. |
 | Standings and season statistics | Cached snapshots; hot rounds/phases are refreshed, as are current-season mutable resources under refresh-current. |
 | Played game box scores and live detail | Reused once stored; refresh-current does not force those game resources to refetch. |
 | Completed seasons | Existing resources reused; current-season hot rules do not apply. Missing resources can still be fetched. |

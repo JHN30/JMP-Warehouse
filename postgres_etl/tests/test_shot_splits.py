@@ -185,7 +185,7 @@ class RunAndCheckTests(unittest.TestCase):
 
 
 class MainWiringTests(unittest.TestCase):
-    def run_main(self, argv, results=(True, True)):
+    def run_main(self, argv, result=True):
         import main
 
         with patch.object(main, "available_seasons", return_value=["E2025"]), \
@@ -196,34 +196,27 @@ class MainWiringTests(unittest.TestCase):
                 patch.object(main, "run_score_flow", return_value=True), \
                 patch.object(main, "run_on_court", return_value=True), \
                 patch.object(main, "run_lineups", return_value=True), \
-                patch.object(main, "run_shot_splits", return_value=results[0]) as splits, \
-                patch.object(main, "run_shot_zones", return_value=results[1]) as zones:
-            return main.main(argv), splits, zones
+                patch.object(main, "run_shot_splits", return_value=result) as splits:
+            return main.main(argv), splits
 
-    def test_both_run_after_a_load_that_includes_shots_or_play_by_play(self):
+    def test_runs_after_a_load_that_includes_shots_or_play_by_play(self):
         for table in ("shots", "play_by_play", "games"):
             with self.subTest(table=table):
-                code, splits, zones = self.run_main(["-sc", "2025", "-tb", table])
+                code, splits = self.run_main(["-sc", "2025", "-tb", table])
                 self.assertEqual(code, 0)
                 splits.assert_called_once()
-                zones.assert_called_once()
-                self.assertEqual(zones.call_args.args[2], ["E2025"])
+                self.assertEqual(splits.call_args.args[2], ["E2025"])
 
     def test_skipped_for_dry_run_quality_only_and_unrelated_tables(self):
         for argv in (["-sc", "2025", "--dry-run"], ["-sc", "2025", "--quality-only"],
                      ["-sc", "2025", "-tb", "clubs"]):
             with self.subTest(argv=argv):
-                code, splits, zones = self.run_main(argv)
+                code, splits = self.run_main(argv)
                 self.assertEqual(code, 0)
                 splits.assert_not_called()
-                zones.assert_not_called()
 
-    def test_a_failed_check_fails_the_load_and_stops_before_the_next_table(self):
-        code, splits, zones = self.run_main(["-sc", "2025", "-tb", "shots"],
-                                            results=(False, True))
-        self.assertEqual(code, 1)
-        zones.assert_not_called()
-        code, _, _ = self.run_main(["-sc", "2025", "-tb", "shots"], results=(True, False))
+    def test_a_failed_check_fails_the_load(self):
+        code, _ = self.run_main(["-sc", "2025", "-tb", "shots"], result=False)
         self.assertEqual(code, 1)
 
 

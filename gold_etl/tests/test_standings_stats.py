@@ -1,7 +1,6 @@
-"""Standings stats table: the join equals its three sources, storage, and the tie check."""
+"""Standings stats table: the join equals its three in-memory sources, and storage."""
 
 import unittest
-from decimal import Decimal
 from unittest.mock import patch
 
 from gold_etl.schema import GOLD_TABLES, STANDINGS_STATS_SOURCES, columns
@@ -60,6 +59,8 @@ class JoinTests(unittest.TestCase):
         self.assertIn("app_standings_stats", ROUND_NAMES)
         self.assertNotIn("app_standings_stats", DERIVED_NAMES)
         self.assertIn("app_standings_stats", GOLD_TABLES)
+        for name, _, _ in STANDINGS_STATS_SOURCES:
+            self.assertNotIn(name, GOLD_TABLES)             # intermediate, never stored
 
     def test_a_source_row_without_a_base_row_is_an_error(self):
         with patch("gold_etl.standings_stats.DERIVATIONS", {
@@ -115,42 +116,6 @@ class StorageTests(unittest.TestCase):
                     self.assertEqual(issues == [], message is None)
                     if message:
                         self.assertIn(message, issues[0])
-
-
-class TieTests(unittest.TestCase):
-    def issues(self, ours, sources, exists=True):
-        from gold_etl.quality import check_standings_stats_ties
-
-        db = FakeConnection()
-        db.exists = exists
-        with patch("gold_etl.quality._dict_rows", side_effect=[ours, *sources]):
-            return check_standings_stats_ties(db.cursor(), "E", "E2025")
-
-    def test_matching_rows_and_unbuilt_sources_report_nothing(self):
-        rows = derive_rows(*TABLES)
-        sources = [[dict(row) for row in rows] for _ in STANDINGS_STATS_SOURCES]
-        self.assertEqual(self.issues(rows, sources), [])
-        self.assertEqual(self.issues(rows, [], exists=False), [])
-
-    def test_a_changed_value_and_a_missing_source_row_are_errors(self):
-        rows = derive_rows(*TABLES)
-        good = [dict(row) for row in rows]
-        changed = [dict(row) for row in rows]
-        changed[0]["wins"] = 99
-        issues = self.issues(rows, [changed, good, good])
-        self.assertEqual(len(issues), 1)
-        self.assertIn("wins differs from gold.app_team_round_stats", issues[0])
-        issues = self.issues(rows, [good, good[1:], good])
-        self.assertEqual(len(issues), 1)
-        self.assertIn("keys differ from gold.app_team_round_ratings", issues[0])
-
-    def test_decimal_values_compare_exactly(self):
-        rows = derive_rows(*TABLES)
-        shifted = [dict(row) for row in rows]
-        target = next(row for row in shifted if row["mov"] is not None)
-        target["mov"] = target["mov"] + Decimal("0.000001")
-        issues = self.issues(rows, [shifted, rows, rows])
-        self.assertIn("mov differs", issues[0])
 
 
 if __name__ == "__main__":

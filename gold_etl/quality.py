@@ -10,12 +10,13 @@ from gold_etl.per_game_rows import OWN_COLUMNS, derive_per_game
 from gold_etl.qualification import scope_min_games, scope_rounds
 from gold_etl.postseason import TABLES as PS_TABLES, _dict_rows, read_rows as read_postseason_rows
 from gold_etl.standings import KEY as STANDINGS_KEY, read_rows as read_standings_rows
-from gold_etl.schema import STANDINGS_FEEDS, STANDINGS_STATS_SOURCES, TEAM_PBP_ADDITIVE, ZONE_ADDITIVE
+from gold_etl.schema import STANDINGS_FEEDS, TEAM_PBP_ADDITIVE
 from gold_etl.schema import GOLD_TABLES, SEASON_DERIVED_NAMES, WINDOWS, IDENTITY_TABLES, RECORDS_TABLES
 from gold_etl.loader import read_aggregate_rows
 from gold_etl.records import read_rows as read_record_rows
 from gold_etl.identity import read_rows as read_identity_rows
 from gold_etl.series import read_rows as read_series_rows
+from gold_etl.team_rounds import read_rows as read_round_rows
 
 
 def check_scope(cursor, name, competition_code, season_code):
@@ -306,13 +307,13 @@ API_RATE_TOLERANCE = 0.06
 
 
 def check_round_api_scope(cursor, competition_code, season_code):
-    """Warnings where final-round rows differ from the API feeds (scopes without a feed are skipped)."""
+    """Warnings where final-round team round totals differ from the API feeds (scopes without
+    a feed are skipped). The totals are the in-memory source rows of app_standings_stats."""
     scope = (competition_code, season_code)
-    cursor.execute(
-        'SELECT DISTINCT ON (scope, club_code) * FROM gold."app_team_round_stats" '
-        'WHERE competition_code = %s AND season_code = %s '
-        'ORDER BY scope, club_code, round_number DESC', scope)
-    ours = _dict_rows(cursor)
+    final = {}
+    for row in read_round_rows(cursor, *scope):  # sorted by scope, round and club
+        final[(row["scope"], row["club_code"])] = row
+    ours = list(final.values())
     api = {}
     for kind in ("traditional", "advanced"):
         cursor.execute(
@@ -331,7 +332,7 @@ def check_round_api_scope(cursor, competition_code, season_code):
             if gap > (API_RATE_TOLERANCE if scale == 100 else 0):
                 differences.setdefault((row["scope"], column), []).append(
                     f'{row["club_code"]}: {float(row[column]) * scale:g} vs API {float(theirs[source]):g}')
-    return [f"gold.app_team_round_stats {season_code} {scope_name}: {column} differs from the API "
+    return [f"team_round_stats {season_code} {scope_name}: {column} differs from the API "
             f"feed for {len(examples)} club(s) (e.g. {examples[0]})"
             for (scope_name, column), examples in sorted(differences.items())]
 
@@ -339,31 +340,24 @@ def check_round_api_scope(cursor, competition_code, season_code):
 def check_round_rating_invariants(cursor, competition_code, season_code):
     """Errors where a connected scope-round's SRS sum or possession-weighted adjusted
     net sum is not zero (both hold by construction of the linear systems)."""
-    scope = (competition_code, season_code)
-    cursor.execute('SELECT * FROM gold."app_team_round_ratings" WHERE competition_code = %s '
-                   'AND season_code = %s', scope)
-    ratings = _dict_rows(cursor)
-    cursor.execute('SELECT scope, round_number, club_code, possessions FROM '
-                   'gold."app_team_round_stats" WHERE competition_code = %s '
-                   'AND season_code = %s', scope)
-    possessions = {(row["scope"], row["round_number"], row["club_code"]): row["possessions"]
-                   for row in _dict_rows(cursor)}
+    cursor.execute('SELECT scope, round_number, connected, srs, adj_net_rating, possessions '
+                   'FROM gold."app_standings_stats" WHERE competition_code = %s '
+                   'AND season_code = %s', (competition_code, season_code))
     groups = {}
-    for row in ratings:
+    for row in _dict_rows(cursor):
         if row["connected"]:
             groups.setdefault((row["scope"], row["round_number"]), []).append(row)
     issues = []
     for (scope_name, number), rows in sorted(groups.items()):
         srs_sum = sum(float(row["srs"]) for row in rows)
-        weights = [float(possessions.get((scope_name, number, row["club_code"])) or 0)
-                   for row in rows]
+        weights = [float(row["possessions"] or 0) for row in rows]
         net_sum = sum(w * float(row["adj_net_rating"]) for w, row in zip(weights, rows))
         net_sum = net_sum / sum(weights) if sum(weights) else None
         if abs(srs_sum) > 1e-4:
-            issues.append(f"gold.app_team_round_ratings {season_code} {scope_name} round {number}: "
+            issues.append(f"gold.app_standings_stats {season_code} {scope_name} round {number}: "
                           f"srs sums to {srs_sum:g}, not 0")
         if net_sum is None or abs(net_sum) > 1e-4:
-            issues.append(f"gold.app_team_round_ratings {season_code} {scope_name} round {number}: "
+            issues.append(f"gold.app_standings_stats {season_code} {scope_name} round {number}: "
                           f"possession-weighted adj_net_rating averages {net_sum}, not 0")
     return issues
 
@@ -404,7 +398,7 @@ def check_round_win_share_totals(cursor, competition_code, season_code):
         if row["win_shares"] is not None:
             key = (row["scope"], row["round_number"])
             totals[key] = totals.get(key, 0.0) + float(row["win_shares"])
-    cursor.execute('SELECT scope, round_number, games_played FROM gold."app_team_round_stats" '
+    cursor.execute('SELECT scope, round_number, games_played FROM gold."app_standings_stats" '
                    'WHERE competition_code = %s AND season_code = %s', scope)
     games = {}
     for row in _dict_rows(cursor):
@@ -419,43 +413,11 @@ def check_round_win_share_totals(cursor, competition_code, season_code):
     return warnings
 
 
-def check_standings_stats_ties(cursor, competition_code, season_code):
-    """Errors where a stored standings stats row differs from a stored source row, or has
-    none. A source table that has not been built is skipped."""
-    scope = (competition_code, season_code)
-    cursor.execute('SELECT * FROM gold."app_standings_stats" WHERE competition_code = %s '
-                   'AND season_code = %s', scope)
-    key = lambda row: (row["scope"], row["round_number"], row["club_code"])
-    ours = {key(row): row for row in _dict_rows(cursor)}
-    issues = []
-    for name, _, names in STANDINGS_STATS_SOURCES:
-        cursor.execute("SELECT to_regclass(%s)", (f"gold.{physical_name(name)}",))
-        if cursor.fetchone()[0] is None:
-            continue
-        fields = ", ".join(f'"{column}"' for column in ("scope", "round_number", "club_code",
-                                                         *names))
-        cursor.execute(f'SELECT {fields} FROM gold."{physical_name(name)}" WHERE competition_code = %s '
-                       'AND season_code = %s', scope)
-        source = {key(row): row for row in _dict_rows(cursor)}
-        if source.keys() != ours.keys():
-            issues.append(f"gold.app_standings_stats {season_code}: keys differ from "
-                          f"gold.{physical_name(name)} ({len(ours)} rows, {len(source)} in the source)")
-            continue
-        for row_key, row in sorted(ours.items()):
-            differing = [column for column in names if row[column] != source[row_key][column]]
-            if differing:
-                issues.append(f"gold.app_standings_stats {season_code} {row_key}: "
-                              f"{differing[0]} differs from gold.{physical_name(name)}")
-                break
-    return issues
-
-
 def check_pbp_partition(cursor, name, competition_code, season_code):
     """Errors where a club's `all` scope is not the sum of its phase scopes for an additive
     column (holds by construction when the scopes group games correctly)."""
-    zones = name == "team_shot_zone_stats"
-    columns = ZONE_ADDITIVE if zones else TEAM_PBP_ADDITIVE
-    key = ("club_code", "zone") if zones else ("club_code",)
+    columns = TEAM_PBP_ADDITIVE
+    key = ("club_code",)
     cursor.execute(f'SELECT scope, {", ".join(key + columns)} FROM gold."{physical_name(name)}" '
                    'WHERE competition_code = %s AND season_code = %s',
                    (competition_code, season_code))
@@ -531,38 +493,27 @@ def check_lineup_totals(cursor, competition_code, season_code):
 
 
 def check_round_split_invariants(cursor, competition_code, season_code):
-    """Errors where splits disagree with the cumulative `team_round_stats` rows."""
-    scope = (competition_code, season_code)
-    cursor.execute('SELECT * FROM gold."app_team_round_splits" WHERE competition_code = %s '
-                   'AND season_code = %s', scope)
-    splits = _dict_rows(cursor)
-    cursor.execute('SELECT scope, round_number, club_code, games_played, wins, mov FROM '
-                   'gold."app_team_round_stats" WHERE competition_code = %s '
-                   'AND season_code = %s', scope)
-    stats = {(row["scope"], row["round_number"], row["club_code"]): row
-             for row in _dict_rows(cursor)}
+    """Errors where a row's splits disagree with its own cumulative totals."""
+    cursor.execute('SELECT * FROM gold."app_standings_stats" WHERE competition_code = %s '
+                   'AND season_code = %s', (competition_code, season_code))
     issues = []
 
     def problem(row, message):
-        issues.append(f'gold.app_team_round_splits {season_code} {row["scope"]} round '
+        issues.append(f'gold.app_standings_stats {season_code} {row["scope"]} round '
                       f'{row["round_number"]} {row["club_code"]}: {message}')
 
-    for row in splits:
-        total = stats.get((row["scope"], row["round_number"], row["club_code"]))
-        if total is None:
-            problem(row, "no matching team_round_stats row")
-            continue
-        if row["home_games"] + row["away_games"] != total["games_played"]:
+    for row in _dict_rows(cursor):
+        if row["home_games"] + row["away_games"] != row["games_played"]:
             problem(row, f'home + away games {row["home_games"] + row["away_games"]} '
-                         f'!= games_played {total["games_played"]}')
-        if row["home_wins"] + row["away_wins"] != total["wins"]:
+                         f'!= games_played {row["games_played"]}')
+        if row["home_wins"] + row["away_wins"] != row["wins"]:
             problem(row, f'home + away wins {row["home_wins"] + row["away_wins"]} '
-                         f'!= wins {total["wins"]}')
+                         f'!= wins {row["wins"]}')
         for size in WINDOWS:
             games = row[f"last{size}_games"]
-            if games != min(size, total["games_played"]):
+            if games != min(size, row["games_played"]):
                 problem(row, f"last{size}_games {games} is not min({size}, games_played)")
-            elif total["games_played"] <= size and row[f"last{size}_mov"] != total["mov"]:
+            elif row["games_played"] <= size and row[f"last{size}_mov"] != row["mov"]:
                 problem(row, f"last{size}_mov differs from the cumulative mov")
     return issues
 
@@ -672,13 +623,13 @@ def check_game_advanced_invariants(cursor, name, competition_code, season_code):
             bad = _one(cursor,
                        f'SELECT count(*) FROM gold."app_game_team_advanced" a JOIN gold."app_games" g '
                        'USING (competition_code, season_code, game_code) '
-                       'JOIN gold."app_team_round_stats" t ON t.competition_code = a.competition_code '
+                       'JOIN gold."app_standings_stats" t ON t.competition_code = a.competition_code '
                        "AND t.season_code = a.season_code AND t.scope = 'all' AND t.round_number = 1 "
                        'AND t.club_code = a.club_code AND t.games_played = 1 '
                        f'WHERE a.competition_code = %s AND a.season_code = %s AND g.round_number = 1 '
                        f'AND abs(a."{tie}" - t."{tie}") > {TIE_TOLERANCE}', scope)[0][0]
             if bad:
-                issues.append(prefix + f"{bad} round-1 rows differ from team_round_stats.{tie}")
+                issues.append(prefix + f"{bad} round-1 rows differ from app_standings_stats.{tie}")
         return issues
     missing = _one(
         cursor, 'SELECT count(*) FROM (SELECT game_code, side, person_key FROM gold."app_game_player_stats" '

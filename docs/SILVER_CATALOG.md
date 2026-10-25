@@ -1,7 +1,7 @@
 # EuroLeague Silver data catalog
 
 Silver is the local PostgreSQL layer of typed EuroLeague source data and calculated
-game detail. This catalog covers **28 source tables, eight calculated tables and
+game detail. This catalog covers **26 source tables, seven calculated tables and
 one load-log table**. It describes the code contract checked on 2026-10-20;
 no API fetch, database rebuild or live coverage query was performed.
 
@@ -48,15 +48,15 @@ JSON file. Paths and response shapes are explained in the Bronze catalog.
 | --- | --- | --- | --- |
 | [`silver.seasons`](SILVER_TABLE_REFERENCE.md#seasons) | Competition season names, dates and champion. Grain: one season. | `_catalog/v2/seasons` | [`app_seasons`](GOLD_TABLE_REFERENCE.md#app_seasons) |
 | [`silver.clubs`](SILVER_TABLE_REFERENCE.md#clubs) | Season club profiles, names, crests and venue codes. Grain: one club-season. | `v2/clubs` | [`app_clubs`](GOLD_TABLE_REFERENCE.md#app_clubs); app_club_identities; names/crests in page and aggregate tables |
-| [`silver.people`](SILVER_TABLE_REFERENCE.md#people) | Deduplicated season person profiles and identity bridge. Grain: one person-season. | `v2/season_people_pages/offset_* and v2/rosters/{club}` | [`app_people`](GOLD_TABLE_REFERENCE.md#app_people); app_players (via player registrations) |
-| [`silver.registrations`](SILVER_TABLE_REFERENCE.md#registrations) | Club/role registrations and roster details. Grain: one registration-season. | `v2/season_people_pages/offset_* and v2/rosters/{club}` | [`app_registrations`](GOLD_TABLE_REFERENCE.md#app_registrations); app_players |
+| [`silver.people`](SILVER_TABLE_REFERENCE.md#people) | Deduplicated season person profiles and identity bridge. Grain: one person-season. | `v2/season_people_pages/offset_*` | [`app_people`](GOLD_TABLE_REFERENCE.md#app_people); app_players (via player registrations) |
+| [`silver.registrations`](SILVER_TABLE_REFERENCE.md#registrations) | Club/role registrations and roster details. Grain: one registration-season. | `v2/season_people_pages/offset_*` | [`app_registrations`](GOLD_TABLE_REFERENCE.md#app_registrations); app_players |
 | [`silver.rounds`](SILVER_TABLE_REFERENCE.md#rounds) | Source round definitions and date ranges. Grain: one round definition-season. | `v2/rounds` | [`app_rounds`](GOLD_TABLE_REFERENCE.md#app_rounds) |
 
 ### Fixtures and official box scores
 
 | Table | Purpose / one row | Upstream | Gold use |
 | --- | --- | --- | --- |
-| [`silver.games`](SILVER_TABLE_REFERENCE.md#games) | Every scheduled or played fixture with result, status and venue. Grain: one game-season. | `v2/games` | [`app_games`](GOLD_TABLE_REFERENCE.md#app_games); team/player round tables, standings_stats, coverage, records, postseason_series and event/lineup aggregates |
+| [`silver.games`](SILVER_TABLE_REFERENCE.md#games) | Every scheduled or played fixture with result, status and venue. Grain: one game-season. | `v2/games` | [`app_games`](GOLD_TABLE_REFERENCE.md#app_games); team/player round tables, standings_stats, records, postseason_series and event/lineup aggregates |
 | [`silver.game_officials`](SILVER_TABLE_REFERENCE.md#game_officials) | Official assignments extracted from the fixture list. Grain: one official slot-game. | `v2/games` | [`app_game_officials`](GOLD_TABLE_REFERENCE.md#app_game_officials) |
 | [`silver.game_period_scores`](SILVER_TABLE_REFERENCE.md#game_period_scores) | Quarter and overtime points extracted from fixtures. Grain: one side-period-game. | `v2/games` | [`app_game_period_scores`](GOLD_TABLE_REFERENCE.md#app_game_period_scores) |
 | [`silver.game_player_stats`](SILVER_TABLE_REFERENCE.md#game_player_stats) | Official player box-score lines and registration context. Grain: one player-side-game. | `v2/game_stats/{game}` | [`app_game_player_stats`](GOLD_TABLE_REFERENCE.md#app_game_player_stats); player round stats/PER/Win Shares, game PER, PS player rows, app_records_single_games |
@@ -73,8 +73,6 @@ JSON file. Paths and response shapes are explained in the Bronze catalog.
 | [`silver.season_player_stats_misc`](SILVER_TABLE_REFERENCE.md#season_player_stats_misc) | Source player misc statistics by phase and mode. Grain: one entry ordinal-phase-mode. | `v3/season_stats/players_misc_{phase}_{mode}` | [`app_season_player_stats_misc`](GOLD_TABLE_REFERENCE.md#app_season_player_stats_misc) |
 | [`silver.season_team_stats_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_traditional) | Source team traditional reference statistics. Grain: one club-phase-mode. | `v3/season_stats/teams_traditional_{phase}_{mode}` | No direct projection; API cross-checks for calculated round statistics |
 | [`silver.season_team_stats_advanced`](SILVER_TABLE_REFERENCE.md#season_team_stats_advanced) | Source team advanced reference statistics. Grain: one club-phase-mode. | `v3/season_stats/teams_advanced_{phase}_{mode}` | No direct projection; API cross-checks for calculated round statistics |
-| [`silver.season_team_stats_opponents_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_opponents_traditional) | Source opponent traditional reference statistics. Grain: one club-phase-mode. | `v3/season_stats/teams_opponents_traditional_{phase}_{mode}` | No direct projection; retained opponent reference, not read by current Gold round API checks |
-| [`silver.season_team_stats_opponents_advanced`](SILVER_TABLE_REFERENCE.md#season_team_stats_opponents_advanced) | Source opponent advanced reference statistics. Grain: one club-phase-mode. | `v3/season_stats/teams_opponents_advanced_{phase}_{mode}` | No direct projection; retained opponent reference, not read by current Gold round API checks |
 
 ### Official standings and child rows
 
@@ -104,7 +102,6 @@ JSON file. Paths and response shapes are explained in the Bronze catalog.
 | [`silver.game_team_possessions`](SILVER_TABLE_REFERENCE.md#game_team_possessions) | Counted possessions and their measurable lengths. Grain: one side-game. | `games, game_team_advanced, play_by_play` | [`app_game_team_possessions`](GOLD_TABLE_REFERENCE.md#app_game_team_possessions); app_team_pbp_stats |
 | [`silver.game_team_score_flow`](SILVER_TABLE_REFERENCE.md#game_team_score_flow) | Running-score leads, runs, time ahead/behind and clutch. Grain: one side-game. | `games, play_by_play` | [`app_game_team_score_flow`](GOLD_TABLE_REFERENCE.md#app_game_team_score_flow); app_team_pbp_stats |
 | [`silver.game_team_shot_splits`](SILVER_TABLE_REFERENCE.md#game_team_shot_splits) | Flagged scoring and capped assisted-field-goal counts. Grain: one side-game. | `games, shots, play_by_play` | [`app_game_team_shot_splits`](GOLD_TABLE_REFERENCE.md#app_game_team_shot_splits); app_team_pbp_stats |
-| [`silver.game_team_shot_zones`](SILVER_TABLE_REFERENCE.md#game_team_shot_zones) | Field-goal attempts, makes and points by source zone. Grain: one side-zone-game. | `games, shots` | [`app_game_team_shot_zones`](GOLD_TABLE_REFERENCE.md#app_game_team_shot_zones); app_team_shot_zone_stats |
 | [`silver.game_player_on_court`](SILVER_TABLE_REFERENCE.md#game_player_on_court) | Reconstructed continuous player on-court stretches. Grain: one interval ordinal-player-side-game. | `games, game_player_stats, play_by_play` | [`app_game_player_on_court`](GOLD_TABLE_REFERENCE.md#app_game_player_on_court) |
 | [`silver.game_team_lineup_stints`](SILVER_TABLE_REFERENCE.md#game_team_lineup_stints) | Complete five-versus-five intervals with scoring and possessions. Grain: one stint ordinal-side-game. | `games, game_player_stats, play_by_play` | [`app_game_team_lineup_stints`](GOLD_TABLE_REFERENCE.md#app_game_team_lineup_stints); app_player_on_off, app_lineup_ratings, app_player_rapm |
 
@@ -119,7 +116,7 @@ JSON file. Paths and response shapes are explained in the Bronze catalog.
 | Need | Bronze -> Silver -> Gold |
 | --- | --- |
 | Schedule/results | `v2/games` -> `silver.games` -> `gold.app_games`. The same response supplies officials and period scores. |
-| Roster/career identity | People pages + club rosters -> `silver.people`, `silver.registrations` -> season profiles/registrations and `gold.app_players`. |
+| Roster/career identity | People pages -> `silver.people`, `silver.registrations` -> season profiles/registrations and `gold.app_players`. |
 | Official player stats | `v3/season_stats/players_*` -> four `silver.season_player_stats_*` tables -> the four Gold projections plus calculated rows/qualification. |
 | Team efficiency | `v2/game_stats/*` + fixtures -> team box scores and `silver.game_team_advanced` -> team round tables and `gold.app_standings_stats`. |
 | Player Game Score/PER/Win Shares | Box scores -> player/team Silver rows and game advanced -> player round stats/ratings/win shares and Gold game PER. PER/Win Shares are Gold calculations. |

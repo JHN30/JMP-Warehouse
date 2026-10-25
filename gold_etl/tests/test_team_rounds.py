@@ -1,4 +1,4 @@
-"""Cumulative team-round rows: scopes, carry-forward, formulas, and storage."""
+"""Cumulative team-round rows: scopes, carry-forward, formulas, and the API cross-check."""
 
 import sys
 import unittest
@@ -6,7 +6,7 @@ from decimal import Decimal
 from pathlib import Path
 from unittest.mock import patch
 
-from gold_etl.schema import ROUND_MEASURES, TEAM_ROUND_TABLE, columns
+from gold_etl.schema import ROUND_MEASURES, TEAM_ROUND_TABLE
 from gold_etl.team_rounds import PYTHAGOREAN_EXPONENT, derive_rows
 
 MEASURES = dict(points=83, field_goals_made=30, field_goals_attempted=60,
@@ -180,14 +180,14 @@ class SchemaTests(unittest.TestCase):
     def test_every_derived_key_is_a_registered_column(self):
         rows = derive([game(1, 1)], [box(1)])
         self.assertEqual(set(rows[0]) | {"competition_code", "season_code"},
-                         set(columns("team_round_stats")))
+                         {field.name for field in TEAM_ROUND_TABLE.fields})
         self.assertEqual(TEAM_ROUND_TABLE.key[-3:], ("scope", "round_number", "club_code"))
         self.assertEqual(len(ROUND_MEASURES), 9)
 
-    def test_table_is_outside_the_publish_allowlist(self):
-        from gold_etl.schema import DERIVED_NAMES, SOURCE_NAMES
+    def test_rows_are_an_intermediate_step_never_stored(self):
+        from gold_etl.schema import GOLD_TABLES
 
-        self.assertNotIn("team_round_stats", DERIVED_NAMES + SOURCE_NAMES)
+        self.assertNotIn("team_round_stats", GOLD_TABLES)
 
 
 class FakeCursor:
@@ -225,32 +225,7 @@ class FakeConnection:
         return False
 
 
-def stored_row():
-    row = derive([game(1, 1)], [box(1)])[0]
-    return dict(row, competition_code="E", season_code="E2025")
-
-
-class StorageTests(unittest.TestCase):
-    def test_replace_is_scoped_and_atomic(self):
-        from gold_etl.loader import replace_aggregate_scope
-
-        db = FakeConnection()
-        with patch("gold_etl.loader.read_aggregate_rows", return_value=[stored_row()]),                 patch("psycopg2.extras.execute_values") as insert:
-            self.assertEqual(replace_aggregate_scope(db, "team_round_stats", "E", "E2025"), 1)
-        self.assertEqual((db.commits, db.rollbacks), (1, 0))
-        self.assertTrue(any(query.startswith('DELETE FROM gold."app_team_round_stats"')
-                            and params == ("E", "E2025") for query, params in db.queries))
-        self.assertEqual(insert.call_args.args[2][0][:2], ("E", "E2025"))
-
-    def test_failure_rolls_back(self):
-        from gold_etl.loader import replace_aggregate_scope
-
-        db = FakeConnection()
-        with patch("gold_etl.loader.read_aggregate_rows", return_value=[stored_row()]),                 patch("psycopg2.extras.execute_values", side_effect=RuntimeError("failed")):
-            with self.assertRaisesRegex(RuntimeError, "failed"):
-                replace_aggregate_scope(db, "team_round_stats", "E", "E2025")
-        self.assertEqual((db.commits, db.rollbacks), (0, 1))
-
+class ReadTests(unittest.TestCase):
     def test_read_rows_queries_the_four_silver_tables(self):
         from gold_etl import team_rounds
 
@@ -263,31 +238,12 @@ class StorageTests(unittest.TestCase):
             self.assertTrue(any(f"silver.{table} " in query for query in sql), table)
         self.assertTrue(all(params == ("E", "E2025") for _, params in db.queries))
 
-    def test_quality_detects_missing_keys_and_values(self):
-        from gold_etl.quality import check_aggregate_scope
-
-        db, expected = FakeConnection(), stored_row()
-        cursor = db.cursor()
-        db.exists = False
-        self.assertEqual(check_aggregate_scope(cursor, "team_round_stats", "E", "E2025"),
-                         ["gold.app_team_round_stats is missing"])
-        db.exists = True
-        with patch("gold_etl.quality.read_aggregate_rows", return_value=[expected]):
-            for actual, message in (([], "keys differ"),
-                                    ([dict(expected, wins=9)], "values differ"),
-                                    ([expected], None)):
-                with patch("gold_etl.quality._dict_rows", return_value=actual):
-                    issues = check_aggregate_scope(cursor, "team_round_stats", "E", "E2025")
-                    self.assertEqual(issues == [], message is None)
-                    if message:
-                        self.assertIn(message, issues[0])
-
-
 class ApiCrossCheckTests(unittest.TestCase):
     def run_check(self, ours, traditional, advanced):
         from gold_etl.quality import check_round_api_scope
 
-        with patch("gold_etl.quality._dict_rows", side_effect=[ours, traditional, advanced]):
+        with patch("gold_etl.quality.read_round_rows", return_value=ours), \
+                patch("gold_etl.quality._dict_rows", side_effect=[traditional, advanced]):
             return check_round_api_scope(FakeConnection().cursor(), "E", "E2025")
 
     def final(self, scope="RS", **changes):
@@ -322,6 +278,10 @@ class ApiCrossCheckTests(unittest.TestCase):
         self.assertTrue(any("points_for differs" in issue and "MAD: 170 vs API 166" in issue
                             for issue in issues))
         self.assertTrue(any("efg_pct differs" in issue for issue in issues))
+
+    def test_only_the_final_round_is_compared(self):
+        earlier = self.final(round_number=1, points_for=80)
+        self.assertEqual(self.run_check([earlier, self.final(round_number=2)], *self.feeds()), [])
 
     def test_scope_without_an_api_feed_is_skipped(self):
         self.assertEqual(self.run_check([self.final("PS", points_for=1)], *self.feeds()), [])

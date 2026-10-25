@@ -6,6 +6,9 @@ from gold_etl.schema import (DERIVED_NAMES, GAME_ADVANCED_NAMES, GAME_COURT_NAME
 
 
 # Feature 30g added the twelve tables of features 26-29 (ROUND_NAMES) after the first 26.
+# The three team round tables and team_shot_zone_stats were later retired, coverage and
+# app_game_team_shot_zones with them; migrations/drop_unused_app_tables.sql drops them in
+# Neon. The checked-in migration files stay the record of what each feature created.
 NEW_TABLES = tuple(map(physical_name, ROUND_NAMES))
 # Feature 30h added the two per-game advanced tables after those.
 GAME_TABLES = tuple(map(physical_name, GAME_ADVANCED_NAMES))

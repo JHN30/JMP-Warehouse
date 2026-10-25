@@ -13,19 +13,19 @@ that v2/v3 lack: play-by-play and shot coordinates.
 
 | Data                                                                      | Primary source  | Cache policy                                                         |
 | ------------------------------------------------------------------------- | --------------- | -------------------------------------------------------------------- |
-| Season catalogue, fixtures, clubs, people, rosters and rounds             | v2              | Cache all fixtures, including future games                           |
+| Season catalogue, fixtures, clubs, people and rounds                      | v2              | Cache all fixtures, including future games                           |
 | Per-game player/team statistics                                           | v2              | Fetch only after a game is played                                    |
 | Season people                                                             | v2              | Fetch every offset page, including coaches, officials and staff      |
-| Season player statistics and round standings                              | v3              | Fetch for played phases; standings are limited to group-phase rounds |
+| Season player and team statistics, round standings                        | v3              | Fetch for played phases; teams in accumulated mode only; standings are limited to group-phase rounds |
 | Play-by-play and shot coordinates                                         | live API        | Fetch only after a game is played and only from season 2007 onward   |
-| Boxscore, Evolution, Comparison, ShootingGraphic (optional)               | live API        | Not fetched by default: covered by v2, play-by-play or shots         |
+| Boxscore, Evolution, Comparison, ShootingGraphic                          | live API        | Not requested: covered by v2, play-by-play or shots                  |
 
 v2/v3 cover every season from E2000 (checked on E2000, E2007 and E2015). The live
 API has no data before E2007. Comparing all 402 E2025 games showed that Boxscore
 duplicates v2 game stats (quarters, attendance and referees are in the v2 game
 list), ShootingGraphic can be summed from shots, Evolution from play-by-play, and
-Comparison from v2 box scores and play-by-play. They can still be requested by
-name with `-ds`.
+Comparison from v2 box scores and play-by-play. The extractor has no dataset for
+them.
 
 The v2 game list replaces the live API's Header endpoint for bulk extraction. A
 future scheduled game is retained in v2/games.json, but its per-game stats and
@@ -48,7 +48,6 @@ The default all dataset selection caches:
 - seasons
 - game_lists
 - clubs
-- rosters
 - rounds
 - season_people
 - season_stats
@@ -57,15 +56,10 @@ The default all dataset selection caches:
 - play_by_play
 - shooting_charts
 
-Optional, only when named with `-ds`: live_boxscores, live_evolution,
-live_comparison, live_scoring. They are archived in bronze only; the loader
-does not read them, since v2 game data, play-by-play and shots cover their
-content.
-
 The live dataset names map to live API endpoints:
 
+- play_by_play uses PlayByPlay, which provides every event by quarter.
 - shooting_charts uses Points, which provides shot attempts and coordinates.
-- live_scoring uses ShootingGraphic, which contains scoring-context summaries.
 
 ## Endpoint reference
 
@@ -83,15 +77,13 @@ PostgreSQL names (see [docs/DATA_DICTIONARY.md](../docs/DATA_DICTIONARY.md)).
 | game_lists | `GET /v2/competitions/{c}/seasons/{s}/games` | `v2/games` | Every fixture, played or scheduled: phase, round, date, clubs, score, quarter scores, venue (with capacity and address), attendance, referees | E2000+ | Current season every run; completed seasons once | `games`, `game_officials`, `game_period_scores` |
 | clubs | `GET /v2/competitions/{c}/seasons/{s}/clubs` | `v2/clubs` | The season's clubs: names, TV code, crest, country, address, city, website, venue | E2000+ | Current season while hot and at least every 20 h; completed once | `clubs` |
 | season_people | `GET /v2/competitions/{c}/seasons/{s}/people?offset=&limit=1000` | `v2/season_people_pages/offset_NNNNNN` | Every person registered that season (players, coaches, staff, officials): profile (height, weight, birth date and country) and club/role registration | E2000+ | Like clubs; all pages each time | `people`, `registrations` |
-| rosters | `GET /v2/competitions/{c}/seasons/{s}/clubs/{club}/people` (per club) | `v2/rosters/{club}` | One club's registrations: dorsal, position, start and end dates | E2000+ | Like clubs | `people`, `registrations` |
 | rounds | `GET /v2/competitions/{c}/seasons/{s}/rounds` | `v2/rounds` | Rounds: phase, number, name, first and last game date | E2000+ | Like clubs | `rounds` |
 | standings | `GET /v3/competitions/{c}/seasons/{s}/rounds/{r}/{feed}`, feed = `basicstandings`, `calendarstandings`, `streaks`, `aheadbehind`, `margins` (per played group-phase round) | `v3/standings/{phase}_{round}_{feed}` | Standings after that round: position, record, points for/against, form, streaks, home/away, ahead/behind at checkpoints, margin bands | E2000+, group phases only | Once per round; hot rounds again; all with `--refresh-current` | 7 `standings_*` silver tables |
 | season_stats | `GET /v3/competitions/{c}/statistics/players/{type}`, type = `traditional`, `advanced`, `scoring`, `misc`; params `SeasonMode=Single`, `SeasonCode`, `StatisticMode` (`accumulated`, `perGame`), `Statistic` (sort), `Limit=1000`, optional `PhaseTypeCode` | `v3/season_stats/players_{type}_{phase}_{mode}` | Player season statistics for `all` phases and each played phase, totals and per game | E2000+ | Once; `all` and hot phases again while a game is hot; all with `--refresh-current` | `season_player_stats_*` |
-| season_stats | `GET /v3/competitions/{c}/statistics/teams/{type}`, type = `traditional`, `advanced`, `opponentsTraditional`, `opponentsAdvanced`; same params without `Statistic` (the team endpoints reject it) | `v3/season_stats/teams_{feed}_{phase}_{mode}` (`opponentsTraditional` is stored as `opponents_traditional`) | Team season statistics, and what each team's opponents did against it, for `all` and each played phase, totals and per game | E2000+ | Like the player feeds | `season_team_stats_*` |
+| season_stats | `GET /v3/competitions/{c}/statistics/teams/{type}`, type = `traditional`, `advanced`; accumulated mode only; same params without `Statistic` (the team endpoints reject it) | `v3/season_stats/teams_{feed}_{phase}_accumulated` | Team season statistics for `all` and each played phase, totals only | E2000+ | Like the player feeds | `season_team_stats_*` |
 | game_stats | `GET /v2/competitions/{c}/seasons/{s}/games/{g}/stats` (per played game) | `v2/game_stats/{g}` | Box score: every player's line, the team row and totals, coach, starters, plus/minus | E2000+ | Once per played game | `game_player_stats`, `game_team_stats`, `game_stat_gaps` |
 | play_by_play | `GET /api/PlayByPlay?gamecode={g}&seasoncode={s}` (live API) | `live/{g}/play_by_play` | Every event by quarter: type, clock, player, club, running score | E2007+ | Once per played game | `play_by_play` |
 | shooting_charts | `GET /api/Points?gamecode={g}&seasoncode={s}` (live API) | `live/{g}/shooting_charts` | Every shot attempt, made or missed: coordinates, zone, fast-break, second-chance and points-off-turnover flags | E2007+ | Once per played game | `shots` |
-| live_boxscores, live_evolution, live_comparison, live_scoring (optional) | `GET /api/{Boxscore,Evolution,Comparison,ShootingGraphic}?gamecode={g}&seasoncode={s}` (live API) | `live/{g}/{dataset}` | Live box score, minute-by-minute score, starters/bench comparison, fast-break/second-chance/turnover points | E2007+ | Only when named with `-ds` | Not loaded (bronze only) |
 
 ## Checked, not downloaded
 
@@ -149,15 +141,6 @@ Request only selected data:
 python main.py -sc 2025 -ds game_lists game_stats play_by_play shooting_charts
 ```
 
-Use -api only to restrict the live API requests:
-
-```powershell
-python main.py -sc 2025 -ds game_lists live_boxscores play_by_play -api Boxscore PlayByPlay
-```
-
-`PlayByPlay` is the canonical endpoint spelling. The previous `PlaybyPlay`
-spelling is accepted as a command-line alias for compatibility.
-
 ## Refreshing
 
 The game list for the current season is refreshed on every run so new fixtures,
@@ -170,13 +153,13 @@ re-fetches:
 
 - the five standings feeds of each hot group-phase round,
 - v3 season statistics for `all` and for each hot phase,
-- clubs, rounds, season people and rosters.
+- clubs, rounds and season people.
 
 Standings and statistics can lag behind the final whistle, so the window keeps a
 round fresh for two days instead of freezing it at its first fetch. Completed
 seasons are never hot.
 
-Clubs, rounds, season people and rosters also change without games (signings,
+Clubs, rounds and season people also change without games (signings,
 pre-season), so for the current season they are re-checked at least every 20
 hours even when no game is hot. The last check is recorded in
 `refresh_state.json`.
@@ -311,7 +294,7 @@ data/bronze/
         ├── refresh_state.json
         ├── runs/run_<timestamp>.json
         ├── v2/games/<fetched_at>_<sha16>.json.gz
-        ├── v2/clubs/…  v2/rounds/…  v2/rosters/<club>/…  v2/season_people_pages/offset_000000/…
+        ├── v2/clubs/…  v2/rounds/…  v2/season_people_pages/offset_000000/…
         ├── v2/game_stats/<game-code>/…
         ├── v3/season_stats/players_<category>_<phase>_<mode>/…
         ├── v3/standings/<phase>_<round>_<feed>/…
@@ -324,6 +307,16 @@ new, and a changed response adds a version instead of overwriting. Readers use
 the newest file. The pre-bronze cache now sits in `old/data/` and is no longer read.
 
 ## Change log
+
+### 2026-10-25 - unused downloads dropped
+
+- The optional live datasets live_boxscores, live_evolution, live_comparison and
+  live_scoring and the `-api` option are removed; none had ever been downloaded.
+- The team opponents statistics feeds and the team per-game mode are no longer fetched.
+- `rosters` (`v2/rosters/{club}`, one request per club and season) is no longer fetched or
+  loaded. In every season E2000-E2026 each roster entry was already in the season people
+  pages with identical values, and rosters had no extra fields. Existing roster versions stay
+  in the archive.
 
 ### 2026-09-24 - bronze layer and endpoint trim (M2)
 

@@ -12,7 +12,7 @@ from gold_etl.team_rounds import _scopes
 
 PLACES = Decimal("0.000001")
 SOURCES = {"game_team_possessions": "possessions.py", "game_team_score_flow": "score_flow.py",
-           "game_team_shot_splits": "shot_splits.py", "game_team_shot_zones": "shot_zones.py",
+           "game_team_shot_splits": "shot_splits.py",
            "game_team_lineup_stints": "lineups.py"}
 SPLIT_POINTS = ("fast_break_points", "second_chance_points", "points_off_turnover_points")
 

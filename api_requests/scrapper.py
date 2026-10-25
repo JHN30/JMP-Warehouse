@@ -31,19 +31,20 @@ class EuroScrapas:
     # of the same feed are tried afterwards.
     STALE_RETRIES = 4
 
-    # name: (entity, statistic type, sort statistic). The team endpoints reject
-    # the player sort statistics (400) and have no scoring or misc feed (404).
+    # name: (entity, statistic type, sort statistic, modes). The team endpoints reject
+    # the player sort statistics (400) and have no scoring or misc feed (404). The
+    # player feeds are published in both modes. The team feeds serve only Gold's
+    # accumulated API cross-check, so their per-game mode and the opponents feeds
+    # (the same facts as app_team_season_stats' opp_* totals) are not requested.
+    BOTH_MODES = ("perGame", "accumulated")
     V3_STATISTIC_SPECS = {
-        "players_traditional": ("players", "traditional", "timePlayed"),
-        "players_advanced": ("players", "advanced", "timePlayed"),
-        "players_scoring": ("players", "scoring", "gamesPlayed"),
-        "players_misc": ("players", "misc", "gamesPlayed"),
-        "teams_traditional": ("teams", "traditional", None),
-        "teams_advanced": ("teams", "advanced", None),
-        "teams_opponents_traditional": ("teams", "opponentsTraditional", None),
-        "teams_opponents_advanced": ("teams", "opponentsAdvanced", None),
+        "players_traditional": ("players", "traditional", "timePlayed", BOTH_MODES),
+        "players_advanced": ("players", "advanced", "timePlayed", BOTH_MODES),
+        "players_scoring": ("players", "scoring", "gamesPlayed", BOTH_MODES),
+        "players_misc": ("players", "misc", "gamesPlayed", BOTH_MODES),
+        "teams_traditional": ("teams", "traditional", None, ("accumulated",)),
+        "teams_advanced": ("teams", "advanced", None, ("accumulated",)),
     }
-    V3_STATISTIC_MODES = ("perGame", "accumulated")
     STANDING_TYPES = (
         "basicstandings",
         "calendarstandings",
@@ -51,13 +52,12 @@ class EuroScrapas:
         "aheadbehind",
         "margins",
     )
+    # Live API datasets and their endpoints. The other live endpoints (Boxscore,
+    # Evolution, Comparison, ShootingGraphic, Header) repeat v2 game data,
+    # play-by-play or shots and are not requested.
     LIVE_DATASETS = {
-        "live_boxscores": "Boxscore",
         "play_by_play": "PlayByPlay",
         "shooting_charts": "Points",
-        "live_evolution": "Evolution",
-        "live_comparison": "Comparison",
-        "live_scoring": "ShootingGraphic",
     }
 
     def __init__(
@@ -65,7 +65,6 @@ class EuroScrapas:
         competition,
         season_codes,
         datasets,
-        euroleague_apis,
         failed_extractions_limit,
         game_code_start,
         datetime_now,
@@ -78,7 +77,6 @@ class EuroScrapas:
         self.competition_code = {"euroleague": "E", "eurocup": "U"}[competition]
         self.season_codes = season_codes
         self.datasets = set(datasets)
-        self.live_apis = set(euroleague_apis)
         self.failed_extractions_limit = failed_extractions_limit
         self.game_code_start = game_code_start
         self.datetime_now = datetime_now
@@ -202,7 +200,7 @@ class EuroScrapas:
         )
 
     def season_level_refresh_due(self, season_code):
-        """Clubs, people, rosters and rounds change without games (signings,
+        """Clubs, people and rounds change without games (signings,
         pre-season), so the current season re-checks them at least daily."""
         if season_code != self.current_season_code:
             return False
@@ -219,10 +217,8 @@ class EuroScrapas:
             self.refresh_current or self.hot["any"] or daily_due
         )
 
-        clubs = None
-        clubs_needed = "clubs" in self.datasets or "rosters" in self.datasets
-        if clubs_needed:
-            clubs = self.fetch_to_cache(
+        if "clubs" in self.datasets:
+            self.fetch_to_cache(
                 source="v2.clubs",
                 url=(
                     f"{self.API_LIVE_URL}/v2/competitions/{self.competition_code}"
@@ -237,21 +233,6 @@ class EuroScrapas:
                 season_code=season_code,
                 force=mutable_force,
             )
-
-        if "rosters" in self.datasets and clubs is not None:
-            for club in self.get_data_list(clubs):
-                club_code = club.get("code")
-                if not club_code:
-                    continue
-                self.fetch_to_cache(
-                    source="v2.roster",
-                    url=(
-                        f"{self.API_LIVE_URL}/v2/competitions/{self.competition_code}"
-                        f"/seasons/{season_code}/clubs/{club_code}/people"
-                    ),
-                    resource=f"v2/rosters/{club_code}",
-                    force=mutable_force,
-                )
 
         if "rounds" in self.datasets or "standings" in self.datasets:
             self.fetch_to_cache(
@@ -410,8 +391,8 @@ class EuroScrapas:
         }
         single_phase = phase_codes[1] if len(phase_codes) == 2 else None
 
-        for name, (entity, statistic_type, sort_statistic) in self.V3_STATISTIC_SPECS.items():
-            for statistic_mode in self.V3_STATISTIC_MODES:
+        for name, (entity, statistic_type, sort_statistic, modes) in self.V3_STATISTIC_SPECS.items():
+            for statistic_mode in modes:
                 for phase_code in phase_codes:
                     params = self.v3_stats_params(
                         season_code, sort_statistic, statistic_mode, phase_code)
@@ -499,7 +480,7 @@ class EuroScrapas:
             return
 
         for dataset, endpoint in self.LIVE_DATASETS.items():
-            if dataset not in self.datasets or endpoint not in self.live_apis:
+            if dataset not in self.datasets:
                 continue
 
             for game in played_games:

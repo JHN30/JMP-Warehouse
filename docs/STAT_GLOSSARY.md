@@ -48,7 +48,7 @@ rates. Some event aggregates sum only usable games and have separate sample coun
 
 | Stored family | Example stored value | Frontend display |
 | --- | --- | --- |
-| Calculated `efg_pct`, `ts_pct`, `true_shooting_pct`, rebound/usage rates, `pie`, zone shares | `0.55` | `55%` (multiply by 100 once). |
+| Calculated `efg_pct`, `ts_pct`, `true_shooting_pct`, rebound/usage rates, `pie` | `0.55` | `55%` (multiply by 100 once). |
 | Traditional shooting `*_percentage`; API eFG/TS/rebound percentage fields | `55.0` | `55%` (already percentage points). |
 | Points-source percentages in API scoring | `55.0` | `55%`; source values are retained. |
 | Calculated `ft_rate`, `assist_ratio` | `0.25`, `0.65` | Ratio or percentage with an explicit label and denominator. |
@@ -72,7 +72,7 @@ season fit. Definitions below distinguish special cases. Profile dimensions
 
 | SQL statistic | Definition / units | Read from |
 | --- | --- | --- |
-| `points` | Scored points; in shots this is points awarded for that shot, and in zone tables points from the zone. | [`app_game_player_stats`](GOLD_TABLE_REFERENCE.md#app_game_player_stats), [`app_season_player_stats_traditional`](GOLD_TABLE_REFERENCE.md#app_season_player_stats_traditional), [`app_player_round_stats`](GOLD_TABLE_REFERENCE.md#app_player_round_stats) |
+| `points` | Scored points; in shots this is points awarded for that shot. | [`app_game_player_stats`](GOLD_TABLE_REFERENCE.md#app_game_player_stats), [`app_season_player_stats_traditional`](GOLD_TABLE_REFERENCE.md#app_season_player_stats_traditional), [`app_player_round_stats`](GOLD_TABLE_REFERENCE.md#app_player_round_stats) |
 | `seconds_played` | Official playing time in seconds; player seconds or aggregate team player-seconds in box scores. | [`app_game_player_stats`](GOLD_TABLE_REFERENCE.md#app_game_player_stats), [`app_player_round_stats`](GOLD_TABLE_REFERENCE.md#app_player_round_stats), [`app_player_round_ratings`](GOLD_TABLE_REFERENCE.md#app_player_round_ratings), [`app_player_round_win_shares`](GOLD_TABLE_REFERENCE.md#app_player_round_win_shares), [`app_game_player_advanced`](GOLD_TABLE_REFERENCE.md#app_game_player_advanced) |
 | `pir` | Official Performance Index Rating; source valuation, distinct from PER and Game Score. See player glossary. | [`app_game_player_stats`](GOLD_TABLE_REFERENCE.md#app_game_player_stats), [`app_season_player_stats_traditional`](GOLD_TABLE_REFERENCE.md#app_season_player_stats_traditional), [`app_player_round_stats`](GOLD_TABLE_REFERENCE.md#app_player_round_stats) |
 | `two_pointers_made` | Successful two-point field goals (2PM). | [`app_game_player_stats`](GOLD_TABLE_REFERENCE.md#app_game_player_stats), [`app_season_player_stats_traditional`](GOLD_TABLE_REFERENCE.md#app_season_player_stats_traditional) |
@@ -443,7 +443,7 @@ are reference inputs, not additional Gold frontend tables.
 
 | SQL statistic | Definition / units | Read from |
 | --- | --- | --- |
-| `points` | Scored points; in shots this is points awarded for that shot, and in zone tables points from the zone. | [`app_game_team_stats`](GOLD_TABLE_REFERENCE.md#app_game_team_stats), [`app_game_team_shot_zones`](GOLD_TABLE_REFERENCE.md#app_game_team_shot_zones), [`app_team_shot_zone_stats`](GOLD_TABLE_REFERENCE.md#app_team_shot_zone_stats) |
+| `points` | Scored points; in shots this is points awarded for that shot. | [`app_game_team_stats`](GOLD_TABLE_REFERENCE.md#app_game_team_stats) |
 | `seconds_played` | Official playing time in seconds; player seconds or aggregate team player-seconds in box scores. | [`app_game_team_stats`](GOLD_TABLE_REFERENCE.md#app_game_team_stats) |
 | `pir` | Official Performance Index Rating; source valuation, distinct from PER and Game Score. See player glossary. | [`app_game_team_stats`](GOLD_TABLE_REFERENCE.md#app_game_team_stats) |
 | `two_pointers_made` | Successful two-point field goals (2PM). | [`app_game_team_stats`](GOLD_TABLE_REFERENCE.md#app_game_team_stats) |
@@ -467,132 +467,123 @@ are reference inputs, not additional Gold frontend tables.
 | `fouls_committed` | Personal fouls charged to the player or team (PF). | [`app_game_team_stats`](GOLD_TABLE_REFERENCE.md#app_game_team_stats) |
 | `fouls_drawn` | Opponent fouls drawn by the player or team. | [`app_game_team_stats`](GOLD_TABLE_REFERENCE.md#app_game_team_stats) |
 | `plus_minus` | Source point margin while the player was on court; raw points, not per 100 possessions. | [`app_game_team_stats`](GOLD_TABLE_REFERENCE.md#app_game_team_stats) |
-| `games_played` | Games/appearances in the selected row scope; see table notes for counted games and series fixture counts. | [`app_team_season_stats`](GOLD_TABLE_REFERENCE.md#app_team_season_stats), [`app_team_round_stats`](GOLD_TABLE_REFERENCE.md#app_team_round_stats), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
-| `own_points` | Team total: Scored points; in shots this is points awarded for that shot, and in zone tables points from the zone. | [`app_team_season_stats`](GOLD_TABLE_REFERENCE.md#app_team_season_stats) |
+| `games_played` | Games/appearances in the selected row scope; see table notes for counted games and series fixture counts. | [`app_team_season_stats`](GOLD_TABLE_REFERENCE.md#app_team_season_stats), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
+| `own_points` | Team total: Scored points; in shots this is points awarded for that shot. | [`app_team_season_stats`](GOLD_TABLE_REFERENCE.md#app_team_season_stats) |
 | `own_field_goals_made2` | Team total: Successful two-point field goals (2PM). | [`app_team_season_stats`](GOLD_TABLE_REFERENCE.md#app_team_season_stats) |
 | `own_field_goals_attempted2` | Team total: Two-point field-goal attempts (2PA), including makes. | [`app_team_season_stats`](GOLD_TABLE_REFERENCE.md#app_team_season_stats) |
 | `own_field_goals_made3` | Team total: Successful three-point field goals (3PM). | [`app_team_season_stats`](GOLD_TABLE_REFERENCE.md#app_team_season_stats) |
 | `own_field_goals_attempted3` | Team total: Three-point field-goal attempts (3PA), including makes. | [`app_team_season_stats`](GOLD_TABLE_REFERENCE.md#app_team_season_stats) |
-| `own_free_throws_made` | Team total: Successful free throws (FTM). | [`app_team_season_stats`](GOLD_TABLE_REFERENCE.md#app_team_season_stats), [`app_team_round_stats`](GOLD_TABLE_REFERENCE.md#app_team_round_stats) |
-| `own_free_throws_attempted` | Team total: Free-throw attempts (FTA), including makes. | [`app_team_season_stats`](GOLD_TABLE_REFERENCE.md#app_team_season_stats), [`app_team_round_stats`](GOLD_TABLE_REFERENCE.md#app_team_round_stats) |
+| `own_free_throws_made` | Team total: Successful free throws (FTM). | [`app_team_season_stats`](GOLD_TABLE_REFERENCE.md#app_team_season_stats) |
+| `own_free_throws_attempted` | Team total: Free-throw attempts (FTA), including makes. | [`app_team_season_stats`](GOLD_TABLE_REFERENCE.md#app_team_season_stats) |
 | `own_field_goals_made_total` | Team total: Successful two- and three-point field goals (FGM), excluding free throws. | [`app_team_season_stats`](GOLD_TABLE_REFERENCE.md#app_team_season_stats) |
 | `own_field_goals_attempted_total` | Team total: All two- and three-point field-goal attempts (FGA), including blocked attempts. | [`app_team_season_stats`](GOLD_TABLE_REFERENCE.md#app_team_season_stats) |
 | `own_total_rebounds` | Team total: Offensive plus defensive rebounds (REB); official team totals can include team rebounds. | [`app_team_season_stats`](GOLD_TABLE_REFERENCE.md#app_team_season_stats) |
-| `own_defensive_rebounds` | Team total: Rebounds recovered after the opponent's missed shot (DREB). | [`app_team_season_stats`](GOLD_TABLE_REFERENCE.md#app_team_season_stats), [`app_team_round_stats`](GOLD_TABLE_REFERENCE.md#app_team_round_stats) |
-| `own_offensive_rebounds` | Team total: Rebounds recovered after the player's or club's missed shot (OREB). | [`app_team_season_stats`](GOLD_TABLE_REFERENCE.md#app_team_season_stats), [`app_team_round_stats`](GOLD_TABLE_REFERENCE.md#app_team_round_stats) |
+| `own_defensive_rebounds` | Team total: Rebounds recovered after the opponent's missed shot (DREB). | [`app_team_season_stats`](GOLD_TABLE_REFERENCE.md#app_team_season_stats) |
+| `own_offensive_rebounds` | Team total: Rebounds recovered after the player's or club's missed shot (OREB). | [`app_team_season_stats`](GOLD_TABLE_REFERENCE.md#app_team_season_stats) |
 | `own_assistances` | Team total: Official credited assists (AST), including EuroLeague assists that lead to free throws. | [`app_team_season_stats`](GOLD_TABLE_REFERENCE.md#app_team_season_stats) |
 | `own_steals` | Team total: Official credited steals (STL). | [`app_team_season_stats`](GOLD_TABLE_REFERENCE.md#app_team_season_stats) |
-| `own_turnovers` | Team total: Lost possessions charged to the player or team (TOV). | [`app_team_season_stats`](GOLD_TABLE_REFERENCE.md#app_team_season_stats), [`app_team_round_stats`](GOLD_TABLE_REFERENCE.md#app_team_round_stats) |
+| `own_turnovers` | Team total: Lost possessions charged to the player or team (TOV). | [`app_team_season_stats`](GOLD_TABLE_REFERENCE.md#app_team_season_stats) |
 | `own_blocks_favour` | Team total: Opponent field-goal attempts blocked by the player or team (BLK). | [`app_team_season_stats`](GOLD_TABLE_REFERENCE.md#app_team_season_stats) |
 | `own_blocks_against` | Team total: The player's or team's field-goal attempts blocked by opponents. | [`app_team_season_stats`](GOLD_TABLE_REFERENCE.md#app_team_season_stats) |
 | `own_fouls_commited` | Team total: Personal fouls charged to the player or team (PF). | [`app_team_season_stats`](GOLD_TABLE_REFERENCE.md#app_team_season_stats) |
 | `own_fouls_received` | Team total: Opponent fouls drawn by the player or team. | [`app_team_season_stats`](GOLD_TABLE_REFERENCE.md#app_team_season_stats) |
 | `own_valuation` | Team total: Official Performance Index Rating; source valuation, distinct from PER and Game Score. See player glossary. | [`app_team_season_stats`](GOLD_TABLE_REFERENCE.md#app_team_season_stats) |
-| `opp_points` | Opponent total: Scored points; in shots this is points awarded for that shot, and in zone tables points from the zone. | [`app_team_season_stats`](GOLD_TABLE_REFERENCE.md#app_team_season_stats) |
+| `opp_points` | Opponent total: Scored points; in shots this is points awarded for that shot. | [`app_team_season_stats`](GOLD_TABLE_REFERENCE.md#app_team_season_stats) |
 | `opp_field_goals_made2` | Opponent total: Successful two-point field goals (2PM). | [`app_team_season_stats`](GOLD_TABLE_REFERENCE.md#app_team_season_stats) |
 | `opp_field_goals_attempted2` | Opponent total: Two-point field-goal attempts (2PA), including makes. | [`app_team_season_stats`](GOLD_TABLE_REFERENCE.md#app_team_season_stats) |
 | `opp_field_goals_made3` | Opponent total: Successful three-point field goals (3PM). | [`app_team_season_stats`](GOLD_TABLE_REFERENCE.md#app_team_season_stats) |
 | `opp_field_goals_attempted3` | Opponent total: Three-point field-goal attempts (3PA), including makes. | [`app_team_season_stats`](GOLD_TABLE_REFERENCE.md#app_team_season_stats) |
-| `opp_free_throws_made` | Opponent total: Successful free throws (FTM). | [`app_team_season_stats`](GOLD_TABLE_REFERENCE.md#app_team_season_stats), [`app_team_round_stats`](GOLD_TABLE_REFERENCE.md#app_team_round_stats) |
-| `opp_free_throws_attempted` | Opponent total: Free-throw attempts (FTA), including makes. | [`app_team_season_stats`](GOLD_TABLE_REFERENCE.md#app_team_season_stats), [`app_team_round_stats`](GOLD_TABLE_REFERENCE.md#app_team_round_stats) |
+| `opp_free_throws_made` | Opponent total: Successful free throws (FTM). | [`app_team_season_stats`](GOLD_TABLE_REFERENCE.md#app_team_season_stats) |
+| `opp_free_throws_attempted` | Opponent total: Free-throw attempts (FTA), including makes. | [`app_team_season_stats`](GOLD_TABLE_REFERENCE.md#app_team_season_stats) |
 | `opp_field_goals_made_total` | Opponent total: Successful two- and three-point field goals (FGM), excluding free throws. | [`app_team_season_stats`](GOLD_TABLE_REFERENCE.md#app_team_season_stats) |
 | `opp_field_goals_attempted_total` | Opponent total: All two- and three-point field-goal attempts (FGA), including blocked attempts. | [`app_team_season_stats`](GOLD_TABLE_REFERENCE.md#app_team_season_stats) |
 | `opp_total_rebounds` | Opponent total: Offensive plus defensive rebounds (REB); official team totals can include team rebounds. | [`app_team_season_stats`](GOLD_TABLE_REFERENCE.md#app_team_season_stats) |
-| `opp_defensive_rebounds` | Opponent total: Rebounds recovered after the opponent's missed shot (DREB). | [`app_team_season_stats`](GOLD_TABLE_REFERENCE.md#app_team_season_stats), [`app_team_round_stats`](GOLD_TABLE_REFERENCE.md#app_team_round_stats) |
-| `opp_offensive_rebounds` | Opponent total: Rebounds recovered after the player's or club's missed shot (OREB). | [`app_team_season_stats`](GOLD_TABLE_REFERENCE.md#app_team_season_stats), [`app_team_round_stats`](GOLD_TABLE_REFERENCE.md#app_team_round_stats) |
+| `opp_defensive_rebounds` | Opponent total: Rebounds recovered after the opponent's missed shot (DREB). | [`app_team_season_stats`](GOLD_TABLE_REFERENCE.md#app_team_season_stats) |
+| `opp_offensive_rebounds` | Opponent total: Rebounds recovered after the player's or club's missed shot (OREB). | [`app_team_season_stats`](GOLD_TABLE_REFERENCE.md#app_team_season_stats) |
 | `opp_assistances` | Opponent total: Official credited assists (AST), including EuroLeague assists that lead to free throws. | [`app_team_season_stats`](GOLD_TABLE_REFERENCE.md#app_team_season_stats) |
 | `opp_steals` | Opponent total: Official credited steals (STL). | [`app_team_season_stats`](GOLD_TABLE_REFERENCE.md#app_team_season_stats) |
-| `opp_turnovers` | Opponent total: Lost possessions charged to the player or team (TOV). | [`app_team_season_stats`](GOLD_TABLE_REFERENCE.md#app_team_season_stats), [`app_team_round_stats`](GOLD_TABLE_REFERENCE.md#app_team_round_stats) |
+| `opp_turnovers` | Opponent total: Lost possessions charged to the player or team (TOV). | [`app_team_season_stats`](GOLD_TABLE_REFERENCE.md#app_team_season_stats) |
 | `opp_blocks_favour` | Opponent total: Opponent field-goal attempts blocked by the player or team (BLK). | [`app_team_season_stats`](GOLD_TABLE_REFERENCE.md#app_team_season_stats) |
 | `opp_blocks_against` | Opponent total: The player's or team's field-goal attempts blocked by opponents. | [`app_team_season_stats`](GOLD_TABLE_REFERENCE.md#app_team_season_stats) |
 | `opp_fouls_commited` | Opponent total: Personal fouls charged to the player or team (PF). | [`app_team_season_stats`](GOLD_TABLE_REFERENCE.md#app_team_season_stats) |
 | `opp_fouls_received` | Opponent total: Opponent fouls drawn by the player or team. | [`app_team_season_stats`](GOLD_TABLE_REFERENCE.md#app_team_season_stats) |
 | `opp_valuation` | Opponent total: Official Performance Index Rating; source valuation, distinct from PER and Game Score. See player glossary. | [`app_team_season_stats`](GOLD_TABLE_REFERENCE.md#app_team_season_stats) |
-| `wins` | Games won in this row's scope; source player misc values follow the API. | [`app_team_round_stats`](GOLD_TABLE_REFERENCE.md#app_team_round_stats), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
-| `losses` | Games lost in this row's scope; source player misc values follow the API. | [`app_team_round_stats`](GOLD_TABLE_REFERENCE.md#app_team_round_stats), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
-| `points_for` | Points scored by this club or lineup in the row's game, stint or cumulative scope. | [`app_team_round_stats`](GOLD_TABLE_REFERENCE.md#app_team_round_stats), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats), [`app_game_team_score_flow`](GOLD_TABLE_REFERENCE.md#app_game_team_score_flow), [`app_lineup_ratings`](GOLD_TABLE_REFERENCE.md#app_lineup_ratings) |
-| `points_against` | Points conceded by this club or lineup in the same sample. | [`app_team_round_stats`](GOLD_TABLE_REFERENCE.md#app_team_round_stats), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats), [`app_game_team_score_flow`](GOLD_TABLE_REFERENCE.md#app_game_team_score_flow), [`app_lineup_ratings`](GOLD_TABLE_REFERENCE.md#app_lineup_ratings) |
-| `own_field_goals_made` | Team total: Successful two- and three-point field goals (FGM), excluding free throws. | [`app_team_round_stats`](GOLD_TABLE_REFERENCE.md#app_team_round_stats) |
-| `own_field_goals_attempted` | Team total: All two- and three-point field-goal attempts (FGA), including blocked attempts. | [`app_team_round_stats`](GOLD_TABLE_REFERENCE.md#app_team_round_stats) |
-| `own_three_pointers_made` | Team total: Successful three-point field goals (3PM). | [`app_team_round_stats`](GOLD_TABLE_REFERENCE.md#app_team_round_stats) |
-| `own_assists` | Team total: Official credited assists (AST), including EuroLeague assists that lead to free throws. | [`app_team_round_stats`](GOLD_TABLE_REFERENCE.md#app_team_round_stats) |
-| `opp_field_goals_made` | Opponent total: Successful two- and three-point field goals (FGM), excluding free throws. | [`app_team_round_stats`](GOLD_TABLE_REFERENCE.md#app_team_round_stats) |
-| `opp_field_goals_attempted` | Opponent total: All two- and three-point field-goal attempts (FGA), including blocked attempts. | [`app_team_round_stats`](GOLD_TABLE_REFERENCE.md#app_team_round_stats) |
-| `opp_three_pointers_made` | Opponent total: Successful three-point field goals (3PM). | [`app_team_round_stats`](GOLD_TABLE_REFERENCE.md#app_team_round_stats) |
-| `opp_assists` | Opponent total: Official credited assists (AST), including EuroLeague assists that lead to free throws. | [`app_team_round_stats`](GOLD_TABLE_REFERENCE.md#app_team_round_stats) |
-| `opp_efg_pct` | Opponent total: (FGM + 0.5 * 3PM) / FGA, a fraction that can exceed 1. | [`app_team_round_stats`](GOLD_TABLE_REFERENCE.md#app_team_round_stats), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats), [`app_game_team_advanced`](GOLD_TABLE_REFERENCE.md#app_game_team_advanced) |
-| `opp_tov_pct` | Opponent total: TOV / (FGA + 0.44 * FTA + TOV), a fraction. | [`app_team_round_stats`](GOLD_TABLE_REFERENCE.md#app_team_round_stats), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats), [`app_game_team_advanced`](GOLD_TABLE_REFERENCE.md#app_game_team_advanced) |
-| `opp_ft_rate` | Opponent total: FTM / FGA, made free throws per field-goal attempt; not FTA / FGA. | [`app_team_round_stats`](GOLD_TABLE_REFERENCE.md#app_team_round_stats), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats), [`app_game_team_advanced`](GOLD_TABLE_REFERENCE.md#app_game_team_advanced) |
+| `wins` | Games won in this row's scope; source player misc values follow the API. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
+| `losses` | Games lost in this row's scope; source player misc values follow the API. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
+| `points_for` | Points scored by this club or lineup in the row's game, stint or cumulative scope. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats), [`app_game_team_score_flow`](GOLD_TABLE_REFERENCE.md#app_game_team_score_flow), [`app_lineup_ratings`](GOLD_TABLE_REFERENCE.md#app_lineup_ratings) |
+| `points_against` | Points conceded by this club or lineup in the same sample. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats), [`app_game_team_score_flow`](GOLD_TABLE_REFERENCE.md#app_game_team_score_flow), [`app_lineup_ratings`](GOLD_TABLE_REFERENCE.md#app_lineup_ratings) |
+| `opp_efg_pct` | Opponent total: (FGM + 0.5 * 3PM) / FGA, a fraction that can exceed 1. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats), [`app_game_team_advanced`](GOLD_TABLE_REFERENCE.md#app_game_team_advanced) |
+| `opp_tov_pct` | Opponent total: TOV / (FGA + 0.44 * FTA + TOV), a fraction. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats), [`app_game_team_advanced`](GOLD_TABLE_REFERENCE.md#app_game_team_advanced) |
+| `opp_ft_rate` | Opponent total: FTM / FGA, made free throws per field-goal attempt; not FTA / FGA. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats), [`app_game_team_advanced`](GOLD_TABLE_REFERENCE.md#app_game_team_advanced) |
 | `own_possessions_estimate` | Club box-score estimate: FGA + 0.44 * FTA - OREB + TOV. | [`app_game_team_advanced`](GOLD_TABLE_REFERENCE.md#app_game_team_advanced) |
 
 ### Possession efficiency and adjusted strength
 
 | SQL statistic | Definition / units | Read from |
 | --- | --- | --- |
-| `game_minutes` | Game-clock minutes, 40 plus 5 per overtime; cumulative sum in team-round rows, not player-minutes. | [`app_team_round_stats`](GOLD_TABLE_REFERENCE.md#app_team_round_stats), [`app_game_team_advanced`](GOLD_TABLE_REFERENCE.md#app_game_team_advanced) |
-| `possessions` | In calculated team rows: mean of the two clubs' possession estimates, summed for cumulative rows. API player feed possessions has a separate source definition. | [`app_team_round_stats`](GOLD_TABLE_REFERENCE.md#app_team_round_stats), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats), [`app_game_team_advanced`](GOLD_TABLE_REFERENCE.md#app_game_team_advanced) |
-| `mov` | (points_for - points_against) / games_played, mean margin in points per game. | [`app_team_round_stats`](GOLD_TABLE_REFERENCE.md#app_team_round_stats), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
-| `pythagorean_exponent` | Fixed exponent 10.25 used in this warehouse's expected-win model. | [`app_team_round_stats`](GOLD_TABLE_REFERENCE.md#app_team_round_stats) |
-| `pythagorean_win_pct` | PF^10.25 / (PF^10.25 + PA^10.25), expected win fraction from cumulative scores. | [`app_team_round_stats`](GOLD_TABLE_REFERENCE.md#app_team_round_stats), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
-| `pythagorean_wins` | pythagorean_win_pct * games_played, expected wins. | [`app_team_round_stats`](GOLD_TABLE_REFERENCE.md#app_team_round_stats), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
-| `pace` | 40 * estimated possessions / game_minutes, possessions per regulation-length team game. | [`app_team_round_stats`](GOLD_TABLE_REFERENCE.md#app_team_round_stats), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats), [`app_game_team_advanced`](GOLD_TABLE_REFERENCE.md#app_game_team_advanced) |
-| `offensive_rating` | 100 * points_for / estimated possessions, points scored per 100 possessions. | [`app_team_round_stats`](GOLD_TABLE_REFERENCE.md#app_team_round_stats), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats), [`app_game_team_advanced`](GOLD_TABLE_REFERENCE.md#app_game_team_advanced) |
-| `defensive_rating` | 100 * points_against / estimated possessions, points allowed per 100 possessions; lower is better. | [`app_team_round_stats`](GOLD_TABLE_REFERENCE.md#app_team_round_stats), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats), [`app_game_team_advanced`](GOLD_TABLE_REFERENCE.md#app_game_team_advanced) |
-| `net_rating` | Offensive rating minus defensive rating; points per 100 possessions. Lineup rows use counted possessions separately on each side. | [`app_team_round_stats`](GOLD_TABLE_REFERENCE.md#app_team_round_stats), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats), [`app_game_team_advanced`](GOLD_TABLE_REFERENCE.md#app_game_team_advanced), [`app_lineup_ratings`](GOLD_TABLE_REFERENCE.md#app_lineup_ratings) |
-| `efg_pct` | (FGM + 0.5 * 3PM) / FGA, a fraction that can exceed 1. | [`app_team_round_stats`](GOLD_TABLE_REFERENCE.md#app_team_round_stats), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats), [`app_game_team_advanced`](GOLD_TABLE_REFERENCE.md#app_game_team_advanced) |
-| `tov_pct` | TOV / (FGA + 0.44 * FTA + TOV), a fraction. | [`app_team_round_stats`](GOLD_TABLE_REFERENCE.md#app_team_round_stats), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats), [`app_game_team_advanced`](GOLD_TABLE_REFERENCE.md#app_game_team_advanced) |
-| `orb_pct` | Offensive rebound share, a fraction; team, player estimated and player on-court denominators differ. See glossary. | [`app_team_round_stats`](GOLD_TABLE_REFERENCE.md#app_team_round_stats), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats), [`app_game_team_advanced`](GOLD_TABLE_REFERENCE.md#app_game_team_advanced) |
-| `drb_pct` | Defensive rebound share, a fraction; team, player estimated and player on-court denominators differ. See glossary. | [`app_team_round_stats`](GOLD_TABLE_REFERENCE.md#app_team_round_stats), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats), [`app_game_team_advanced`](GOLD_TABLE_REFERENCE.md#app_game_team_advanced) |
-| `ft_rate` | FTM / FGA, made free throws per field-goal attempt; not FTA / FGA. | [`app_team_round_stats`](GOLD_TABLE_REFERENCE.md#app_team_round_stats), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats), [`app_game_team_advanced`](GOLD_TABLE_REFERENCE.md#app_game_team_advanced) |
-| `true_shooting_pct` | PTS / (2 * (FGA + 0.44 * FTA)), a fraction that can exceed 1. | [`app_team_round_stats`](GOLD_TABLE_REFERENCE.md#app_team_round_stats), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats), [`app_game_team_advanced`](GOLD_TABLE_REFERENCE.md#app_game_team_advanced) |
-| `assist_ratio` | AST / FGM in calculated team tables; not the API assists_ratio. | [`app_team_round_stats`](GOLD_TABLE_REFERENCE.md#app_team_round_stats), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats), [`app_game_team_advanced`](GOLD_TABLE_REFERENCE.md#app_game_team_advanced) |
-| `connected` | True if the played-game graph links every club in this scope-round; governs adjusted-rating availability. | [`app_team_round_ratings`](GOLD_TABLE_REFERENCE.md#app_team_round_ratings), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
-| `league_offensive_rating` | 100 * league points / league estimated possessions in this scope through this round, both sides counted. | [`app_team_round_ratings`](GOLD_TABLE_REFERENCE.md#app_team_round_ratings), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
-| `league_pace` | 40 * league estimated possessions / league game-clock minutes, both sides counted. | [`app_team_round_ratings`](GOLD_TABLE_REFERENCE.md#app_team_round_ratings), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
-| `relative_offensive_rating` | Club offensive_rating minus league_offensive_rating; positive means better offense. | [`app_team_round_ratings`](GOLD_TABLE_REFERENCE.md#app_team_round_ratings), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
-| `relative_defensive_rating` | Club defensive_rating minus league_offensive_rating; negative means better defense. | [`app_team_round_ratings`](GOLD_TABLE_REFERENCE.md#app_team_round_ratings), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
-| `relative_pace` | Club pace minus league_pace, possessions per 40 minutes above/below the league. | [`app_team_round_ratings`](GOLD_TABLE_REFERENCE.md#app_team_round_ratings), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
-| `srs` | Simple Rating System: MOV plus mean opponent SRS, solved with league mean zero; points per game. | [`app_team_round_ratings`](GOLD_TABLE_REFERENCE.md#app_team_round_ratings), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
-| `sos` | Strength of schedule: mean opponent SRS over all counted games, equal to SRS - MOV. | [`app_team_round_ratings`](GOLD_TABLE_REFERENCE.md#app_team_round_ratings), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
-| `sov` | Strength of victory: mean opponent SRS in games won; NULL without wins. | [`app_team_round_ratings`](GOLD_TABLE_REFERENCE.md#app_team_round_ratings), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
-| `adj_offensive_rating` | Possession-weighted opponent-adjusted offensive rating, centered on league offensive rating. | [`app_team_round_ratings`](GOLD_TABLE_REFERENCE.md#app_team_round_ratings), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
-| `adj_defensive_rating` | Possession-weighted opponent-adjusted defensive rating, centered on league offensive rating; lower is better. | [`app_team_round_ratings`](GOLD_TABLE_REFERENCE.md#app_team_round_ratings), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
-| `adj_net_rating` | Possession-weighted opponent-adjusted net rating, centered on zero; higher is better. | [`app_team_round_ratings`](GOLD_TABLE_REFERENCE.md#app_team_round_ratings), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
+| `game_minutes` | Game-clock minutes, 40 plus 5 per overtime; cumulative sum in team-round rows, not player-minutes. | [`app_game_team_advanced`](GOLD_TABLE_REFERENCE.md#app_game_team_advanced) |
+| `possessions` | In calculated team rows: mean of the two clubs' possession estimates, summed for cumulative rows. API player feed possessions has a separate source definition. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats), [`app_game_team_advanced`](GOLD_TABLE_REFERENCE.md#app_game_team_advanced) |
+| `mov` | (points_for - points_against) / games_played, mean margin in points per game. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
+| `pythagorean_win_pct` | PF^10.25 / (PF^10.25 + PA^10.25), expected win fraction from cumulative scores. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
+| `pythagorean_wins` | pythagorean_win_pct * games_played, expected wins. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
+| `pace` | 40 * estimated possessions / game_minutes, possessions per regulation-length team game. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats), [`app_game_team_advanced`](GOLD_TABLE_REFERENCE.md#app_game_team_advanced) |
+| `offensive_rating` | 100 * points_for / estimated possessions, points scored per 100 possessions. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats), [`app_game_team_advanced`](GOLD_TABLE_REFERENCE.md#app_game_team_advanced) |
+| `defensive_rating` | 100 * points_against / estimated possessions, points allowed per 100 possessions; lower is better. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats), [`app_game_team_advanced`](GOLD_TABLE_REFERENCE.md#app_game_team_advanced) |
+| `net_rating` | Offensive rating minus defensive rating; points per 100 possessions. Lineup rows use counted possessions separately on each side. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats), [`app_game_team_advanced`](GOLD_TABLE_REFERENCE.md#app_game_team_advanced), [`app_lineup_ratings`](GOLD_TABLE_REFERENCE.md#app_lineup_ratings) |
+| `efg_pct` | (FGM + 0.5 * 3PM) / FGA, a fraction that can exceed 1. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats), [`app_game_team_advanced`](GOLD_TABLE_REFERENCE.md#app_game_team_advanced) |
+| `tov_pct` | TOV / (FGA + 0.44 * FTA + TOV), a fraction. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats), [`app_game_team_advanced`](GOLD_TABLE_REFERENCE.md#app_game_team_advanced) |
+| `orb_pct` | Offensive rebound share, a fraction; team, player estimated and player on-court denominators differ. See glossary. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats), [`app_game_team_advanced`](GOLD_TABLE_REFERENCE.md#app_game_team_advanced) |
+| `drb_pct` | Defensive rebound share, a fraction; team, player estimated and player on-court denominators differ. See glossary. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats), [`app_game_team_advanced`](GOLD_TABLE_REFERENCE.md#app_game_team_advanced) |
+| `ft_rate` | FTM / FGA, made free throws per field-goal attempt; not FTA / FGA. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats), [`app_game_team_advanced`](GOLD_TABLE_REFERENCE.md#app_game_team_advanced) |
+| `true_shooting_pct` | PTS / (2 * (FGA + 0.44 * FTA)), a fraction that can exceed 1. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats), [`app_game_team_advanced`](GOLD_TABLE_REFERENCE.md#app_game_team_advanced) |
+| `assist_ratio` | AST / FGM in calculated team tables; not the API assists_ratio. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats), [`app_game_team_advanced`](GOLD_TABLE_REFERENCE.md#app_game_team_advanced) |
+| `connected` | True if the played-game graph links every club in this scope-round; governs adjusted-rating availability. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
+| `league_offensive_rating` | 100 * league points / league estimated possessions in this scope through this round, both sides counted. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
+| `league_pace` | 40 * league estimated possessions / league game-clock minutes, both sides counted. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
+| `relative_offensive_rating` | Club offensive_rating minus league_offensive_rating; positive means better offense. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
+| `relative_defensive_rating` | Club defensive_rating minus league_offensive_rating; negative means better defense. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
+| `relative_pace` | Club pace minus league_pace, possessions per 40 minutes above/below the league. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
+| `srs` | Simple Rating System: MOV plus mean opponent SRS, solved with league mean zero; points per game. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
+| `sos` | Strength of schedule: mean opponent SRS over all counted games, equal to SRS - MOV. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
+| `sov` | Strength of victory: mean opponent SRS in games won; NULL without wins. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
+| `adj_offensive_rating` | Possession-weighted opponent-adjusted offensive rating, centered on league offensive rating. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
+| `adj_defensive_rating` | Possession-weighted opponent-adjusted defensive rating, centered on league offensive rating; lower is better. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
+| `adj_net_rating` | Possession-weighted opponent-adjusted net rating, centered on zero; higher is better. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
 
 ### Home, away and recent-game splits
 
 | SQL statistic | Definition / units | Read from |
 | --- | --- | --- |
-| `home_games` | Local-side games in this scope through this round: Count of contributing games, with a table-specific denominator; in postseason_series this is a JSON fixture list. | [`app_team_round_splits`](GOLD_TABLE_REFERENCE.md#app_team_round_splits), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
-| `home_wins` | Local-side games in this scope through this round: Games won in this row's scope; source player misc values follow the API. | [`app_team_round_splits`](GOLD_TABLE_REFERENCE.md#app_team_round_splits), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
-| `home_mov` | Local-side games in this scope through this round: (points_for - points_against) / games_played, mean margin in points per game. | [`app_team_round_splits`](GOLD_TABLE_REFERENCE.md#app_team_round_splits), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
-| `home_offensive_rating` | Local-side games in this scope through this round: 100 * points_for / estimated possessions, points scored per 100 possessions. | [`app_team_round_splits`](GOLD_TABLE_REFERENCE.md#app_team_round_splits), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
-| `home_defensive_rating` | Local-side games in this scope through this round: 100 * points_against / estimated possessions, points allowed per 100 possessions; lower is better. | [`app_team_round_splits`](GOLD_TABLE_REFERENCE.md#app_team_round_splits), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
-| `home_net_rating` | Local-side games in this scope through this round: Offensive rating minus defensive rating; points per 100 possessions. Lineup rows use counted possessions separately on each side. | [`app_team_round_splits`](GOLD_TABLE_REFERENCE.md#app_team_round_splits), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
-| `home_pace` | Local-side games in this scope through this round: 40 * estimated possessions / game_minutes, possessions per regulation-length team game. | [`app_team_round_splits`](GOLD_TABLE_REFERENCE.md#app_team_round_splits), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
-| `away_games` | Road-side games in this scope through this round: Count of contributing games, with a table-specific denominator; in postseason_series this is a JSON fixture list. | [`app_team_round_splits`](GOLD_TABLE_REFERENCE.md#app_team_round_splits), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
-| `away_wins` | Road-side games in this scope through this round: Games won in this row's scope; source player misc values follow the API. | [`app_team_round_splits`](GOLD_TABLE_REFERENCE.md#app_team_round_splits), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
-| `away_mov` | Road-side games in this scope through this round: (points_for - points_against) / games_played, mean margin in points per game. | [`app_team_round_splits`](GOLD_TABLE_REFERENCE.md#app_team_round_splits), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
-| `away_offensive_rating` | Road-side games in this scope through this round: 100 * points_for / estimated possessions, points scored per 100 possessions. | [`app_team_round_splits`](GOLD_TABLE_REFERENCE.md#app_team_round_splits), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
-| `away_defensive_rating` | Road-side games in this scope through this round: 100 * points_against / estimated possessions, points allowed per 100 possessions; lower is better. | [`app_team_round_splits`](GOLD_TABLE_REFERENCE.md#app_team_round_splits), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
-| `away_net_rating` | Road-side games in this scope through this round: Offensive rating minus defensive rating; points per 100 possessions. Lineup rows use counted possessions separately on each side. | [`app_team_round_splits`](GOLD_TABLE_REFERENCE.md#app_team_round_splits), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
-| `away_pace` | Road-side games in this scope through this round: 40 * estimated possessions / game_minutes, possessions per regulation-length team game. | [`app_team_round_splits`](GOLD_TABLE_REFERENCE.md#app_team_round_splits), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
-| `last5_games` | Last up to five counted games in this scope: Count of contributing games, with a table-specific denominator; in postseason_series this is a JSON fixture list. | [`app_team_round_splits`](GOLD_TABLE_REFERENCE.md#app_team_round_splits), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
-| `last5_wins` | Last up to five counted games in this scope: Games won in this row's scope; source player misc values follow the API. | [`app_team_round_splits`](GOLD_TABLE_REFERENCE.md#app_team_round_splits), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
-| `last5_mov` | Last up to five counted games in this scope: (points_for - points_against) / games_played, mean margin in points per game. | [`app_team_round_splits`](GOLD_TABLE_REFERENCE.md#app_team_round_splits), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
-| `last5_offensive_rating` | Last up to five counted games in this scope: 100 * points_for / estimated possessions, points scored per 100 possessions. | [`app_team_round_splits`](GOLD_TABLE_REFERENCE.md#app_team_round_splits), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
-| `last5_defensive_rating` | Last up to five counted games in this scope: 100 * points_against / estimated possessions, points allowed per 100 possessions; lower is better. | [`app_team_round_splits`](GOLD_TABLE_REFERENCE.md#app_team_round_splits), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
-| `last5_net_rating` | Last up to five counted games in this scope: Offensive rating minus defensive rating; points per 100 possessions. Lineup rows use counted possessions separately on each side. | [`app_team_round_splits`](GOLD_TABLE_REFERENCE.md#app_team_round_splits), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
-| `last5_pace` | Last up to five counted games in this scope: 40 * estimated possessions / game_minutes, possessions per regulation-length team game. | [`app_team_round_splits`](GOLD_TABLE_REFERENCE.md#app_team_round_splits), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
-| `last10_games` | Last up to ten counted games in this scope: Count of contributing games, with a table-specific denominator; in postseason_series this is a JSON fixture list. | [`app_team_round_splits`](GOLD_TABLE_REFERENCE.md#app_team_round_splits), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
-| `last10_wins` | Last up to ten counted games in this scope: Games won in this row's scope; source player misc values follow the API. | [`app_team_round_splits`](GOLD_TABLE_REFERENCE.md#app_team_round_splits), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
-| `last10_mov` | Last up to ten counted games in this scope: (points_for - points_against) / games_played, mean margin in points per game. | [`app_team_round_splits`](GOLD_TABLE_REFERENCE.md#app_team_round_splits), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
-| `last10_offensive_rating` | Last up to ten counted games in this scope: 100 * points_for / estimated possessions, points scored per 100 possessions. | [`app_team_round_splits`](GOLD_TABLE_REFERENCE.md#app_team_round_splits), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
-| `last10_defensive_rating` | Last up to ten counted games in this scope: 100 * points_against / estimated possessions, points allowed per 100 possessions; lower is better. | [`app_team_round_splits`](GOLD_TABLE_REFERENCE.md#app_team_round_splits), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
-| `last10_net_rating` | Last up to ten counted games in this scope: Offensive rating minus defensive rating; points per 100 possessions. Lineup rows use counted possessions separately on each side. | [`app_team_round_splits`](GOLD_TABLE_REFERENCE.md#app_team_round_splits), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
-| `last10_pace` | Last up to ten counted games in this scope: 40 * estimated possessions / game_minutes, possessions per regulation-length team game. | [`app_team_round_splits`](GOLD_TABLE_REFERENCE.md#app_team_round_splits), [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
+| `home_games` | Local-side games in this scope through this round: Count of contributing games, with a table-specific denominator; in postseason_series this is a JSON fixture list. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
+| `home_wins` | Local-side games in this scope through this round: Games won in this row's scope; source player misc values follow the API. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
+| `home_mov` | Local-side games in this scope through this round: (points_for - points_against) / games_played, mean margin in points per game. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
+| `home_offensive_rating` | Local-side games in this scope through this round: 100 * points_for / estimated possessions, points scored per 100 possessions. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
+| `home_defensive_rating` | Local-side games in this scope through this round: 100 * points_against / estimated possessions, points allowed per 100 possessions; lower is better. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
+| `home_net_rating` | Local-side games in this scope through this round: Offensive rating minus defensive rating; points per 100 possessions. Lineup rows use counted possessions separately on each side. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
+| `home_pace` | Local-side games in this scope through this round: 40 * estimated possessions / game_minutes, possessions per regulation-length team game. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
+| `away_games` | Road-side games in this scope through this round: Count of contributing games, with a table-specific denominator; in postseason_series this is a JSON fixture list. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
+| `away_wins` | Road-side games in this scope through this round: Games won in this row's scope; source player misc values follow the API. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
+| `away_mov` | Road-side games in this scope through this round: (points_for - points_against) / games_played, mean margin in points per game. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
+| `away_offensive_rating` | Road-side games in this scope through this round: 100 * points_for / estimated possessions, points scored per 100 possessions. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
+| `away_defensive_rating` | Road-side games in this scope through this round: 100 * points_against / estimated possessions, points allowed per 100 possessions; lower is better. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
+| `away_net_rating` | Road-side games in this scope through this round: Offensive rating minus defensive rating; points per 100 possessions. Lineup rows use counted possessions separately on each side. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
+| `away_pace` | Road-side games in this scope through this round: 40 * estimated possessions / game_minutes, possessions per regulation-length team game. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
+| `last5_games` | Last up to five counted games in this scope: Count of contributing games, with a table-specific denominator; in postseason_series this is a JSON fixture list. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
+| `last5_wins` | Last up to five counted games in this scope: Games won in this row's scope; source player misc values follow the API. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
+| `last5_mov` | Last up to five counted games in this scope: (points_for - points_against) / games_played, mean margin in points per game. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
+| `last5_offensive_rating` | Last up to five counted games in this scope: 100 * points_for / estimated possessions, points scored per 100 possessions. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
+| `last5_defensive_rating` | Last up to five counted games in this scope: 100 * points_against / estimated possessions, points allowed per 100 possessions; lower is better. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
+| `last5_net_rating` | Last up to five counted games in this scope: Offensive rating minus defensive rating; points per 100 possessions. Lineup rows use counted possessions separately on each side. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
+| `last5_pace` | Last up to five counted games in this scope: 40 * estimated possessions / game_minutes, possessions per regulation-length team game. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
+| `last10_games` | Last up to ten counted games in this scope: Count of contributing games, with a table-specific denominator; in postseason_series this is a JSON fixture list. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
+| `last10_wins` | Last up to ten counted games in this scope: Games won in this row's scope; source player misc values follow the API. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
+| `last10_mov` | Last up to ten counted games in this scope: (points_for - points_against) / games_played, mean margin in points per game. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
+| `last10_offensive_rating` | Last up to ten counted games in this scope: 100 * points_for / estimated possessions, points scored per 100 possessions. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
+| `last10_defensive_rating` | Last up to ten counted games in this scope: 100 * points_against / estimated possessions, points allowed per 100 possessions; lower is better. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
+| `last10_net_rating` | Last up to ten counted games in this scope: Offensive rating minus defensive rating; points per 100 possessions. Lineup rows use counted possessions separately on each side. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
+| `last10_pace` | Last up to ten counted games in this scope: 40 * estimated possessions / game_minutes, possessions per regulation-length team game. | [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) |
 
-### Event analytics, zones, lineup ratings and samples
+### Event analytics, lineup ratings and samples
 
 | SQL statistic | Definition / units | Read from |
 | --- | --- | --- |
@@ -616,17 +607,12 @@ are reference inputs, not additional Gold frontend tables.
 | `points_off_turnover_points` | Sum of positive shot points tagged points_off_turnover, including any flagged made free throws; distinct from the Boolean shot flag. | [`app_game_team_shot_splits`](GOLD_TABLE_REFERENCE.md#app_game_team_shot_splits), [`app_team_pbp_stats`](GOLD_TABLE_REFERENCE.md#app_team_pbp_stats) |
 | `assisted_field_goals` | min(team AS event count, team made-field-goal event count); summed in aggregates, not shot-by-shot matching. | [`app_game_team_shot_splits`](GOLD_TABLE_REFERENCE.md#app_game_team_shot_splits), [`app_team_pbp_stats`](GOLD_TABLE_REFERENCE.md#app_team_pbp_stats) |
 | `assisted_fg_pct` | assisted_field_goals / field_goals_made, a fraction. | [`app_game_team_shot_splits`](GOLD_TABLE_REFERENCE.md#app_game_team_shot_splits), [`app_team_pbp_stats`](GOLD_TABLE_REFERENCE.md#app_team_pbp_stats) |
-| `zone` | Source shot-zone label, preserved without a warehouse court taxonomy. | [`app_game_team_shot_zones`](GOLD_TABLE_REFERENCE.md#app_game_team_shot_zones), [`app_team_shot_zone_stats`](GOLD_TABLE_REFERENCE.md#app_team_shot_zone_stats) |
-| `attempts` | Field-goal attempts in this source zone, including makes. | [`app_game_team_shot_zones`](GOLD_TABLE_REFERENCE.md#app_game_team_shot_zones), [`app_team_shot_zone_stats`](GOLD_TABLE_REFERENCE.md#app_team_shot_zone_stats) |
-| `made` | Successful field goals in this source zone. | [`app_game_team_shot_zones`](GOLD_TABLE_REFERENCE.md#app_game_team_shot_zones), [`app_team_shot_zone_stats`](GOLD_TABLE_REFERENCE.md#app_team_shot_zone_stats) |
 | `games` | Count of contributing games, with a table-specific denominator; in postseason_series this is a JSON fixture list. | [`app_team_pbp_stats`](GOLD_TABLE_REFERENCE.md#app_team_pbp_stats), [`app_lineup_ratings`](GOLD_TABLE_REFERENCE.md#app_lineup_ratings) |
 | `timed_games` | Games with non-NULL time-leading data; denominator for time-based summaries. | [`app_team_pbp_stats`](GOLD_TABLE_REFERENCE.md#app_team_pbp_stats) |
 | `clutch_games` | Timed games with positive clutch_seconds, not all close final scores. | [`app_team_pbp_stats`](GOLD_TABLE_REFERENCE.md#app_team_pbp_stats) |
 | `flagged_games` | Games with recorded shot-split flags (non-NULL fast_break_points), denominator for flagged scoring coverage. | [`app_team_pbp_stats`](GOLD_TABLE_REFERENCE.md#app_team_pbp_stats) |
 | `lead_changes_per_game` | Mean of available per-game lead_changes values. | [`app_team_pbp_stats`](GOLD_TABLE_REFERENCE.md#app_team_pbp_stats) |
 | `ties_per_game` | Mean of available per-game ties values. | [`app_team_pbp_stats`](GOLD_TABLE_REFERENCE.md#app_team_pbp_stats) |
-| `fg_pct` | made / attempts in this zone, a fraction. | [`app_team_shot_zone_stats`](GOLD_TABLE_REFERENCE.md#app_team_shot_zone_stats) |
-| `attempt_share` | Zone attempts / all zone-tagged field-goal attempts for the club in the scope, a fraction. | [`app_team_shot_zone_stats`](GOLD_TABLE_REFERENCE.md#app_team_shot_zone_stats) |
 | `lineup_size` | Number of players in the combination: 2, 3 or 5. | [`app_lineup_ratings`](GOLD_TABLE_REFERENCE.md#app_lineup_ratings) |
 | `seconds` | Elapsed on-court time in complete stored stints, summed over the row's sample. | [`app_lineup_ratings`](GOLD_TABLE_REFERENCE.md#app_lineup_ratings) |
 | `possessions_for` | Team counted possessions closed during these stints. | [`app_lineup_ratings`](GOLD_TABLE_REFERENCE.md#app_lineup_ratings) |
@@ -709,55 +695,53 @@ are reference inputs, not additional Gold frontend tables.
 
 ### Local Silver API team reference feeds
 
-These four API tables are local-only and have no Gold/Neon projection.
-Their own/opponent definitions and source units are retained for cross-checks.
-For the opponents feeds, each metric is what opponents did against the keyed
-club. Filter competition, season, phase_code and mode; join on club_code.
-`team_ranking` is the source ranking, not an adjusted team rating.
-Current automatic Gold round checks read the own-team traditional/advanced
-accumulated feeds; the opponent feeds remain available as local reference data.
+These two API tables are local-only and have no Gold/Neon projection. They hold
+the own-team traditional and advanced feeds in accumulated mode only, for Gold's
+API cross-check of the team round totals. Filter competition, season and
+phase_code; join on club_code. `team_ranking` is the source ranking, not an
+adjusted team rating. Opponent totals come from `app_team_season_stats` (`opp_*`).
 
-### API team measures (including opponents)
+### API team measures
 
 | SQL statistic | Definition / units | Read from |
 | --- | --- | --- |
-| `games_played` | Games/appearances in the selected row scope; see table notes for counted games and series fixture counts. | [`silver.season_team_stats_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_traditional), [`silver.season_team_stats_advanced`](SILVER_TABLE_REFERENCE.md#season_team_stats_advanced), [`silver.season_team_stats_opponents_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_opponents_traditional), [`silver.season_team_stats_opponents_advanced`](SILVER_TABLE_REFERENCE.md#season_team_stats_opponents_advanced) |
-| `minutes_played` | Playing time in minutes in season feeds; traditional perGame rows use minutes per appearance. | [`silver.season_team_stats_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_traditional), [`silver.season_team_stats_opponents_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_opponents_traditional) |
-| `points` | Scored points; in shots this is points awarded for that shot, and in zone tables points from the zone. | [`silver.season_team_stats_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_traditional), [`silver.season_team_stats_opponents_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_opponents_traditional) |
-| `two_pointers_made` | Successful two-point field goals (2PM). | [`silver.season_team_stats_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_traditional), [`silver.season_team_stats_opponents_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_opponents_traditional) |
-| `two_pointers_attempted` | Two-point field-goal attempts (2PA), including makes. | [`silver.season_team_stats_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_traditional), [`silver.season_team_stats_opponents_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_opponents_traditional) |
-| `two_pointers_percentage` | Two-point shooting percentage, 100 * 2PM / 2PA, on the feed's 0-100 scale. | [`silver.season_team_stats_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_traditional), [`silver.season_team_stats_opponents_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_opponents_traditional) |
-| `three_pointers_made` | Successful three-point field goals (3PM). | [`silver.season_team_stats_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_traditional), [`silver.season_team_stats_opponents_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_opponents_traditional) |
-| `three_pointers_attempted` | Three-point field-goal attempts (3PA), including makes. | [`silver.season_team_stats_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_traditional), [`silver.season_team_stats_opponents_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_opponents_traditional) |
-| `three_pointers_percentage` | Three-point shooting percentage, 100 * 3PM / 3PA, on the feed's 0-100 scale. | [`silver.season_team_stats_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_traditional), [`silver.season_team_stats_opponents_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_opponents_traditional) |
-| `free_throws_made` | Successful free throws (FTM). | [`silver.season_team_stats_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_traditional), [`silver.season_team_stats_opponents_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_opponents_traditional) |
-| `free_throws_attempted` | Free-throw attempts (FTA), including makes. | [`silver.season_team_stats_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_traditional), [`silver.season_team_stats_opponents_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_opponents_traditional) |
-| `free_throws_percentage` | Free-throw shooting percentage, 100 * FTM / FTA, on the feed's 0-100 scale. | [`silver.season_team_stats_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_traditional), [`silver.season_team_stats_opponents_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_opponents_traditional) |
-| `offensive_rebounds` | Rebounds recovered after the player's or club's missed shot (OREB). | [`silver.season_team_stats_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_traditional), [`silver.season_team_stats_opponents_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_opponents_traditional) |
-| `defensive_rebounds` | Rebounds recovered after the opponent's missed shot (DREB). | [`silver.season_team_stats_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_traditional), [`silver.season_team_stats_opponents_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_opponents_traditional) |
-| `total_rebounds` | Offensive plus defensive rebounds (REB); official team totals can include team rebounds. | [`silver.season_team_stats_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_traditional), [`silver.season_team_stats_opponents_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_opponents_traditional) |
-| `assists` | Official credited assists (AST), including EuroLeague assists that lead to free throws. | [`silver.season_team_stats_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_traditional), [`silver.season_team_stats_opponents_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_opponents_traditional) |
-| `steals` | Official credited steals (STL). | [`silver.season_team_stats_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_traditional), [`silver.season_team_stats_opponents_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_opponents_traditional) |
-| `turnovers` | Lost possessions charged to the player or team (TOV). | [`silver.season_team_stats_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_traditional), [`silver.season_team_stats_opponents_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_opponents_traditional) |
-| `blocks` | Opponent field-goal attempts blocked by the player or team (BLK). | [`silver.season_team_stats_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_traditional), [`silver.season_team_stats_opponents_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_opponents_traditional) |
-| `blocks_against` | The player's or team's field-goal attempts blocked by opponents. | [`silver.season_team_stats_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_traditional), [`silver.season_team_stats_opponents_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_opponents_traditional) |
-| `fouls_committed` | Personal fouls charged to the player or team (PF). | [`silver.season_team_stats_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_traditional), [`silver.season_team_stats_opponents_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_opponents_traditional) |
-| `fouls_drawn` | Opponent fouls drawn by the player or team. | [`silver.season_team_stats_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_traditional), [`silver.season_team_stats_opponents_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_opponents_traditional) |
-| `pir` | Official Performance Index Rating; source valuation, distinct from PER and Game Score. See player glossary. | [`silver.season_team_stats_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_traditional), [`silver.season_team_stats_opponents_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_opponents_traditional) |
-| `effective_field_goal_percentage` | API eFG percentage on the 0-100 scale; calculated efg_pct uses a fraction instead. | [`silver.season_team_stats_advanced`](SILVER_TABLE_REFERENCE.md#season_team_stats_advanced), [`silver.season_team_stats_opponents_advanced`](SILVER_TABLE_REFERENCE.md#season_team_stats_opponents_advanced) |
-| `true_shooting_percentage` | API true-shooting percentage on the 0-100 scale; calculated ts_pct/true_shooting_pct use fractions. | [`silver.season_team_stats_advanced`](SILVER_TABLE_REFERENCE.md#season_team_stats_advanced), [`silver.season_team_stats_opponents_advanced`](SILVER_TABLE_REFERENCE.md#season_team_stats_opponents_advanced) |
-| `offensive_rebounds_percentage` | API offensive rebound percentage on the 0-100 scale, retaining source team-minute conventions. | [`silver.season_team_stats_advanced`](SILVER_TABLE_REFERENCE.md#season_team_stats_advanced), [`silver.season_team_stats_opponents_advanced`](SILVER_TABLE_REFERENCE.md#season_team_stats_opponents_advanced) |
-| `defensive_rebounds_percentage` | API defensive rebound percentage on the 0-100 scale, retaining source team-minute conventions. | [`silver.season_team_stats_advanced`](SILVER_TABLE_REFERENCE.md#season_team_stats_advanced), [`silver.season_team_stats_opponents_advanced`](SILVER_TABLE_REFERENCE.md#season_team_stats_opponents_advanced) |
-| `rebounds_percentage` | API total rebound percentage on the 0-100 scale, retaining source team-minute conventions. | [`silver.season_team_stats_advanced`](SILVER_TABLE_REFERENCE.md#season_team_stats_advanced), [`silver.season_team_stats_opponents_advanced`](SILVER_TABLE_REFERENCE.md#season_team_stats_opponents_advanced) |
-| `assists_to_turnovers_ratio` | API assists-to-turnovers ratio (AST/TOV), retained as supplied including source zero-denominator handling. | [`silver.season_team_stats_advanced`](SILVER_TABLE_REFERENCE.md#season_team_stats_advanced), [`silver.season_team_stats_opponents_advanced`](SILVER_TABLE_REFERENCE.md#season_team_stats_opponents_advanced) |
-| `assists_ratio` | API assists ratio, retained without recomputation; denominator differs from calculated assist_ratio/ast_pct. | [`silver.season_team_stats_advanced`](SILVER_TABLE_REFERENCE.md#season_team_stats_advanced), [`silver.season_team_stats_opponents_advanced`](SILVER_TABLE_REFERENCE.md#season_team_stats_opponents_advanced) |
-| `turnovers_ratio` | API turnovers ratio, retained without recomputation; not calculated tov_pct. | [`silver.season_team_stats_advanced`](SILVER_TABLE_REFERENCE.md#season_team_stats_advanced), [`silver.season_team_stats_opponents_advanced`](SILVER_TABLE_REFERENCE.md#season_team_stats_opponents_advanced) |
-| `two_point_rate` | API two-point rate; denominator and scale are not established by the warehouse. | [`silver.season_team_stats_advanced`](SILVER_TABLE_REFERENCE.md#season_team_stats_advanced), [`silver.season_team_stats_opponents_advanced`](SILVER_TABLE_REFERENCE.md#season_team_stats_opponents_advanced) |
-| `three_point_rate` | API three-point rate; denominator and scale are not established by the warehouse. | [`silver.season_team_stats_advanced`](SILVER_TABLE_REFERENCE.md#season_team_stats_advanced), [`silver.season_team_stats_opponents_advanced`](SILVER_TABLE_REFERENCE.md#season_team_stats_opponents_advanced) |
-| `free_throws_rate` | API free-throw rate; definition differs from calculated FTM/FGA ft_rate. Do not substitute it. | [`silver.season_team_stats_advanced`](SILVER_TABLE_REFERENCE.md#season_team_stats_advanced), [`silver.season_team_stats_opponents_advanced`](SILVER_TABLE_REFERENCE.md#season_team_stats_opponents_advanced) |
-| `points_from_two_pointers_percentage` | API percentage of points from two-pointers, 0-100 scale. | [`silver.season_team_stats_advanced`](SILVER_TABLE_REFERENCE.md#season_team_stats_advanced), [`silver.season_team_stats_opponents_advanced`](SILVER_TABLE_REFERENCE.md#season_team_stats_opponents_advanced) |
-| `points_from_three_pointers_percentage` | API percentage of points from three-pointers, 0-100 scale. | [`silver.season_team_stats_advanced`](SILVER_TABLE_REFERENCE.md#season_team_stats_advanced), [`silver.season_team_stats_opponents_advanced`](SILVER_TABLE_REFERENCE.md#season_team_stats_opponents_advanced) |
-| `points_from_free_throws_percentage` | API percentage of points from free throws, 0-100 scale. | [`silver.season_team_stats_advanced`](SILVER_TABLE_REFERENCE.md#season_team_stats_advanced), [`silver.season_team_stats_opponents_advanced`](SILVER_TABLE_REFERENCE.md#season_team_stats_opponents_advanced) |
+| `games_played` | Games/appearances in the selected row scope; see table notes for counted games and series fixture counts. | [`silver.season_team_stats_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_traditional), [`silver.season_team_stats_advanced`](SILVER_TABLE_REFERENCE.md#season_team_stats_advanced) |
+| `minutes_played` | Playing time in minutes in season feeds; traditional perGame rows use minutes per appearance. | [`silver.season_team_stats_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_traditional) |
+| `points` | Scored points; in shots this is points awarded for that shot. | [`silver.season_team_stats_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_traditional) |
+| `two_pointers_made` | Successful two-point field goals (2PM). | [`silver.season_team_stats_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_traditional) |
+| `two_pointers_attempted` | Two-point field-goal attempts (2PA), including makes. | [`silver.season_team_stats_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_traditional) |
+| `two_pointers_percentage` | Two-point shooting percentage, 100 * 2PM / 2PA, on the feed's 0-100 scale. | [`silver.season_team_stats_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_traditional) |
+| `three_pointers_made` | Successful three-point field goals (3PM). | [`silver.season_team_stats_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_traditional) |
+| `three_pointers_attempted` | Three-point field-goal attempts (3PA), including makes. | [`silver.season_team_stats_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_traditional) |
+| `three_pointers_percentage` | Three-point shooting percentage, 100 * 3PM / 3PA, on the feed's 0-100 scale. | [`silver.season_team_stats_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_traditional) |
+| `free_throws_made` | Successful free throws (FTM). | [`silver.season_team_stats_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_traditional) |
+| `free_throws_attempted` | Free-throw attempts (FTA), including makes. | [`silver.season_team_stats_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_traditional) |
+| `free_throws_percentage` | Free-throw shooting percentage, 100 * FTM / FTA, on the feed's 0-100 scale. | [`silver.season_team_stats_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_traditional) |
+| `offensive_rebounds` | Rebounds recovered after the player's or club's missed shot (OREB). | [`silver.season_team_stats_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_traditional) |
+| `defensive_rebounds` | Rebounds recovered after the opponent's missed shot (DREB). | [`silver.season_team_stats_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_traditional) |
+| `total_rebounds` | Offensive plus defensive rebounds (REB); official team totals can include team rebounds. | [`silver.season_team_stats_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_traditional) |
+| `assists` | Official credited assists (AST), including EuroLeague assists that lead to free throws. | [`silver.season_team_stats_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_traditional) |
+| `steals` | Official credited steals (STL). | [`silver.season_team_stats_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_traditional) |
+| `turnovers` | Lost possessions charged to the player or team (TOV). | [`silver.season_team_stats_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_traditional) |
+| `blocks` | Opponent field-goal attempts blocked by the player or team (BLK). | [`silver.season_team_stats_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_traditional) |
+| `blocks_against` | The player's or team's field-goal attempts blocked by opponents. | [`silver.season_team_stats_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_traditional) |
+| `fouls_committed` | Personal fouls charged to the player or team (PF). | [`silver.season_team_stats_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_traditional) |
+| `fouls_drawn` | Opponent fouls drawn by the player or team. | [`silver.season_team_stats_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_traditional) |
+| `pir` | Official Performance Index Rating; source valuation, distinct from PER and Game Score. See player glossary. | [`silver.season_team_stats_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_traditional) |
+| `effective_field_goal_percentage` | API eFG percentage on the 0-100 scale; calculated efg_pct uses a fraction instead. | [`silver.season_team_stats_advanced`](SILVER_TABLE_REFERENCE.md#season_team_stats_advanced) |
+| `true_shooting_percentage` | API true-shooting percentage on the 0-100 scale; calculated ts_pct/true_shooting_pct use fractions. | [`silver.season_team_stats_advanced`](SILVER_TABLE_REFERENCE.md#season_team_stats_advanced) |
+| `offensive_rebounds_percentage` | API offensive rebound percentage on the 0-100 scale, retaining source team-minute conventions. | [`silver.season_team_stats_advanced`](SILVER_TABLE_REFERENCE.md#season_team_stats_advanced) |
+| `defensive_rebounds_percentage` | API defensive rebound percentage on the 0-100 scale, retaining source team-minute conventions. | [`silver.season_team_stats_advanced`](SILVER_TABLE_REFERENCE.md#season_team_stats_advanced) |
+| `rebounds_percentage` | API total rebound percentage on the 0-100 scale, retaining source team-minute conventions. | [`silver.season_team_stats_advanced`](SILVER_TABLE_REFERENCE.md#season_team_stats_advanced) |
+| `assists_to_turnovers_ratio` | API assists-to-turnovers ratio (AST/TOV), retained as supplied including source zero-denominator handling. | [`silver.season_team_stats_advanced`](SILVER_TABLE_REFERENCE.md#season_team_stats_advanced) |
+| `assists_ratio` | API assists ratio, retained without recomputation; denominator differs from calculated assist_ratio/ast_pct. | [`silver.season_team_stats_advanced`](SILVER_TABLE_REFERENCE.md#season_team_stats_advanced) |
+| `turnovers_ratio` | API turnovers ratio, retained without recomputation; not calculated tov_pct. | [`silver.season_team_stats_advanced`](SILVER_TABLE_REFERENCE.md#season_team_stats_advanced) |
+| `two_point_rate` | API two-point rate; denominator and scale are not established by the warehouse. | [`silver.season_team_stats_advanced`](SILVER_TABLE_REFERENCE.md#season_team_stats_advanced) |
+| `three_point_rate` | API three-point rate; denominator and scale are not established by the warehouse. | [`silver.season_team_stats_advanced`](SILVER_TABLE_REFERENCE.md#season_team_stats_advanced) |
+| `free_throws_rate` | API free-throw rate; definition differs from calculated FTM/FGA ft_rate. Do not substitute it. | [`silver.season_team_stats_advanced`](SILVER_TABLE_REFERENCE.md#season_team_stats_advanced) |
+| `points_from_two_pointers_percentage` | API percentage of points from two-pointers, 0-100 scale. | [`silver.season_team_stats_advanced`](SILVER_TABLE_REFERENCE.md#season_team_stats_advanced) |
+| `points_from_three_pointers_percentage` | API percentage of points from three-pointers, 0-100 scale. | [`silver.season_team_stats_advanced`](SILVER_TABLE_REFERENCE.md#season_team_stats_advanced) |
+| `points_from_free_throws_percentage` | API percentage of points from free throws, 0-100 scale. | [`silver.season_team_stats_advanced`](SILVER_TABLE_REFERENCE.md#season_team_stats_advanced) |
 
 ### Game and shot observations
 
@@ -769,7 +753,7 @@ accumulated feeds; the opponent feeds remain available as local reference data.
 | `road_standings_score` | Source road-side score used for standings, retained separately from the final score. | [`app_games`](GOLD_TABLE_REFERENCE.md#app_games) |
 | `audience` | Reported attendance; source zero for unknown is stored as NULL. | [`app_games`](GOLD_TABLE_REFERENCE.md#app_games) |
 | `score` | Points scored by this side in this period, not the cumulative score. | [`app_game_period_scores`](GOLD_TABLE_REFERENCE.md#app_game_period_scores) |
-| `points` | Scored points; in shots this is points awarded for that shot, and in zone tables points from the zone. | [`app_shots`](GOLD_TABLE_REFERENCE.md#app_shots) |
+| `points` | Scored points; in shots this is points awarded for that shot. | [`app_shots`](GOLD_TABLE_REFERENCE.md#app_shots) |
 | `coord_x` | Shot x coordinate in the source coordinate system; no warehouse court-unit contract. | [`app_shots`](GOLD_TABLE_REFERENCE.md#app_shots) |
 | `coord_y` | Shot y coordinate in the source coordinate system; no warehouse court-unit contract. | [`app_shots`](GOLD_TABLE_REFERENCE.md#app_shots) |
 | `fastbreak` | Source flag that the shot was a fast-break action; NULL means unrecorded. | [`app_shots`](GOLD_TABLE_REFERENCE.md#app_shots) |
@@ -819,7 +803,7 @@ Assist ratio = AST / FGM
 
 These four-factor definitions use **made** free throws for FT rate. API
 `free_throws_rate`, `turnovers_ratio` and `assists_ratio` use separate definitions.
-Team round rates recompute from cumulative totals. A season pace is
+Team round rates (`app_standings_stats`) recompute from cumulative totals. A season pace is
 `40*sum(possessions)/sum(game_minutes)`, not an average of game paces.
 Game-clock minutes are not the sum of five players' minutes.
 
@@ -887,7 +871,7 @@ Implementations: [possessions.py](../postgres_etl/possessions.py),
 [score_flow.py](../postgres_etl/score_flow.py),
 [team_pbp.py](../gold_etl/team_pbp.py).
 
-### Shot splits, zones and lineups
+### Shot splits and lineups
 
 Flagged points sum positive shot points for each source flag. The implementation
 does not restrict the flagged sums to field goals: any made shot row, including
@@ -900,11 +884,9 @@ per team-game. This is a capped event count, not a shot-by-shot assist matching
 algorithm; EuroLeague assists can lead to free throws. The assisted FG fraction
 is that count divided by event FGM. For aggregate rows it is sum(count) / sum(FGM).
 
-Zone tables use field-goal attempts with nonempty source zones only. `fg_pct`
-is made/attempts; `attempt_share` divides zone attempts by the club's zone-tagged
-attempts in scope. A zone with no attempts has no row. Raw shot coordinates and
-zone labels are retained without a warehouse contract for meters, orientation,
-rim distance or a paint/midrange/above-break taxonomy.
+Raw shot coordinates and source zone labels are retained in `app_shots` without a
+warehouse contract for meters, orientation, rim distance or a paint/midrange/above-break
+taxonomy; the web app derives its own zones from the coordinates.
 
 Lineup ratings use counted possessions and points from complete five-on-five
 stints. A pair/triple sums every stored five-man stint containing its members.
@@ -914,8 +896,6 @@ combination rows overlap. `ortg = 100*points_for/possessions_for`,
 They are unadjusted team results for that unit. Four-man units are not built.
 
 Implementations: [shot_splits.py](../postgres_etl/shot_splits.py),
-[shot_zones.py](../postgres_etl/shot_zones.py),
-[team_shot_zones.py](../gold_etl/team_shot_zones.py),
 [lineup_ratings.py](../gold_etl/lineup_ratings.py).
 
 ## Frontend display and availability

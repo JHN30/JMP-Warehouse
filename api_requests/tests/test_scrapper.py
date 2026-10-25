@@ -61,13 +61,11 @@ class EuroScrapasTests(unittest.TestCase):
         datasets,
         season_code="E2026",
         year=2026,
-        live_apis=None,
     ):
         scrapper = EuroScrapas(
             competition="euroleague",
             season_codes=[season_code],
             datasets=datasets,
-            euroleague_apis=live_apis or ["Boxscore", "Points"],
             failed_extractions_limit=500,
             game_code_start=1,
             datetime_now="test",
@@ -92,7 +90,7 @@ class EuroScrapasTests(unittest.TestCase):
             root = Path(temporary_directory)
             scrapper = self.make_scrapper(
                 root,
-                {"game_lists", "game_stats", "live_boxscores", "shooting_charts"},
+                {"game_lists", "game_stats", "shooting_charts"},
             )
             fake_client = FakeClient(games)
             scrapper.client = fake_client
@@ -103,8 +101,8 @@ class EuroScrapasTests(unittest.TestCase):
             self.assertEqual(store.read_json("v2/games")["data"], games)
             self.assertTrue(self.stored(root, "E2026", "v2/game_stats/1"))
             self.assertFalse(self.stored(root, "E2026", "v2/game_stats/2"))
-            self.assertTrue(self.stored(root, "E2026", "live/1/live_boxscores"))
-            self.assertFalse(self.stored(root, "E2026", "live/2/live_boxscores"))
+            self.assertTrue(self.stored(root, "E2026", "live/1/shooting_charts"))
+            self.assertFalse(self.stored(root, "E2026", "live/2/shooting_charts"))
 
     def test_bronze_keeps_exact_bytes_and_only_new_versions(self):
         games = [{"gameCode": 1, "played": False, "round": 1, "phaseType": {"code": "RS"}}]
@@ -141,7 +139,7 @@ class EuroScrapasTests(unittest.TestCase):
             root = Path(temporary_directory)
             scrapper = self.make_scrapper(
                 root,
-                {"game_lists", "game_stats", "live_boxscores"},
+                {"game_lists", "game_stats", "shooting_charts"},
             )
             fake_client = FakeClient(games)
             scrapper.client = fake_client
@@ -155,12 +153,12 @@ class EuroScrapasTests(unittest.TestCase):
             game_stat_calls = [
                 call for call in fake_client.calls if call[0].endswith("/stats")
             ]
-            live_boxscore_calls = [
-                call for call in fake_client.calls if call[0].endswith("/Boxscore")
+            shot_calls = [
+                call for call in fake_client.calls if call[0].endswith("/Points")
             ]
             self.assertEqual(len(game_list_calls), 2)
             self.assertEqual(len(game_stat_calls), 1)
-            self.assertEqual(len(live_boxscore_calls), 1)
+            self.assertEqual(len(shot_calls), 1)
 
     def test_live_detail_is_not_requested_before_2007(self):
         games = [
@@ -170,7 +168,7 @@ class EuroScrapasTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary_directory:
             scrapper = self.make_scrapper(
                 Path(temporary_directory),
-                {"game_lists", "live_boxscores"},
+                {"game_lists", "shooting_charts"},
                 season_code="E2006",
                 year=2006,
             )
@@ -180,7 +178,7 @@ class EuroScrapasTests(unittest.TestCase):
             scrapper.extract_season("E2006")
 
             self.assertFalse(
-                any(call[0].endswith("/Boxscore") for call in fake_client.calls)
+                any(call[0].endswith("/Points") for call in fake_client.calls)
             )
 
     def test_play_by_play_uses_the_verified_canonical_endpoint_name(self):
@@ -193,7 +191,6 @@ class EuroScrapasTests(unittest.TestCase):
             scrapper = self.make_scrapper(
                 root,
                 {"game_lists", "play_by_play"},
-                live_apis=["PlayByPlay"],
             )
             fake_client = FakeClient(games)
             scrapper.client = fake_client
@@ -245,40 +242,17 @@ class EuroScrapasTests(unittest.TestCase):
                 any(call[0].endswith("/people") for call in fake_client.calls)
             )
 
-    def test_legacy_playbyplay_cli_spelling_is_normalized(self):
+    def test_default_datasets_include_only_the_used_live_endpoints(self):
         parser = ConfigParser(year_today=2026)
-        args = Namespace(
-            competition="euroleague",
-            season_code=["2025"],
-            dataset=["play_by_play"],
-            euroleague_api=["PlaybyPlay"],
-            failed_extractions_limit=500,
-            game_code_start=1,
-            refresh_current=False,
-            request_interval=0,
-        )
-
-        parser.parse_arguments(args)
-
-        self.assertEqual(parser.euroleague_apis, ["PlayByPlay"])
-
-    def test_default_datasets_skip_redundant_live_endpoints_unless_named(self):
-        def parse(datasets):
-            parser = ConfigParser(year_today=2026)
-            parser.parse_arguments(Namespace(
-                competition="euroleague", season_code=["2025"], dataset=datasets,
-                euroleague_api=list(EuroScrapas.LIVE_DATASETS.values()),
-                failed_extractions_limit=500, game_code_start=1,
-                refresh_current=False, request_interval=0,
-            ))
-            return parser.datasets
-
-        defaults = parse(["all"])
-        self.assertIn("play_by_play", defaults)
-        self.assertIn("shooting_charts", defaults)
-        for redundant in ("live_boxscores", "live_evolution", "live_comparison", "live_scoring"):
-            self.assertNotIn(redundant, defaults)
-        self.assertIn("live_boxscores", parse(["all", "live_boxscores"]))
+        parser.parse_arguments(Namespace(
+            competition="euroleague", season_code=["2025"], dataset=["all"],
+            failed_extractions_limit=500, game_code_start=1,
+            refresh_current=False, request_interval=0,
+        ))
+        self.assertIn("play_by_play", parser.datasets)
+        self.assertIn("shooting_charts", parser.datasets)
+        self.assertEqual(parser.LIVE_ENDPOINTS, EuroScrapas.LIVE_DATASETS)
+        self.assertNotIn("live_boxscores", parser.valid_datasets)
 
     def test_time_counter_shows_season_and_total_time(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -293,7 +267,6 @@ class EuroScrapasTests(unittest.TestCase):
         parser = ConfigParser(year_today=2026)
         parser.parse_arguments(Namespace(
             competition="euroleague", season_code=["2000-2025"], dataset=["all"],
-            euroleague_api=list(EuroScrapas.LIVE_DATASETS.values()),
             failed_extractions_limit=500, game_code_start=1,
             refresh_current=False, request_interval=2.5,
         ))
@@ -385,18 +358,20 @@ class EuroScrapasTests(unittest.TestCase):
 
             team_calls = [call for call in fake_client.calls if "/statistics/teams/" in call[0]]
             player_calls = [call for call in fake_client.calls if "/statistics/players/" in call[0]]
+            # 2 feeds x accumulated only x (all, RS)
+            self.assertEqual(len(team_calls), 4)
+            self.assertEqual({url.rsplit("/", 1)[1] for url, _ in team_calls},
+                             {"traditional", "advanced"})
+            self.assertEqual({params["StatisticMode"] for _, params in team_calls},
+                             {"accumulated"})
             # 4 feeds x 2 modes x (all, RS)
-            self.assertEqual(len(team_calls), 16)
-            self.assertEqual(
-                {url.rsplit("/", 1)[1] for url, _ in team_calls},
-                {"traditional", "advanced", "opponentsTraditional", "opponentsAdvanced"},
-            )
+            self.assertEqual(len(player_calls), 16)
             self.assertTrue(all("Statistic" not in params and "StatisticSortMode" not in params
                                 for _, params in team_calls))
             self.assertEqual({params.get("PhaseTypeCode") for _, params in team_calls}, {None, "RS"})
             self.assertTrue(all(params["Statistic"] for _, params in player_calls))
             self.assertTrue(scrapper.store.exists(
-                "v3/season_stats/teams_opponents_advanced_RS_accumulated"))
+                "v3/season_stats/teams_advanced_RS_accumulated"))
 
     def stats_scrapper(self, root, answers):
         """A scrapper whose client returns the next queued answer per resource URL."""
@@ -809,8 +784,8 @@ class EuroScrapasTests(unittest.TestCase):
                     f"v3/season_stats/teams_traditional_{phase}_accumulated"
                 )["teams"][0]["gamesPlayed"], 1)
             behind = {resource.rsplit("/", 1)[1] for resource in scrapper.behind_resources}
-            self.assertEqual(behind, {f"teams_advanced_{phase}_{mode}" for phase in ("all", "RS")
-                                      for mode in ("perGame", "accumulated")})
+            self.assertEqual(behind, {f"teams_advanced_{phase}_accumulated"
+                                      for phase in ("all", "RS")})
 
     def test_stats_requests_carry_a_cache_buster_that_is_not_recorded(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -886,9 +861,7 @@ class EuroScrapasTests(unittest.TestCase):
                                     for phase in ("all", "RS")})
             self.assertEqual(len(scrapper.store.read_json(
                 "v3/season_stats/teams_traditional_RS_accumulated")["teams"]), 3)
-            # A smaller per-game answer is stored; other feeds update normally.
-            self.assertEqual(len(scrapper.store.read_json(
-                "v3/season_stats/teams_traditional_RS_perGame")["teams"]), 1)
+            self.assertFalse(scrapper.store.exists("v3/season_stats/teams_traditional_RS_perGame"))
 
     def test_old_unchanged_rounds_are_not_refetched_and_report_no_changes(self):
         games = [self.rs_game(1, True)]

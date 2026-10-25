@@ -367,9 +367,8 @@ for category, metrics in PLAYER_METRICS.items():
         indexes=(("person_key",), ("club_code",)),
     )
 
-# v3 team season statistics: one row per club in each feed, phase and mode. The
-# opponents feeds hold what a club's opponents did against it. Reference
-# numbers, local only.
+# v3 team season statistics: one row per club in each feed and phase, accumulated
+# mode only. Reference numbers for Gold's API cross-check, local only.
 TEAM_STATS_IDENTITY = (
     f("phase_code", "TEXT NOT NULL", "@phase_code"),
     f("mode", "TEXT NOT NULL", "@mode"),
@@ -393,8 +392,7 @@ TEAM_METRICS = {
                 "pointsFromTwoPointersPercentage pointsFromThreePointersPercentage "
                 "pointsFromFreeThrowsPercentage",
 }
-TEAM_STATS_TABLES = tuple(f"season_team_stats_{prefix}{category}"
-                          for prefix in ("", "opponents_") for category in TEAM_METRICS)
+TEAM_STATS_TABLES = tuple(f"season_team_stats_{category}" for category in TEAM_METRICS)
 for name in TEAM_STATS_TABLES:
     TABLES[name] = table(
         "season_team_stats", ("phase_code", "mode", "club_code"),
@@ -456,11 +454,6 @@ TABLES["standings_basic_form"] = table(
     ),
 )
 
-STANDINGS_FEED_TABLES = (
-    "standings_basic", "standings_calendar",
-    "standings_streaks", "standings_ahead_behind", "standings_margins",
-    "standings_calendar_streaks", "standings_basic_form",
-)
 
 def _derived(names):
     return tuple(f(name, "NUMERIC") for name in names.split())
@@ -501,11 +494,6 @@ ADVANCED_TABLES = {
         f("points_off_turnover_points", "INTEGER"), f("field_goals_made", "INTEGER"),
         f("assisted_field_goals", "INTEGER"),
     ), _derived("assisted_fg_pct"), indexes=(("club_code",),)),
-    "game_team_shot_zones": table("game_team_shot_zones", ("game_code", "side", "zone"), (
-        f("game_code", "INTEGER NOT NULL"), f("side", "TEXT NOT NULL"),
-        f("zone", "TEXT NOT NULL"), f("club_code", "TEXT"),
-        f("attempts", "INTEGER"), f("made", "INTEGER"), f("points", "INTEGER"),
-    ), indexes=(("club_code",),)),
     "game_player_on_court": table(
         "game_player_on_court", ("game_code", "side", "person_key", "interval_ordinal"), (
             f("game_code", "INTEGER NOT NULL"), f("side", "TEXT NOT NULL"),
@@ -531,8 +519,6 @@ ADVANCED_TABLES = {
 }
 
 ALL_TABLES = {**TABLES, **ADVANCED_TABLES}
-PUBLISHED_TABLES = ()
-
 PROVENANCE_COLUMNS = (("load_id", "UUID"), ("loaded_at", "TIMESTAMPTZ"))
 
 

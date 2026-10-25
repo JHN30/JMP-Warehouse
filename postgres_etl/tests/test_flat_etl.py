@@ -95,7 +95,7 @@ class FlatEtlTests(unittest.TestCase):
 
 class CleanTableNameTests(unittest.TestCase):
     def test_silver_names_and_columns(self):
-        self.assertEqual(len(TABLES), 28)
+        self.assertEqual(len(TABLES), 26)
         self.assertEqual(physical_name("games"), "games")
         self.assertEqual(physical_name("standings_basic"), "standings_basic")
         self.assertEqual(physical_name("season_player_stats_misc"),
@@ -119,7 +119,7 @@ class CleanTableNameTests(unittest.TestCase):
             connection.commit.assert_called_once()
 
     def test_provenance_schema_is_additive_for_existing_tables(self):
-        self.assertEqual(len(TABLES), 28)
+        self.assertEqual(len(TABLES), 26)
         for name in TABLES:
             created = create_table_sql(name)
             altered = list(add_column_sql(name))

@@ -15,13 +15,13 @@ for optional tool settings.
 
 The data pipeline behind the JMP EuroLeague web app (`jmpeuroleague.com`, repo
 `jmp-euroleague2`). It downloads EuroLeague API data into a bronze store of exact
-responses, loads it into 28 typed tables in the local PostgreSQL `silver`
+responses, loads it into 26 typed tables in the local PostgreSQL `silver`
 schema with quality checks, plus derived per-game advanced tables (box-score estimates and counted possessions). Gold builds 16 local source tables from Silver,
 postseason player statistics, a page-shaped standings table, team-season totals,
-season/game coverage, all-time records, postseason series, cross-season
+all-time records, postseason series, cross-season
 player and club identities, per-round team and player advanced stats (ratings,
-Win Shares, on/off, lineups, RAPM), and nine per-game tables (advanced stats with
-game PER, counted possessions, score flow, shot splits, shot zones, on-court
+Win Shares, on/off, lineups, RAPM), and eight per-game tables (advanced stats with
+game PER, counted possessions, score flow, shot splits, on-court
 intervals, lineup stints and stat gaps). The 30f Gold-to-Neon cutover and first E2026
 publish completed on 2026-09-28 with owner approval. Further live publishing
 still requires explicit owner approval.
@@ -341,9 +341,9 @@ committed; copy the `.example`). Publishing reads the direct non-pooled
   as above.
 - Score flow from play-by-play (lead changes, time leading, runs, clutch; same triggers):
   `python postgres_etl/score_flow.py -sc <seasons>` (E2007+); `--dry-run` and `--quality-only`.
-- Shot splits and shot zones (also run after a load of `games`, `play_by_play` or `shots`):
-  `python postgres_etl/shot_splits.py -sc <seasons>` and
-  `python postgres_etl/shot_zones.py -sc <seasons>` (E2007+); same options.
+- Shot splits (also run after a load of `games`, `play_by_play` or `shots`):
+  `python postgres_etl/shot_splits.py -sc <seasons>` (E2007+); same options. The official
+  A-J shot zones are no longer built (the app derives its zones from `app_shots`).
 - On-court intervals per player from starters and substitutions (also run after a load of
   `games`, `game_player_stats` or `play_by_play`):
   `python postgres_etl/on_court.py -sc <seasons>` (E2007+); same options.
@@ -352,18 +352,11 @@ committed; copy the `.example`). Publishing reads the direct non-pooled
 - Build local Gold from Silver: `python gold_etl/main.py -sc <seasons>`
   (`-sc all` uses every locally loaded Silver season).
 - Build only local standings: `python gold_etl/main.py -sc <seasons> -tb app_standings`
-- Build local team and coverage tables: `python gold_etl/main.py -sc <seasons> -tb app_team_season_stats app_coverage_seasons app_coverage_games`
+- Build local team-season totals: `python gold_etl/main.py -sc <seasons> -tb app_team_season_stats`
 - Build local records and postseason series: `python gold_etl/main.py -sc <seasons> -tb app_records_player_seasons app_records_single_games app_records_team_seasons app_postseason_series`.
   Records use all loaded EuroLeague seasons regardless of `-sc`; series uses the selected seasons.
 - Build local player and club identities: `python gold_etl/main.py -sc all -tb app_players app_club_identities`.
   Identities use every loaded Silver season for the selected competition, regardless of `-sc`.
-- Build local cumulative team-round stats (published to Neon by 30g):
-  `python gold_etl/main.py -sc <seasons> -tb team_round_stats`. `--quality-only` also
-  prints `WARN` lines where final-round rows differ from the API team feeds.
-- Build local team-round ratings (relative, SRS/SOS/SOV, adjusted; published to Neon by 30g):
-  `python gold_etl/main.py -sc <seasons> -tb team_round_ratings`.
-- Build local team-round splits (home/away, last 5 and 10 games; published to Neon by 30g):
-  `python gold_etl/main.py -sc <seasons> -tb team_round_splits`.
 - Build local player round stats (cumulative rates, per-100, Game Score, PIE; published to Neon by 30g):
   `python gold_etl/main.py -sc <seasons> -tb player_round_stats`. `--quality-only` prints
   `WARN` lines where final-round rows differ from the API player feeds.
@@ -375,20 +368,23 @@ committed; copy the `.example`). Publishing reads the direct non-pooled
   prints `WARN` lines where a scope round's total Win Shares is far from its games.
 - Build local per-game advanced tables with single-game PER (published to Neon by 30h):
   `python gold_etl/main.py -sc <seasons> -tb game_team_advanced game_player_advanced`.
-  `--quality-only` checks row shape, nulls, the league mean and round-1 ties to the round tables.
+  `--quality-only` checks row shape, nulls, the league mean and round-1 ties to the round tables
+  (`app_standings_stats` and `app_player_round_*`).
 - Build local copies of the per-game play-by-play Silver tables (published to Neon by 30i):
   `python gold_etl/main.py -sc <seasons> -tb game_team_possessions game_team_score_flow
-  game_team_shot_splits game_team_shot_zones`. `--quality-only` checks equality with Silver.
+  game_team_shot_splits`. `--quality-only` checks equality with Silver.
 - Build local copies of the on-court, lineup-stint and stat-gap Silver tables (published to Neon by 30j):
   `python gold_etl/main.py -sc <seasons> -tb game_player_on_court game_team_lineup_stints
   game_stat_gaps`. `--quality-only` checks equality with Silver.
-- Build local page-shaped team advanced stats (`app_standings_stats`, a per-round projection of
-  the three team round tables; published to Neon by 30g):
-  `python gold_etl/main.py -sc <seasons> -tb app_standings_stats`. `--quality-only` ties each
-  row to the stored team round tables.
+- Build local page-shaped team advanced stats per round (`app_standings_stats`: cumulative
+  totals and ratings, relative, SRS/SOS/SOV and adjusted ratings, home/away and last 5 and 10
+  splits; published to Neon by 30g). The three team round derivations behind it run in memory
+  and are not stored: `python gold_etl/main.py -sc <seasons> -tb app_standings_stats`.
+  `--quality-only` checks the SRS and adjusted-rating sums and the split totals, and prints
+  `WARN` lines where final-round team totals differ from the API team feeds.
 - Build local play-by-play aggregates per club and scope (from the Silver tables of
-  `possessions.py`, `score_flow.py`, `shot_splits.py`, `shot_zones.py`; published to Neon by 30g):
-  `python gold_etl/main.py -sc <seasons> -tb team_pbp_stats team_shot_zone_stats`.
+  `possessions.py`, `score_flow.py`, `shot_splits.py`; published to Neon by 30g):
+  `python gold_etl/main.py -sc <seasons> -tb team_pbp_stats`.
   `--quality-only` checks that the `all` scope equals the sum of the phase scopes.
 - Build local player on/off ratings per club and scope (from `lineups.py`; published to Neon by 30g):
   `python gold_etl/main.py -sc <seasons> -tb player_on_off`. `--quality-only` checks that
@@ -404,12 +400,16 @@ committed; copy the `.example`). Publishing reads the direct non-pooled
   `qualified` (30l); `--quality-only` checks them and prints `WARN` where the feed disagrees.
 - Gold read-only source and derived counts: `python gold_etl/main.py -sc <seasons> --dry-run`
 - Gold read-only equality checks: `python gold_etl/main.py -sc <seasons> --quality-only`
-- List the 47 fixed Gold-to-Neon mappings: `python neon_publish/main.py --list-tables`;
-  print the reviewed DDL for the 12 tables added in 30g (no database):
+- List the 40 fixed Gold-to-Neon mappings: `python neon_publish/main.py --list-tables`;
+  print the reviewed DDL for the 8 current tables added in 30g (no database):
   `python neon_publish/main.py --print-migration`, and for the 2 per-game tables added in 30h:
-  `python neon_publish/main.py --print-migration 30h`, and for the 4 per-game play-by-play tables
+  `python neon_publish/main.py --print-migration 30h`, and for the 3 current per-game play-by-play tables
   added in 30i: `python neon_publish/main.py --print-migration 30i`, and for the 3 on-court, stint and
-  stat-gap tables added in 30j: `python neon_publish/main.py --print-migration 30j`. Applying any on Neon needs owner approval.
+  stat-gap tables added in 30j: `python neon_publish/main.py --print-migration 30j`. The checked-in
+  migration files keep the tables each feature originally created. Applying any on Neon needs owner approval.
+- The 7 retired tables (`app_coverage_*`, `app_team_round_*`, `app_game_team_shot_zones`,
+  `app_team_shot_zone_stats`) were dropped from Neon on 2026-10-26 with the reviewed
+  [drop script](neon_publish/migrations/drop_unused_app_tables.sql), after the app deploy.
 - Read-only Neon preflight and count preview: `python neon_publish/main.py -sc E2025 --dry-run`
 - Publish one EuroLeague season and competition-wide Gold tables: `python neon_publish/main.py -sc E2026`
   after separate owner approval. The one-time

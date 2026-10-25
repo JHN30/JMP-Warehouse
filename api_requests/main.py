@@ -28,7 +28,6 @@ def main():
     competition = config_parser.competition
     season_codes = config_parser.season_codes
     datasets = config_parser.datasets
-    euroleague_apis = config_parser.euroleague_apis
     failed_extractions_limit = config_parser.failed_extractions_limit
     game_code_start = config_parser.game_code_start
     refresh_current = config_parser.refresh_current
@@ -39,7 +38,6 @@ def main():
         competition,
         season_codes,
         datasets,
-        euroleague_apis,
         failed_extractions_limit,
         game_code_start,
         datetime_now,

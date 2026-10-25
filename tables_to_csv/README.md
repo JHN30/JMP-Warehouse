@@ -6,8 +6,8 @@ CSV file per table, so the data can be imported into SQL Server Management Studi
 APIs or change database rows. Run it after loading Silver and building Gold.
 
 Tables are discovered from the database itself, so new derived tables (possessions,
-lineups, RAPM and so on) are included without a code change. That is currently 84
-tables (37 Silver, 47 Gold), about 11.9 million rows for EuroLeague; `play_by_play`, `shots` and the lineup
+lineups, RAPM and so on) are included without a code change. That is currently 74
+tables (34 Silver, 40 Gold), about 11.9 million rows for EuroLeague; `play_by_play`, `shots` and the lineup
 tables are the large files.
 
 ## Run from the repository root
@@ -48,7 +48,7 @@ python tables_to_csv/main.py -cp eurocup
 ```text
 data/csv_export/euroleague/silver/games.csv
 data/csv_export/euroleague/silver/play_by_play.csv
-data/csv_export/euroleague/gold/app_team_round_stats.csv
+data/csv_export/euroleague/gold/app_standings_stats.csv
 data/csv_export/euroleague/gold/app_player_rapm.csv
 ```
 

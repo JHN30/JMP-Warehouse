@@ -1,4 +1,4 @@
-"""Play-by-play aggregates: team totals, zone stats, storage, and the partition check."""
+"""Play-by-play aggregates: team totals, storage, and the partition check."""
 
 import unittest
 from decimal import Decimal
@@ -7,7 +7,6 @@ from unittest.mock import patch
 from gold_etl.schema import physical_name
 from gold_etl.schema import GOLD_TABLES, PBP_NAMES, ROUND_NAMES, TEAM_PBP_ADDITIVE, columns
 from gold_etl.team_pbp import derive_rows, read_silver
-from gold_etl.team_shot_zones import derive_rows as zone_rows
 from gold_etl.tests.test_team_splits import FakeConnection
 
 D = Decimal
@@ -119,47 +118,10 @@ class TeamPbpTests(unittest.TestCase):
         self.assertEqual(set(row) | {"competition_code", "season_code"},
                          set(columns("team_pbp_stats")))
         self.assertIn("team_pbp_stats", ROUND_NAMES)
-        self.assertEqual(set(PBP_NAMES), {"team_pbp_stats", "team_shot_zone_stats"})
+        self.assertEqual(PBP_NAMES, ("team_pbp_stats",))
+        self.assertNotIn("team_shot_zone_stats", GOLD_TABLES)
         self.assertEqual(GOLD_TABLES["team_pbp_stats"].key,
                          ("competition_code", "season_code", "scope", "club_code"))
-
-
-def zone(code, club, name, attempts, made, points):
-    return {"game_code": code, "club_code": club, "zone": name, "attempts": attempts,
-            "made": made, "points": points}
-
-
-ZONES = [zone(1, "A", "B", 10, 6, 12), zone(1, "A", "H", 8, 3, 9), zone(2, "A", "B", 5, 2, 4),
-         zone(3, "A", "B", 6, 3, 6), zone(1, "B", "C", 4, 1, 2)]
-
-
-class ZoneTests(unittest.TestCase):
-    rows = zone_rows(GAMES, ZONES)
-
-    def test_totals_percentages_and_shares_per_scope(self):
-        row = pick(self.rows, "all", "A", "B")
-        self.assertEqual((row["attempts"], row["made"], row["points"]), (21, 11, 22))
-        self.assertEqual((row["fg_pct"], row["attempt_share"]), (D("0.523810"), D("0.724138")))
-        other = pick(self.rows, "all", "A", "H")
-        self.assertEqual((other["attempts"], other["fg_pct"], other["attempt_share"]),
-                         (8, D("0.375000"), D("0.275862")))
-        regular = pick(self.rows, "RS", "A", "B")
-        self.assertEqual((regular["attempts"], regular["attempt_share"]), (15, D("0.652174")))
-        self.assertEqual(pick(self.rows, "PO", "A", "B")["attempt_share"], D("1.000000"))
-
-    def test_shares_sum_to_one_per_club_and_scope_and_absent_zones_have_no_row(self):
-        for scope in ("all", "RS", "PO", "PS"):
-            shares = [r["attempt_share"] for r in self.rows
-                      if (r["scope"], r["club_code"]) == (scope, "A")]
-            self.assertAlmostEqual(float(sum(shares)), 1.0, places=5)
-        self.assertFalse([r for r in self.rows if r["scope"] == "PO" and r["zone"] == "H"])
-
-    def test_sorted_and_registered(self):
-        keys = [(r["scope"], r["club_code"], r["zone"]) for r in self.rows]
-        self.assertEqual(keys, sorted(keys))
-        self.assertEqual(set(self.rows[0]) | {"competition_code", "season_code"},
-                         set(columns("team_shot_zone_stats")))
-        self.assertEqual(zone_rows([dict(GAMES[0], played=False)], ZONES), [])
 
 
 class ReadTests(unittest.TestCase):
@@ -189,44 +151,41 @@ class ReadTests(unittest.TestCase):
         self.assertTrue(any("silver.game_team_possessions" in q and "SELECT *" in q
                             for q in log))
         cursor, _ = self.cursor(present=False)
-        with self.assertRaisesRegex(ValueError, "silver.game_team_shot_zones is missing; run "
-                                    "python postgres_etl/shot_zones.py"):
-            read_silver(cursor, "E", "E2025", ("game_team_shot_zones",))
+        with self.assertRaisesRegex(ValueError, "silver.game_team_score_flow is missing; run "
+                                    "python postgres_etl/score_flow.py"):
+            read_silver(cursor, "E", "E2025", ("game_team_score_flow",))
 
     def test_read_rows_dispatch_uses_the_shared_reader(self):
-        from gold_etl import team_pbp, team_shot_zones
+        from gold_etl import team_pbp
         from gold_etl.loader import read_aggregate_rows
 
         with patch.object(team_pbp, "read_silver",
                           return_value=[GAMES, POSSESSIONS, FLOW, SPLITS]):
             rows = read_aggregate_rows(object(), "team_pbp_stats", "E", "E2025")
         self.assertEqual(rows, derive_rows(GAMES, POSSESSIONS, FLOW, SPLITS))
-        with patch.object(team_shot_zones, "read_silver", return_value=[GAMES, ZONES]):
-            rows = read_aggregate_rows(object(), "team_shot_zone_stats", "E", "E2025")
-        self.assertEqual(rows, zone_rows(GAMES, ZONES))
 
 
 class StorageTests(unittest.TestCase):
-    def test_replace_is_scoped_atomic_and_rolls_back_for_both_tables(self):
+    def test_replace_is_scoped_atomic_and_rolls_back(self):
         from gold_etl.loader import replace_aggregate_scope
 
-        for name, row in (("team_pbp_stats", derive_rows(GAMES, POSSESSIONS, FLOW, SPLITS)[0]),
-                          ("team_shot_zone_stats", zone_rows(GAMES, ZONES)[0])):
-            stored = dict(row, competition_code="E", season_code="E2025")
-            db = FakeConnection()
-            with patch("gold_etl.loader.read_aggregate_rows", return_value=[stored]), \
-                    patch("psycopg2.extras.execute_values") as insert:
-                self.assertEqual(replace_aggregate_scope(db, name, "E", "E2025"), 1)
-            self.assertEqual((db.commits, db.rollbacks), (1, 0))
-            self.assertTrue(any(query.startswith(f'DELETE FROM gold."{physical_name(name)}"')
-                                and params == ("E", "E2025") for query, params in db.queries))
-            self.assertEqual(insert.call_args.args[2][0][:2], ("E", "E2025"))
-            failing = FakeConnection()
-            with patch("gold_etl.loader.read_aggregate_rows", return_value=[stored]), \
-                    patch("psycopg2.extras.execute_values", side_effect=RuntimeError("failed")):
-                with self.assertRaisesRegex(RuntimeError, "failed"):
-                    replace_aggregate_scope(failing, name, "E", "E2025")
-            self.assertEqual((failing.commits, failing.rollbacks), (0, 1))
+        name = "team_pbp_stats"
+        stored = dict(derive_rows(GAMES, POSSESSIONS, FLOW, SPLITS)[0],
+                      competition_code="E", season_code="E2025")
+        db = FakeConnection()
+        with patch("gold_etl.loader.read_aggregate_rows", return_value=[stored]), \
+                patch("psycopg2.extras.execute_values") as insert:
+            self.assertEqual(replace_aggregate_scope(db, name, "E", "E2025"), 1)
+        self.assertEqual((db.commits, db.rollbacks), (1, 0))
+        self.assertTrue(any(query.startswith(f'DELETE FROM gold."{physical_name(name)}"')
+                            and params == ("E", "E2025") for query, params in db.queries))
+        self.assertEqual(insert.call_args.args[2][0][:2], ("E", "E2025"))
+        failing = FakeConnection()
+        with patch("gold_etl.loader.read_aggregate_rows", return_value=[stored]), \
+                patch("psycopg2.extras.execute_values", side_effect=RuntimeError("failed")):
+            with self.assertRaisesRegex(RuntimeError, "failed"):
+                replace_aggregate_scope(failing, name, "E", "E2025")
+        self.assertEqual((failing.commits, failing.rollbacks), (0, 1))
 
     def test_quality_compares_a_fresh_derivation(self):
         from gold_etl.quality import check_aggregate_scope
@@ -256,10 +215,9 @@ class PartitionTests(unittest.TestCase):
     def stored(self, rows, name="team_pbp_stats"):
         return [dict(row, scope=row["scope"]) for row in rows]
 
-    def test_a_correct_derivation_passes_for_both_tables(self):
+    def test_a_correct_derivation_passes(self):
         self.assertEqual(self.issues("team_pbp_stats",
                                      derive_rows(GAMES, POSSESSIONS, FLOW, SPLITS)), [])
-        self.assertEqual(self.issues("team_shot_zone_stats", zone_rows(GAMES, ZONES)), [])
 
     def test_a_wrong_all_row_or_orphan_phase_rows_are_reported(self):
         rows = derive_rows(GAMES, POSSESSIONS, FLOW, SPLITS)
@@ -271,10 +229,6 @@ class PartitionTests(unittest.TestCase):
         no_all = [r for r in rows if r["scope"] != "all"]
         self.assertTrue(any("phase rows without an all row" in i
                             for i in self.issues("team_pbp_stats", no_all)))
-        zones = zone_rows(GAMES, ZONES)
-        wrong = [dict(r, attempts=99) if (r["scope"], r["zone"]) == ("all", "H") else r
-                 for r in zones]
-        self.assertIn("attempts of the all scope", self.issues("team_shot_zone_stats", wrong)[0])
 
 
 if __name__ == "__main__":

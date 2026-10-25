@@ -6,7 +6,7 @@ Documentation: [EuroLeague Silver catalog](../docs/SILVER_CATALOG.md),
 [player/team stats glossary](../docs/STAT_GLOSSARY.md).
 
 `main.py` reads the latest version of each resource in the local bronze store
-and builds 28 source-derived tables in the PostgreSQL `silver` schema. The
+and builds 26 source-derived tables in the PostgreSQL `silver` schema. The
 connection uses `search_path = silver`, so SQL and `-tb` use bare table names.
 The loader creates the schema if it is missing. Source responses remain in
 bronze; silver rows contain typed columns and no derived gold aggregates or
@@ -24,7 +24,6 @@ python postgres_etl/advanced.py -sc 2025 --dry-run
 python postgres_etl/possessions.py -sc 2025 --dry-run
 python postgres_etl/score_flow.py -sc 2025 --dry-run
 python postgres_etl/shot_splits.py -sc 2025 --dry-run
-python postgres_etl/shot_zones.py -sc 2025 --dry-run
 python postgres_etl/on_court.py -sc 2025 --dry-run
 python postgres_etl/lineups.py -sc 2025 --dry-run
 ```
@@ -50,11 +49,10 @@ leading and trailing, largest lead, scoring runs and clutch results per team and
 the running score in `play_by_play`. It shares `possessions.py`'s event ordering, clock and
 storage code and runs right after it.
 
-`shot_splits.py` and `shot_zones.py` (feature 19c) add `game_team_shot_splits` (fast-break,
-second-chance and off-turnover points, assisted field goals) and `game_team_shot_zones`
-(attempts, makes and points per shot zone) per team and game from the shots and
-play-by-play feeds. `main.py` runs both after a load that includes `games`,
-`play_by_play` or `shots`.
+`shot_splits.py` (feature 19c) adds `game_team_shot_splits` (fast-break,
+second-chance and off-turnover points, assisted field goals) per team and game from the shots
+and play-by-play feeds. `main.py` runs it after a load that includes `games`,
+`play_by_play` or `shots`. The per-game shot zone table of 19c is no longer built.
 
 `on_court.py` (feature 29a) adds `game_player_on_court`: each player's continuous stretches
 on the floor per game, rebuilt from the box-score starters and the `IN`/`OUT` events, with
@@ -86,7 +84,7 @@ missing matching log entries, and mismatched current row counts.
 | v2 catalogue and people | `seasons`, `clubs`, `people`, `registrations`, `rounds` |
 | v2 games and box scores | `games`, `game_officials`, `game_period_scores`, `game_player_stats`, `game_team_stats`, `game_stat_gaps` |
 | v3 player statistics | `season_player_stats_traditional`, `season_player_stats_advanced`, `season_player_stats_scoring`, `season_player_stats_misc` |
-| v3 team statistics | `season_team_stats_traditional`, `season_team_stats_advanced`, `season_team_stats_opponents_traditional`, `season_team_stats_opponents_advanced` |
+| v3 team statistics (accumulated mode only) | `season_team_stats_traditional`, `season_team_stats_advanced` |
 | v3 standings | `standings_basic`, `standings_calendar`, `standings_streaks`, `standings_ahead_behind`, `standings_margins`, `standings_calendar_streaks`, `standings_basic_form` |
 | Live API | `play_by_play`, `shots` |
 

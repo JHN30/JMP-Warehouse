@@ -1,6 +1,6 @@
 # Gold data catalog
 
-Start here when choosing data for the frontend. This catalog explains **all 47
+Start here when choosing data for the frontend. This catalog explains **all 40
 Gold tables**, what one row represents, and which table serves each use case.
 The names, columns and keys were checked against the repository on 2026-10-20.
 This is a code contract, not a live database or frontend completeness audit.
@@ -54,10 +54,10 @@ live publication requires owner approval.
 | Game team box score plus advanced stats | `app_game_team_stats`, `app_game_team_advanced` | Filter `stats_kind = 'total'`; join full side-game key. |
 | Quarter scores, score chart, shot chart | `app_game_period_scores`, `app_play_by_play`, `app_shots` | Events use resolved person codes and event order. |
 | Counted possessions, leads, clutch, scoring splits | `app_game_team_possessions`, `app_game_team_score_flow`, `app_game_team_shot_splits` | Per-game event measures; E2007+ subject to feed coverage. |
-| Team season event summaries and zones | `app_team_pbp_stats`, `app_team_shot_zone_stats` | Whole scope, not round snapshots; inspect coverage/sample columns. |
+| Team season event summaries | `app_team_pbp_stats` | Whole scope, not round snapshots; inspect coverage/sample columns. |
 | Player substitution chart, lineup timeline | `app_game_player_on_court`, `app_game_team_lineup_stints` | Elapsed seconds from tipoff; stints store only complete lineups. |
 | Historical leaders, postseason series | `app_records_*`, `app_postseason_series` | Records are competition-wide; series leader is not proof a series is finished. |
-| Missing-data badges and explanations | `app_coverage_seasons`, `app_coverage_games`, `app_game_stat_gaps` | NULL is unavailable, never automatically zero. |
+| Missing-data explanations | `app_game_stat_gaps` | NULL is unavailable, never automatically zero. |
 
 ## Keys, joins and safe aggregation
 
@@ -144,14 +144,12 @@ always within competition; include season unless the row says competition-wide.
 | [`app_season_player_stats_scoring`](GOLD_TABLE_REFERENCE.md#app_season_player_stats_scoring) | API player shot mix and scoring distribution. | one feed entry per phase and mode. |
 | [`app_season_player_stats_misc`](GOLD_TABLE_REFERENCE.md#app_season_player_stats_misc) | Player starts, wins/losses and double/triple doubles. | one feed entry per phase and mode. |
 
-### Standings, coverage, records and postseason
+### Standings, records and postseason
 
 | Table | Purpose | One row represents |
 | --- | --- | --- |
 | [`app_standings`](GOLD_TABLE_REFERENCE.md#app_standings) | Official standings page, form, streaks and standings splits. | one club-phase-round snapshot. |
 | [`app_team_season_stats`](GOLD_TABLE_REFERENCE.md#app_team_season_stats) | Team and opponent season box-score totals. | one club-phase per season, for phases actually present in games. |
-| [`app_coverage_seasons`](GOLD_TABLE_REFERENCE.md#app_coverage_seasons) | Coverage badges for a season. | one season. |
-| [`app_coverage_games`](GOLD_TABLE_REFERENCE.md#app_coverage_games) | Coverage badges for a fixture. | one game. |
 | [`app_records_player_seasons`](GOLD_TABLE_REFERENCE.md#app_records_player_seasons) | Historical top player-season leaderboards. | one rank slot per metric and competition. |
 | [`app_records_single_games`](GOLD_TABLE_REFERENCE.md#app_records_single_games) | Historical top individual game performances. | one rank slot per metric and competition. |
 | [`app_records_team_seasons`](GOLD_TABLE_REFERENCE.md#app_records_team_seasons) | Historical top team-season leaderboards. | one rank slot per metric and competition. |
@@ -161,12 +159,8 @@ always within competition; include season unless the row says competition-wide.
 
 | Table | Purpose | One row represents |
 | --- | --- | --- |
-| [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) | One frontend-ready team advanced-stat row combining the three team-round tables. | one club-scope-round snapshot. |
-| [`app_team_round_stats`](GOLD_TABLE_REFERENCE.md#app_team_round_stats) | Cumulative team totals, possession efficiency and expected wins. | one club-scope-round snapshot. |
-| [`app_team_round_ratings`](GOLD_TABLE_REFERENCE.md#app_team_round_ratings) | League-relative and opponent-adjusted team strength. | one club-scope-round snapshot. |
-| [`app_team_round_splits`](GOLD_TABLE_REFERENCE.md#app_team_round_splits) | Home/away and last-5/last-10 team form. | one club-scope-round snapshot. |
+| [`app_standings_stats`](GOLD_TABLE_REFERENCE.md#app_standings_stats) | One frontend-ready team advanced-stat row: cumulative totals and ratings, league-relative and opponent-adjusted strength, home/away and last-5/last-10 form. | one club-scope-round snapshot. |
 | [`app_team_pbp_stats`](GOLD_TABLE_REFERENCE.md#app_team_pbp_stats) | Season-scope possessions, score flow, clutch and shot-split summaries. | one club-scope per season. |
-| [`app_team_shot_zone_stats`](GOLD_TABLE_REFERENCE.md#app_team_shot_zone_stats) | Season-scope shot map aggregates and shot mix. | one club-zone-scope per season. |
 
 ### Calculated player and lineup statistics
 
@@ -190,7 +184,6 @@ always within competition; include season unless the row says competition-wide.
 | [`app_game_team_possessions`](GOLD_TABLE_REFERENCE.md#app_game_team_possessions) | Counted possessions and possession duration beside the box-score estimate. | one side per game with usable events and an advanced row. |
 | [`app_game_team_score_flow`](GOLD_TABLE_REFERENCE.md#app_game_team_score_flow) | Lead changes, runs, time ahead/behind and clutch scoring. | one side per game with a running score. |
 | [`app_game_team_shot_splits`](GOLD_TABLE_REFERENCE.md#app_game_team_shot_splits) | Fast-break, second-chance, turnover and assisted scoring. | one side per game with usable events. |
-| [`app_game_team_shot_zones`](GOLD_TABLE_REFERENCE.md#app_game_team_shot_zones) | Made shots, attempts and points by source zone. | one side-zone per game with zone-tagged shots. |
 | [`app_game_player_on_court`](GOLD_TABLE_REFERENCE.md#app_game_player_on_court) | Continuous player on-court intervals. | one interval ordinal per player-side-game. |
 | [`app_game_team_lineup_stints`](GOLD_TABLE_REFERENCE.md#app_game_team_lineup_stints) | Five-on-five stints with scoring and counted possessions. | one side-stint per game. |
 | [`app_game_stat_gaps`](GOLD_TABLE_REFERENCE.md#app_game_stat_gaps) | Reasons an official box-score measure is unavailable. | one stat_name per game. |

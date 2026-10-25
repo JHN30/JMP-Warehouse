@@ -50,13 +50,7 @@ class Connection:
 def row(name):
     value = {field: None for field in columns(name)}
     value.update(competition_code="E", season_code="E2025")
-    if name == "app_team_season_stats":
-        value.update(phase_code="RS", club_code="MAD", games_played=1)
-    elif name == "app_coverage_games":
-        value["game_code"] = 1
-        value["items"] = []
-    else:
-        value["items"] = []
+    value.update(phase_code="RS", club_code="MAD", games_played=1)
     return value
 
 
@@ -73,9 +67,6 @@ class AggregateStorageTests(unittest.TestCase):
                     self.assertEqual(replace_aggregate_scope(db, name, "E", "E2025"), 1)
                 self.assertEqual(db.commits, 1)
                 self.assertIn(f'INSERT INTO gold."{physical_name(name)}"', writes[0][0])
-                if name.startswith("app_coverage"):
-                    self.assertEqual(writes[0][1][0][columns(name).index("items")].adapted,
-                                     [])
                 self.assertTrue(any(query.startswith(f'DELETE FROM gold."{physical_name(name)}"')
                                     and params == ("E", "E2025")
                                     for query, params in db.queries))
@@ -115,18 +106,6 @@ class AggregateStorageTests(unittest.TestCase):
             with patch("gold_etl.quality.read_aggregate_rows", return_value=[expected]), \
                     patch("gold_etl.quality._dict_rows", return_value=[expected]):
                 self.assertEqual(check_aggregate_scope(cursor, name, "E", "E2025"), [])
-
-    def test_quality_detects_coverage_json_item_drift(self):
-        name = "app_coverage_games"
-        expected = row(name)
-        expected["items"] = [{"key": "boxScores", "availableCount": 1}]
-        changed = {**expected, "items": [{"key": "boxScores", "availableCount": 0}]}
-        db = Connection()
-        with db.cursor() as cursor, \
-                patch("gold_etl.quality.read_aggregate_rows", return_value=[expected]), \
-                patch("gold_etl.quality._dict_rows", return_value=[changed]):
-            self.assertIn("values differ", check_aggregate_scope(cursor, name,
-                                                                   "E", "E2025")[0])
 
 
 if __name__ == "__main__":

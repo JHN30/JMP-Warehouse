@@ -35,7 +35,6 @@ class ConfigParser(ArgumentParser):
         "seasons",
         "game_lists",
         "clubs",
-        "rosters",
         "rounds",
         "season_people",
         "season_stats",
@@ -46,24 +45,7 @@ class ConfigParser(ArgumentParser):
     ]
     # Live API endpoints whose content is covered by v2 game data, play-by-play
     # or shots (verified on every E2025 game). Requested only when named with -ds.
-    OPTIONAL_DATASETS = [
-        "live_boxscores",
-        "live_evolution",
-        "live_comparison",
-        "live_scoring",
-    ]
-
-    LIVE_DATASET_TO_API = {
-        "live_boxscores": "Boxscore",
-        "play_by_play": "PlayByPlay",
-        "shooting_charts": "Points",
-        "live_evolution": "Evolution",
-        "live_comparison": "Comparison",
-        "live_scoring": "ShootingGraphic",
-    }
-    LIVE_API_ALIASES = {
-        "PlaybyPlay": "PlayByPlay",
-    }
+    LIVE_ENDPOINTS = {"play_by_play": "PlayByPlay", "shooting_charts": "Points"}
 
     def __init__(self, year_today):
         super().__init__(
@@ -74,12 +56,10 @@ class ConfigParser(ArgumentParser):
             ),
         )
         self.year_today = year_today
-        self.valid_euroleague_apis = list(self.LIVE_DATASET_TO_API.values())
-        self.valid_datasets = ["all"] + self.DEFAULT_DATASETS + self.OPTIONAL_DATASETS
+        self.valid_datasets = ["all"] + self.DEFAULT_DATASETS
         self.competition = None
         self.season_codes = None
         self.datasets = None
-        self.euroleague_apis = None
         self.failed_extractions_limit = None
         self.game_code_start = None
         self.refresh_current = None
@@ -117,21 +97,7 @@ class ConfigParser(ArgumentParser):
             choices=self.valid_datasets,
             help=(
                 "Datasets to cache. The default 'all' includes v2/v3 primary "
-                "data plus live play-by-play and shots. The redundant live API "
-                "live_boxscores, live_evolution, live_comparison and "
-                "live_scoring are fetched only when named explicitly and are "
-                "archived in bronze only (not loaded into PostgreSQL)."
-            ),
-        )
-        self.add_argument(
-            "-api",
-            "--euroleague_api",
-            type=str,
-            nargs="+",
-            default=self.valid_euroleague_apis,
-            help=(
-                "Optional subset of supplemental live APIs. Header is not "
-                "requested because v2 game lists supersede it."
+                "data plus live play-by-play and shots."
             ),
         )
         self.add_argument(
@@ -178,7 +144,7 @@ class ConfigParser(ArgumentParser):
             type=float,
             default=48,
             help=(
-                "Current-season standings, statistics and rosters are refreshed "
+                "Current-season standings and statistics are refreshed "
                 "while a game played within this many hours (or newly completed) "
                 "affects them. Default: 48."
             ),
@@ -222,18 +188,7 @@ class ConfigParser(ArgumentParser):
             )
 
         requested = list(dict.fromkeys(args.dataset))
-        self.datasets = (
-            self.DEFAULT_DATASETS + [name for name in requested if name != "all"
-                                     and name not in self.DEFAULT_DATASETS]
-            if "all" in requested
-            else requested
-        )
-
-        self.euroleague_apis = list(dict.fromkeys(
-            self.LIVE_API_ALIASES.get(api, api)
-            for api in args.euroleague_api
-            if self.LIVE_API_ALIASES.get(api, api) in self.valid_euroleague_apis
-        ))
+        self.datasets = list(self.DEFAULT_DATASETS) if "all" in requested else requested
 
         self.failed_extractions_limit = args.failed_extractions_limit
         if self.failed_extractions_limit <= 0:
@@ -257,11 +212,8 @@ class ConfigParser(ArgumentParser):
 
     @property
     def live_endpoints(self):
-        """Live API endpoints that will really be called: dataset selected and API allowed."""
-        return [
-            api for dataset, api in self.LIVE_DATASET_TO_API.items()
-            if dataset in self.datasets and api in self.euroleague_apis
-        ]
+        """Live API endpoints that will really be called."""
+        return [api for dataset, api in self.LIVE_ENDPOINTS.items() if dataset in self.datasets]
 
     def describe(self):
         """Short run summary with only the settings that affect this run."""

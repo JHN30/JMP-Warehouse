@@ -222,7 +222,6 @@ class MainWiringTests(unittest.TestCase):
                 patch.object(main, "run_possessions", return_value=True), \
                 patch.object(main, "run_score_flow", return_value=True), \
                 patch.object(main, "run_shot_splits", return_value=True), \
-                patch.object(main, "run_shot_zones", return_value=True), \
                 patch.object(main, "run_on_court", return_value=True), \
                 patch.object(main, "run_lineups", return_value=result) as run:
             return main.main(argv), run

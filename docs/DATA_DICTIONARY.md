@@ -2,14 +2,14 @@
 
 For frontend work, start with the [Gold data catalog](DATA_CATALOG.md).
 The [Gold table reference](GOLD_TABLE_REFERENCE.md) lists every column of all
-47 Gold tables, with types, nullability, keys and descriptions. The
+40 Gold tables, with types, nullability, keys and descriptions. The
 [statistics glossary](STAT_GLOSSARY.md) separates player and team measures,
 including formulas, units, source tables and calculation limits.
 
 For upstream EuroLeague data, use the [Bronze resource catalog](BRONZE_CATALOG.md),
 [Silver catalog](SILVER_CATALOG.md), and complete
 [Silver column reference](SILVER_TABLE_REFERENCE.md). These describe resource
-containers, source paths, all 36 Silver data tables and the separate load log.
+containers, source paths, all 33 Silver data tables and the separate load log.
 
 This document retains the Silver contract, provenance and historical pipeline
 verification notes. Historical counts, storage measurements and publication
@@ -17,25 +17,32 @@ milestones below describe their recorded checkpoints, not current live coverage.
 The new reference and glossary were checked against the code on 2026-10-20;
 frontend implementation and current Neon contents were not inspected.
 
-The current local database has 28 source-derived tables in the PostgreSQL
+The current local database has 26 source-derived tables in the PostgreSQL
 `silver` schema. The loader and CSV exporter use `search_path = silver`, so
 a bare name such as `games` means `silver.games`. Exact SQL columns, types,
 source JSON paths, and keys are defined in
 [flat_schema.py](../postgres_etl/flat_schema.py). Bronze keeps the exact API
 responses. Silver contains cleaned source data. The local `gold` schema holds
 16 source projections from Silver, derived postseason player stats, the
-page-shaped standings table, team-season totals, two coverage tables, the three
+page-shaped standings table, team-season totals, the three
 record leaderboards, postseason series, and the two identity tables, plus the
 round, event, lineup and game-level derivations cataloged in the new reference.
-The publisher maps all 47 Gold tables to Neon's `public.app_*` tables. The one-time
+The publisher maps all 40 Gold tables to Neon's `public.app_*` tables. The one-time
 in-place Neon migration and first E2026 publish completed on 2026-09-28.
+
+Seven earlier tables are no longer built or published because the web app does not read them:
+`app_coverage_seasons`, `app_coverage_games`, `app_team_round_stats`,
+`app_team_round_ratings`, `app_team_round_splits`, `app_game_team_shot_zones` and
+`app_team_shot_zone_stats`. The three team round tables remain as in-memory steps of
+`app_standings_stats` (their definitions stay below); Silver no longer builds
+`game_team_shot_zones` either. Their Neon copies were dropped on 2026-10-26 by
+[drop_unused_app_tables.sql](../neon_publish/migrations/drop_unused_app_tables.sql).
 
 ## Neon app-table contract
 
-All 47 local `gold` tables now use the same `app_*` names as Neon `public`.
+All 40 local `gold` tables now use the same `app_*` names as Neon `public`.
 The publisher copies identically named relations; Gold's build selectors may
-still use logical Silver names. The local rename retains E2000-E2026, and Neon
-retains its existing E2023-E2026 scope. Each Gold table has the same primary-key
+still use logical Silver names. Local Gold holds E2000-E2026. Neon holds every locally loaded season: E2000-E2026 for the catalog, box-score, standings and round tables, and E2007-E2026 for the play-by-play, shot and lineup tables, whose source data starts in E2007 (checked read-only on 2026-10-25). Each Gold table has the same primary-key
 columns as Neon, plus the app secondary indexes on standings (`club_code`),
 play-by-play (`game_code, play_number` and `person_code`) and shots (`person_code`).
 See [gold_etl/README.md](../gold_etl/README.md) for the in-place local migration.
@@ -46,18 +53,17 @@ The 16 Gold source tables publish to `public.app_<source>`:
 `app_game_player_stats`, `app_game_team_stats`,
 `app_season_player_stats_traditional`, `app_season_player_stats_advanced`,
 `app_season_player_stats_scoring`, `app_season_player_stats_misc`,
-`app_play_by_play`, and `app_shots`. The ten Gold derivations retain their
+`app_play_by_play`, and `app_shots`. The eight Gold derivations retain their
 `app_*` names: `app_standings`, `app_team_season_stats`,
-`app_coverage_seasons`, `app_coverage_games`,
 `app_records_player_seasons`, `app_records_single_games`,
 `app_records_team_seasons`, `app_postseason_series`, `app_players`, and
-`app_club_identities`. The 12 tables of features 26-29 (30g) and the two per-game tables
-`app_game_player_advanced` and `app_game_team_advanced` (30h) the four `app_game_team_*`
+`app_club_identities`. The 8 current tables of features 26-29 (30g) and the two per-game tables
+`app_game_player_advanced` and `app_game_team_advanced` (30h), the three current `app_game_team_*`
 per-game play-by-play tables (30i) and `app_game_player_on_court`, `app_game_team_lineup_stints` and
-`app_game_stat_gaps` (30j) make 47 targets.
+`app_game_stat_gaps` (30j) make 40 targets.
 
 The three record tables and two identity tables replace all rows for the
-selected competition. The other 42 tables replace one selected season. One
+selected competition. The other 35 tables replace one selected season. One
 Neon transaction covers all selected tables. The publisher verifies exact
 post-copy counts and refuses a scope below 90% of its previous row count unless
 `--allow-shrink` is explicit. `app_play_by_play` and `app_shots` copy only changed
@@ -68,11 +74,12 @@ refusals. A failed pipeline run keeps its publish-pending state for retry.
 Size, measured on 2026-10-03 with read-only `pg_database_size` and
 `pg_total_relation_size` after the E2025 and E2026 publishes: the nine per-game tables
 of 30h-30j take 24.8 MB in Neon (the 25 MB planned) and the whole database 197.9 MB of
-the 512 MB free tier.
+the 512 MB free tier. On 2026-10-25, with every season published, the whole database was
+1,851 MB.
 
 ## Silver provenance
 
-Each of the 28 source tables has `load_id UUID NOT NULL` and
+Each of the 26 source tables has `load_id UUID NOT NULL` and
 `loaded_at TIMESTAMPTZ NOT NULL`. A table, competition, and season replacement
 gives every inserted row the same load ID and UTC time. These columns are
 metadata and do not change source table keys or grains.
@@ -104,7 +111,7 @@ The feature 16b historical backfill reloaded all 27 cached EuroLeague seasons
 3,987,204 source rows in total. The initial load wrote 742 log entries,
 including zero-row replacements; a controlled E2025 `games` rerun added one
 more. Every current row matches its log entry, and both provenance columns
-are non-null in all 28 source tables.
+are non-null in all 26 source tables.
 
 ## Silver table names and keys
 
@@ -132,10 +139,8 @@ completes the primary key.
 | `season_player_stats_advanced` | same | One player entry in an advanced feed. |
 | `season_player_stats_scoring` | same | One player entry in a scoring feed. |
 | `season_player_stats_misc` | same | One player entry in a misc feed. |
-| `season_team_stats_traditional` | `phase_code`, `mode`, `club_code` | One club in a v3 traditional feed. |
+| `season_team_stats_traditional` | `phase_code`, `mode`, `club_code` | One club in a v3 traditional feed (accumulated mode only). |
 | `season_team_stats_advanced` | same | One club in an advanced feed. |
-| `season_team_stats_opponents_traditional` | same | One club's opponents in a traditional feed. |
-| `season_team_stats_opponents_advanced` | same | One club's opponents in an advanced feed. |
 | `standings_basic` | `phase_code`, `round_number`, `club_code` | One club snapshot after a round. |
 | `standings_calendar` | same | Calendar standings snapshot. |
 | `standings_streaks` | same | Streak summaries. |
@@ -205,7 +210,7 @@ least 10 minutes, on-court usage differs from the estimate by 0.006 at the media
 the 90th percentile.
 
 Published to Neon as `public.app_game_player_advanced` / `public.app_game_team_advanced`
-(E2025 and E2026) once the reviewed 30h migration is applied. Build:
+for every loaded season. Build:
 `python gold_etl/main.py -sc <seasons> -tb game_team_advanced game_player_advanced`.
 The Gold tables drop `load_id` and `loaded_at`; the team table also drops
 `opponent_club_code`, `phase_code` and `round_number`. Keys: `competition_code`,
@@ -238,7 +243,7 @@ These are box-score estimates. Counted play-by-play possessions sit next to them
 Built by `python postgres_etl/possessions.py -sc <seasons>` from `play_by_play`, `games`
 and `game_team_advanced` (E2007 onward; earlier seasons have no play-by-play and no
 rows). Extra key `game_code`, `side`; one row per club per played game with events and a
-`game_team_advanced` row. Same provenance columns. Gold copy `gold.app_game_team_possessions` (without the provenance columns) is published to Neon as `public.app_game_team_possessions` (E2025 and E2026) once the reviewed 30i migration is applied.
+`game_team_advanced` row. Same provenance columns. Gold copy `gold.app_game_team_possessions` (without the provenance columns) is published to Neon as `public.app_game_team_possessions` (every loaded season).
 
 | Column | Meaning |
 | --- | --- |
@@ -277,7 +282,7 @@ estimate by more than 10% (16 rows across E2007-E2026: 7 in E2007 and 9 in E2009
 
 Built by `python postgres_etl/score_flow.py -sc <seasons>` from `play_by_play` and `games`
 (E2007 onward; same rows as `game_team_possessions`). Extra key `game_code`, `side`; one row
-per club per played game whose events carry a running score. Same provenance columns. Gold copy `gold.app_game_team_score_flow` (without the provenance columns) is published to Neon as `public.app_game_team_score_flow` (E2025 and E2026) once the reviewed 30i migration is applied.
+per club per played game whose events carry a running score. Same provenance columns. Gold copy `gold.app_game_team_score_flow` (without the provenance columns) is published to Neon as `public.app_game_team_score_flow` (every loaded season).
 
 | Column | Meaning |
 | --- | --- |
@@ -303,7 +308,7 @@ a fresh derivation and warns when a final score differs from `games` (none found
 
 Built by `python postgres_etl/shot_splits.py -sc <seasons>` from `games`, `shots` and
 `play_by_play` (E2007 onward; same rows as `game_team_possessions`). Extra key `game_code`,
-`side`. Same provenance columns. Gold copy `gold.app_game_team_shot_splits` (without the provenance columns) is published to Neon as `public.app_game_team_shot_splits` (E2025 and E2026) once the reviewed 30i migration is applied.
+`side`. Same provenance columns. Gold copy `gold.app_game_team_shot_splits` (without the provenance columns) is published to Neon as `public.app_game_team_shot_splits` (every loaded season).
 
 | Column | Meaning |
 | --- | --- |
@@ -321,16 +326,15 @@ The average assisted share is 58% (62% in E2025). `--quality-only` checks the st
 against a fresh derivation and warns when assisted goals exceed made goals or a team's shot
 points differ from `games` (none found).
 
-### `game_team_shot_zones`
+### Shot zone codes (`shots.zone`)
 
-Built by `python postgres_etl/shot_zones.py -sc <seasons>` from `games` and `shots`
-(E2007 onward). Extra key `game_code`, `side`, `zone`; columns `club_code`, `attempts`,
-`made`, `points`. Gold copy `gold.app_game_team_shot_zones` (without the provenance columns) is published to Neon as `public.app_game_team_shot_zones` (E2025 and E2026) once the reviewed 30i migration is applied. Field goals only: `2FGM`, `3FGM`, `LAYUPMD`, `DUNK` made and `2FGA`, `3FGA`,
-`LAYUPATT`, `2FGAB`, `3FGAB` missed (E2008-E2014 use the layup, dunk and blocked types; 19a
-has the same list). Free throws and shots without a zone code are left out, and a team has a
-row only for zones it shot from. Zone totals equal the box score's field goals made in every
-game and its field goals attempted in 97-100% of games per season (a few shots have no zone).
-The feed's zone codes are letters; what the data shows for each, over E2007-E2026:
+The per-game zone table `game_team_shot_zones` (feature 19c) is no longer built; the web app
+derives its own zones from `app_shots` coordinates. Its findings about the feed's zone codes
+still describe `shots.zone`: counting field goals only (`2FGM`, `3FGM`, `LAYUPMD`, `DUNK` made
+and `2FGA`, `3FGA`, `LAYUPATT`, `2FGAB`, `3FGAB` missed), zone totals equal the box score's
+field goals made in every game and its field goals attempted in 97-100% of games per season (a
+few shots have no zone). The codes are letters; what the data showed for each, over
+E2007-E2026:
 
 | Zone | Shots | Mean court x, y | Three-pointers | Made |
 | --- | --- | --- | --- | --- |
@@ -345,15 +349,14 @@ The feed's zone codes are letters; what the data shows for each, over E2007-E202
 | I | 109,581 | 433, 512 | 99% | 36% |
 | J | 6,427 | -286, 673 | 100% | 32% |
 
-The codes are the feed's own; no names are assumed. The table has 87,037 rows over 5,049
-games.
+The codes are the feed's own; no names are assumed.
 
 ### `game_player_on_court`
 
 Built by `python postgres_etl/on_court.py -sc <seasons>` from `games`, `game_player_stats` and
 `play_by_play` (E2007 onward). Key `game_code`, `side`, `person_key`, `interval_ordinal`
 (the player's stretches counted from 1 in time order); columns `club_code`, `start_seconds` and
-`end_seconds` (elapsed game seconds). It is the base of the lineup features 29b-29d. Gold copy `gold.app_game_player_on_court` (without the provenance columns) is published to Neon as `public.app_game_player_on_court` (E2025 and E2026) once the reviewed 30j migration is applied.
+`end_seconds` (elapsed game seconds). It is the base of the lineup features 29b-29d. Gold copy `gold.app_game_player_on_court` (without the provenance columns) is published to Neon as `public.app_game_player_on_court` (every loaded season).
 
 A side starts with the players whose `started` flag is set. An `IN` adds a player, an `OUT`
 removes one, in event order (period, overtime, `event_ordinal`); players carry across periods;
@@ -387,7 +390,7 @@ the box score's `seconds_played`.
 Built by `python postgres_etl/lineups.py -sc <seasons>` from `games`, `game_player_stats` and
 `play_by_play` (E2007 onward), right after `game_player_on_court`. Key `game_code`, `side`,
 `stint_ordinal` (counted from 1 over the stored stints of the game); two rows per stint, one
-from each team's side. Gold copy `gold.app_game_team_lineup_stints` (without the provenance columns) is published to Neon as `public.app_game_team_lineup_stints` (E2025 and E2026) once the reviewed 30j migration is applied.
+from each team's side. Gold copy `gold.app_game_team_lineup_stints` (without the provenance columns) is published to Neon as `public.app_game_team_lineup_stints` (every loaded season).
 
 | Column | Meaning |
 | --- | --- |
@@ -424,7 +427,7 @@ Built as `gold.app_player_on_off` by `python gold_etl/main.py -sc <seasons> -tb 
 from `game_team_lineup_stints` (phase from `silver.games`) and `game_player_stats` (name), for
 E2007 onward; a missing stint table stops the build with the command that creates it. Key
 `competition_code`, `season_code`, `scope` (`all`, each phase, `PS`), `club_code`, `person_key`;
-a player traded during a season has one row per club. Published to Neon as `public.app_player_on_off` (E2025 and E2026) once the reviewed 30g migration is applied.
+a player traded during a season has one row per club. Published to Neon as `public.app_player_on_off` (every loaded season).
 
 Columns: `player_name`; `games` (games with the player on court in a stored stint); the on sums
 `on_seconds`, `on_possessions_for`, `on_possessions_against`, `on_points_for`,
@@ -447,7 +450,7 @@ Built as `gold.app_lineup_ratings` by `python gold_etl/main.py -sc <seasons> -tb
 from `game_team_lineup_stints` (phase from `silver.games`) and `game_player_stats` (names), for
 E2007 onward; a missing stint table stops the build with the command that creates it. Key
 `competition_code`, `season_code`, `scope` (`all`, each phase, `PS`), `club_code`, `lineup_size`
-(2, 3 or 5) and `lineup` (the sorted `person_key`s joined by commas). Published to Neon as `public.app_lineup_ratings` (E2025 and E2026) once the reviewed 30g migration is applied.
+(2, 3 or 5) and `lineup` (the sorted `person_key`s joined by commas). Published to Neon as `public.app_lineup_ratings` (every loaded season).
 
 Every stored stint holds ten pairs, ten triples and one five of the club's players, and each group
 sums the stints it was on court for. Columns: `lineup_names` (player names in lineup order joined
@@ -471,7 +474,7 @@ Built as `gold.app_player_rapm` by `python gold_etl/main.py -sc <seasons> -tb pl
 played games of `silver.games`, for E2007 onward. It needs numpy in the Python environment
 (imported only by this table; a missing numpy stops the build with a message). Key
 `competition_code`, `season_code`, `scope` (always `all`: every game of the season) and
-`person_key`; a traded player has one row. Published to Neon as `public.app_player_rapm` (E2025 and E2026) once the reviewed 30g migration is applied.
+`person_key`; a traded player has one row. Published to Neon as `public.app_player_rapm` (every loaded season).
 
 Method: every stint row with possessions is one observation, the team's points per 100
 possessions, weighted by its counted possessions. The prediction is an intercept plus the
@@ -497,16 +500,15 @@ improvement over the no-player model). RAPM correlates 0.87 with the on-court po
 `--quality-only` checks the stored rows against a fresh derivation (a rerun
 reproduces the rows exactly).
 
-### `team_pbp_stats` and `team_shot_zone_stats`
+### `team_pbp_stats`
 
-Built as `gold.app_team_pbp_stats` and `gold.app_team_shot_zone_stats` by `python gold_etl/main.py
--sc <seasons> -tb team_pbp_stats team_shot_zone_stats` from `silver.games` (phase) and the
-per-game tables `game_team_possessions`, `game_team_score_flow`, `game_team_shot_splits` and
-`game_team_shot_zones` (E2007 onward; earlier seasons build zero rows, and a missing Silver
+Built as `gold.app_team_pbp_stats` by `python gold_etl/main.py
+-sc <seasons> -tb team_pbp_stats` from `silver.games` (phase) and the
+per-game tables `game_team_possessions`, `game_team_score_flow` and `game_team_shot_splits`
+(E2007 onward; earlier seasons build zero rows, and a missing Silver
 table stops the build with the command that creates it). Key `competition_code`,
-`season_code`, `scope` (`all`, each phase, `PS`), `club_code` (and `zone` for the zone table).
-Published to Neon as `public.app_team_pbp_stats` and `public.app_team_shot_zone_stats`
-(E2025 and E2026) once the reviewed 30g migration is applied.
+`season_code`, `scope` (`all`, each phase, `PS`), `club_code`.
+Published to Neon as `public.app_team_pbp_stats` (every loaded season).
 
 `team_pbp_stats` columns: `games` (games with a possessions row); from `game_team_possessions`
 `counted_possessions`, `estimated_possessions`, `possession_seconds` (sums) and
@@ -521,11 +523,8 @@ games), `field_goals_made`, `assisted_field_goals` and `assisted_fg_pct` (sum ov
 no usable game for that column; a club can have a row with some columns NULL when a source table
 has no rows for it.
 
-`team_shot_zone_stats` columns: `attempts`, `made`, `points` (sums per zone), `fg_pct` and
-`attempt_share` (the zone's attempts over the club's attempts in the scope). A club has a row only
-for zones it shot from. `--quality-only` for both checks the fresh derivation and that the `all`
-scope equals the sum of the phase scopes for every additive column. E2025: 66 club-scope rows and
-630 zone rows.
+`--quality-only` checks the fresh derivation and that the `all`
+scope equals the sum of the phase scopes for every additive column. E2025: 66 club-scope rows.
 
 ## Standard column names
 
@@ -625,11 +624,11 @@ The `PS` rows follow the same rule: every player has a `perGame` row (before 30l
 players above half of their latest club's postseason games did), and `PS` `min_games`
 is 5 for E2024 and E2025 (9 postseason rounds).
 
-Nine per-game tables were added later, all named like their Silver sources and published
-to Neon as `public.app_<name>` for E2025 and E2026 once their reviewed migrations are
-applied. Seven are straight copies with the same columns, types, NULLs and primary keys,
-again without `load_id` and `loaded_at`: `game_team_possessions`, `game_team_score_flow`,
-`game_team_shot_splits` and `game_team_shot_zones` (30i), and `game_player_on_court`,
+Eight per-game tables were added later, all named like their Silver sources and published
+to Neon as `public.app_<name>` for every loaded season. Six are straight copies with the same
+columns, types, NULLs and primary keys,
+again without `load_id` and `loaded_at`: `game_team_possessions`, `game_team_score_flow` and
+`game_team_shot_splits` (30i), and `game_player_on_court`,
 `game_team_lineup_stints` and `game_stat_gaps` (30j). Two are projections of Silver's
 per-game advanced tables with the published column set; `game_player_advanced` also adds
 game PER (30h): `game_player_advanced` and `game_team_advanced`. They are defined in
@@ -653,8 +652,8 @@ per-game row, both flagged `is_calculated` with `min_games` and `qualified` (30l
 above). Missing box-score measures propagate as NULL; percentages and
 per-game counting values round half-even to one decimal. No played postseason
 means no `PS` rows. The local `gold.app_standings` table below is also active.
-Feature 30c builds local `gold.app_team_season_stats`,
-`gold.app_coverage_seasons` and `gold.app_coverage_games` from Silver. The
+Feature 30c builds local `gold.app_team_season_stats` from Silver (its coverage tables
+were later retired). The
 record and postseason series tables in this section are built locally in 30d.
 Feature 30e builds the player and club identity tables locally from Silver.
 The separate web app reads the Neon tables. The 30f in-place cutover changed
@@ -768,51 +767,6 @@ published until the approved cutover. This table is season-scoped.
   `PO`, `FF`, or older `TS`) — no synthetic "all phases" row; Express has
   none either.
 
-### `app_coverage_seasons` and `app_coverage_games`
-
-Built locally as `gold.app_coverage_seasons` and `gold.app_coverage_games` from
-Silver. The historical Neon tables serve the Express `/coverage` route (with
-and without `?gameCode=`); the local rebuild publishes through the 30f cutover. Both are
-season-scoped. `app_coverage_seasons` has
-one row per season; `app_coverage_games` has one row per game (played or
-not).
-
-| Table | Key | One row represents |
-| --- | --- | --- |
-| `app_coverage_seasons` | (season only) | 8 data-coverage items for one season. |
-| `app_coverage_games` | `game_code` | The same 8 items, scoped to one game. |
-
-Both store their items as one `items JSONB NOT NULL` column: an array of
-exactly 8 objects, always in this order, each shaped
-`{key, label, status, availableCount, applicableCount}`:
-
-| # | `key` | `availableCount` / `applicableCount` (season row) | Status rule |
-| - | --- | --- | --- |
-| 1 | `boxScores` | games with a `silver.game_team_stats` `total` row / played games | gameStatus |
-| 2 | `periodScores` | games with a `silver.game_period_scores` row / played games | gameStatus |
-| 3 | `officialStandings` | distinct clubs in `silver.standings_basic` / distinct clubs in `silver.clubs` | rosterStatus |
-| 4 | `rosters` | distinct clubs with a row in `silver.registrations` / distinct clubs in `silver.clubs` | rosterStatus |
-| 5 | `playerPhotos` | distinct `person_key` with a headshot in `silver.game_player_stats` among played games / played games | gameStatus |
-| 6 | `seasonStatistics` | distinct `person_key` in `silver.season_player_stats_traditional` / distinct clubs in `silver.clubs` | rosterStatus |
-| 7 | `shotLocations` | games with a `silver.shots` row / played games | gameStatus |
-| 8 | `playByPlay` | games with a `silver.play_by_play` row / played games | gameStatus |
-
-Items 5 and 6 compare a player count against a game/club count — an existing
-Express quirk, replicated as-is, not a design choice made here.
-
-- **gameStatus**(available, applicable): `applicable = 0` →
-  `notYetApplicable`; `available = 0` → `unavailable`; `available >=
-  applicable` → `available`; otherwise `partial`.
-- **rosterStatus**: same as gameStatus, but `incomplete` instead of `partial`.
-- `app_coverage_games` scoping: items 1, 2, 5, 7, 8 narrow every count to that
-  one game (`applicableCount` becomes 0 or 1, per whether the game is
-  played); items 3, 4, 6 stay season-wide, identical to that season's
-  `app_coverage_seasons` row. This mismatched scoping is Express's existing
-  behavior, replicated exactly.
-- **Approved change from Express:** `shotLocations` and `playByPlay` are
-  computed from this pipeline's own `silver.shots`/`silver.play_by_play` data. Before
-  Express read these tables, it hardcoded both as `unavailable`.
-
 ### `app_postseason_series`
 
 Built locally as `gold.app_postseason_series` from `silver.games`, one selected
@@ -905,9 +859,11 @@ publishing replaces this table's competition scope after the approved cutover.
 
 ### `team_round_stats`
 
-Built as `gold.app_team_round_stats` by `python gold_etl/main.py -sc <seasons> -tb
-team_round_stats` from `silver.games`, `silver.game_team_stats` (`total` rows)
-and `silver.game_team_advanced`. Published to Neon as `public.app_team_round_stats` (E2025 and E2026) once the reviewed 30g migration is applied.
+An in-memory step of `app_standings_stats` (`gold_etl/team_rounds.py`), no longer stored in
+Gold or published. Derived from `silver.games`, `silver.game_team_stats` (`total` rows)
+and `silver.game_team_advanced`. The columns `app_standings_stats` takes from it are listed in
+that section; the raw `own_*`/`opp_*` totals, `game_minutes` and `pythagorean_exponent`
+exist only here.
 
 Key: `competition_code`, `season_code`, `scope`, `round_number`, `club_code`.
 `scope` is `all` (every phase), a phase code (`RS`, `PI`, `PO`, `FF`, `TS`, ...)
@@ -933,7 +889,7 @@ are not counted, so `games_played` can be one lower than the API's.
 NULL means an input was missing or a denominator was zero; one missing game
 value makes the later cumulative values NULL.
 
-API cross-check (`--quality-only`, warnings only). The API's accumulated team
+API cross-check (`--quality-only -tb app_standings_stats`, warnings only). The API's accumulated team
 feeds (`season_team_stats_traditional`, `_advanced`) are compared with each
 scope's final round: `games_played` and the counting totals must match exactly,
 and `efg_pct`, `true_shooting_pct`, `orb_pct`, `drb_pct` must agree within 0.06
@@ -946,10 +902,10 @@ the two forfeits above (`games_played` off by one for the forfeit's club in the
 
 ### `team_round_ratings`
 
-Built as `gold.app_team_round_ratings` by `python gold_etl/main.py -sc <seasons> -tb
-team_round_ratings` from the same Silver inputs and counted games as
+An in-memory step of `app_standings_stats` (`gold_etl/team_ratings.py`), no longer stored or
+published. Derived from the same Silver inputs and counted games as
 `team_round_stats`, with the same key (`competition_code`, `season_code`,
-`scope`, `round_number`, `club_code`) and the same rows. Published to Neon as `public.app_team_round_ratings` (E2025 and E2026) once the reviewed 30g migration is applied.
+`scope`, `round_number`, `club_code`) and the same rows.
 All values are cumulative through the round within the scope.
 
 | Column | Meaning |
@@ -966,16 +922,15 @@ All values are cumulative through the round within the scope.
 form separate pairs, and RS rounds 1-2 before schedules link up). The adjusted
 offensive and defensive ratings are also NULL when the game graph is bipartite
 (RS rounds 1-2), because offense and defense cannot be separated; the adjusted
-net rating is still defined. `--quality-only` re-derives the table, compares it,
-and reports an error if a connected scope-round's `srs` sum or possession-weighted
-`adj_net_rating` mean is not zero.
+net rating is still defined. `--quality-only -tb app_standings_stats` reports an error if a
+connected scope-round's `srs` sum or possession-weighted `adj_net_rating` mean is not zero.
 
 ### `team_round_splits`
 
-Built as `gold.app_team_round_splits` by `python gold_etl/main.py -sc <seasons> -tb
-team_round_splits` from the same Silver inputs and counted games as
+An in-memory step of `app_standings_stats` (`gold_etl/team_splits.py`), no longer stored or
+published. Derived from the same Silver inputs and counted games as
 `team_round_stats`, with the same key (`competition_code`, `season_code`,
-`scope`, `round_number`, `club_code`) and the same rows. Published to Neon as `public.app_team_round_splits` (E2025 and E2026) once the reviewed 30g migration is applied.
+`scope`, `round_number`, `club_code`) and the same rows.
 
 Four groups of columns, each with the same measures, all through the round
 within the scope:
@@ -991,17 +946,16 @@ Per group `g`: `g_games`, `g_wins`, `g_mov` (points for minus against per game),
 and `g_pace` (per 40 minutes), using `game_team_advanced` possessions and
 minutes. A group with no games has zero counts and NULL rates; a missing input
 makes that group's rates NULL. Neutral-site games (for example the Final Four)
-keep the source's local/road designation. `--quality-only` re-derives the table,
-compares it, and errors if home plus away games or wins differ from
-`team_round_stats`, if a window's game count is not `min(N, games_played)`, or if
-a window's MOV differs from the cumulative MOV while the club has no more games
-than the window.
+keep the source's local/road designation. `--quality-only -tb app_standings_stats` errors if
+a row's home plus away games or wins differ from its `games_played` and `wins`, if a window's
+game count is not `min(N, games_played)`, or if a window's MOV differs from the cumulative MOV
+while the club has no more games than the window.
 
 ### `player_round_stats`
 
 Built as `gold.app_player_round_stats` by `python gold_etl/main.py -sc <seasons> -tb
 player_round_stats` from `silver.game_player_stats`, `game_player_advanced` and the
-counted team games of `team_round_stats`. Published to Neon as `public.app_player_round_stats` (E2025 and E2026) once the reviewed 30g migration is applied.
+counted team games of `team_round_stats`. Published to Neon as `public.app_player_round_stats` (every loaded season).
 
 Key: `competition_code`, `season_code`, `scope`, `round_number`, `person_key`
 (`scope` as in `team_round_stats`). A player has a row for every scope round from
@@ -1040,7 +994,7 @@ minutes share 5x too small. The stored rows were rebuilt with the corrected shar
 Built as `gold.app_player_round_ratings` by `python gold_etl/main.py -sc <seasons> -tb
 player_round_ratings` from `silver.game_player_stats` and the same counted games as
 `team_round_stats`. Key `competition_code`, `season_code`, `scope` (`all`, each phase,
-`PS`), `round_number`, `person_key`; same row set as `player_round_stats`. Published to Neon as `public.app_player_round_ratings` (E2025 and E2026) once the reviewed 30g migration is applied.
+`PS`), `round_number`, `person_key`; same row set as `player_round_stats`. Published to Neon as `public.app_player_round_ratings` (every loaded season).
 
 | Column | Meaning |
 |---|---|
@@ -1061,7 +1015,7 @@ derivation equality and the league-mean invariant in `--quality-only`.
 Built as `gold.app_player_round_win_shares` by `python gold_etl/main.py -sc <seasons> -tb
 player_round_win_shares` from `silver.game_player_stats` and the same counted games as
 `team_round_stats`. Key `competition_code`, `season_code`, `scope` (`all`, each phase,
-`PS`), `round_number`, `person_key`; same row set as `player_round_stats`. Published to Neon as `public.app_player_round_win_shares` (E2025 and E2026) once the reviewed 30g migration is applied.
+`PS`), `round_number`, `person_key`; same row set as `player_round_stats`. Published to Neon as `public.app_player_round_win_shares` (every loaded season).
 
 | Column | Meaning |
 |---|---|
@@ -1086,12 +1040,12 @@ E2000-E2026 those totals are 0.90-1.07 of the games, mostly 1.03, so no warning 
 
 Built as `gold.app_standings_stats` by `python gold_etl/main.py -sc <seasons> -tb
 app_standings_stats`: one wide, page-shaped row per club, scope and round, a projection of
-`team_round_stats`, `team_round_ratings` and `team_round_splits` (same row set; values
-identical, nothing recomputed). Key `competition_code`, `season_code`, `scope`, `round_number`,
+the in-memory `team_round_stats`, `team_round_ratings` and `team_round_splits` rows (same row
+set; values identical, nothing recomputed). Key `competition_code`, `season_code`, `scope`, `round_number`,
 `club_code`. For a group phase, `scope = phase_code` joins it to `app_standings` on
 (`season_code`, `phase_code`, `round_number`, `club_code`); `scope` also takes `all` and `PS`.
 It is registered with the round tables and is in the Neon allowlist since 30g
-(`public.app_standings_stats`, E2025 and E2026, once the migration is applied). Both it and
+(`public.app_standings_stats`, every loaded season). Both it and
 `app_team_season_stats` are kept.
 
 | Columns | Source |
@@ -1100,8 +1054,8 @@ It is registered with the round tables and is in the Neon allowlist since 30g
 | `connected`, `league_offensive_rating`, `league_pace`, `relative_*`, `srs`, `sos`, `sov`, `adj_*` | `team_round_ratings` |
 | `home_*`, `away_*`, `last5_*`, `last10_*` (`games`, `wins`, `mov`, `offensive_rating`, `defensive_rating`, `net_rating`, `pace`) | `team_round_splits` |
 
-`--quality-only` checks the fresh derivation and that every stored row equals the stored
-source rows. Comparison with `app_standings` (E2000-E2026, all 12,345 group-phase rows have a
+`--quality-only` checks the fresh derivation, the ratings and split invariants and the API
+cross-check described under the three team round sections. Comparison with `app_standings` (E2000-E2026, all 12,345 group-phase rows have a
 match): `games_played` differs in 191 rows (1.5%), `wins` in 135 and `points_for` in 2,858
 (23%, an average gap of about 5-15 points a row). The largest gap is E2021's regular season
 (for example round 12, where `app_standings` lists 21-23 games per club and this table 12), so

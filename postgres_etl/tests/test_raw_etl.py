@@ -15,7 +15,7 @@ from main import available_seasons, build_parser, requested_seasons
 from flat_loader import FlatDatabaseLoader
 from flat_schema import TABLES, create_table_sql
 from flat_transform import FlatSeason
-from raw_transform import RawSeason, person_code_from_live
+from raw_transform import RawSeason
 from shared import BronzeStore
 
 
@@ -49,7 +49,6 @@ class RawEtlTests(unittest.TestCase):
                         "startDate": "2025-07-01", "externalId": 123, "active": True}
         self.write("v2/season_people_pages/offset_000000.json",
                    {"data": [registration], "total": 1})
-        self.write("v2/rosters/MAD.json", [registration])
         self.write("live/1/shooting_charts.json", {"Rows": [
             {"NUM_ANOT": 1, "TEAM": "MAD   ", "ID_PLAYER": "P000123  ",
              "POINTS": 2, "COORD_X": 3, "COORD_Y": 4},
@@ -134,13 +133,6 @@ class RawEtlTests(unittest.TestCase):
         self.assertEqual({row["game_code"] for row in periods}, {1})
         self.assertEqual({row["period_number"] for row in periods}, {1, 5})
         self.assertEqual(len(list(self.season().rows("game_officials"))), 1)
-
-    def test_live_ids_map_to_person_codes_and_markers_to_null(self):
-        self.assertEqual(person_code_from_live("P014102   "), "014102")
-        self.assertEqual(person_code_from_live("PKLT"), "KLT")
-        self.assertIsNone(person_code_from_live("AC_A"))
-        self.assertIsNone(person_code_from_live("CO_B"))
-        self.assertIsNone(person_code_from_live("          "))
 
     def box_player(self, person_code, name, dorsal, club="MAD"):
         return {"player": {"person": {"code": person_code, "name": name},
@@ -246,7 +238,7 @@ class RawEtlTests(unittest.TestCase):
         self.assertEqual([(row["category"], row["phase_code"], row["mode"]) for row in rows],
                          [("misc", "TS", "perGame")])
 
-    def test_team_stats_feeds_load_into_their_own_tables(self):
+    def test_team_stats_load_only_the_accumulated_own_feeds(self):
         team = {"code": "MAD", "tvCodes": "RMB", "name": "Real Madrid", "imageUrl": "crest.png"}
         self.write("v3/season_stats/teams_traditional_RS_accumulated.json", {"total": 1, "teams": [
             {"teamRanking": 1, "team": team, "gamesPlayed": 38.0, "pointsScored": 3100.0,
@@ -267,11 +259,8 @@ class RawEtlTests(unittest.TestCase):
         self.assertEqual(own[0]["points"], Decimal("3100.0"))
         self.assertEqual(own[0]["two_pointers_percentage"], Decimal("55.1"))
         self.assertIsNone(own[0]["free_throws_percentage"])  # "NaN%": undefined
-        opponents = list(season.rows("season_team_stats_opponents_traditional"))
-        self.assertEqual([row["points"] for row in opponents], [Decimal("2900.0")])
-        advanced = list(season.rows("season_team_stats_opponents_advanced"))
-        self.assertEqual([(row["phase_code"], row["mode"], row["true_shooting_percentage"])
-                          for row in advanced], [("all", "perGame", Decimal("59.3"))])
+        # Archived opponents and per-game files are skipped, not loaded.
+        self.assertEqual(len(list(season.raw.rows("season_team_stats"))), 1)
         self.assertEqual(list(season.rows("season_team_stats_advanced")), [])
         # The player feeds ignore the team files next to them.
         self.assertEqual([row["person_key"] for row in season.rows("season_player_stats_traditional")],

@@ -16,7 +16,6 @@ KEYS = {
     "game_team_possessions": GAME_SIDE,
     "game_team_score_flow": GAME_SIDE,
     "game_team_shot_splits": GAME_SIDE,
-    "game_team_shot_zones": (*GAME_SIDE, "zone"),
     "game_player_on_court": (*GAME_SIDE, "person_key", "interval_ordinal"),
     "game_team_lineup_stints": (*GAME_SIDE, "stint_ordinal"),
     "game_stat_gaps": ("competition_code", "season_code", "game_code", "stat_name"),
@@ -25,7 +24,8 @@ KEYS = {
 
 class SchemaTests(unittest.TestCase):
     def test_tables_copy_the_silver_fields_without_provenance(self):
-        self.assertEqual((len(GAME_PBP_NAMES), len(GAME_COURT_NAMES)), (4, 3))
+        self.assertEqual((len(GAME_PBP_NAMES), len(GAME_COURT_NAMES)), (3, 3))
+        self.assertNotIn("game_team_shot_zones", COPIED_TABLES)
         self.assertEqual(set(KEYS), set(NAMES))
         for name in NAMES:
             with self.subTest(table=name):
@@ -44,8 +44,6 @@ class SchemaTests(unittest.TestCase):
         self.assertEqual(set(COPIED_TABLES), set(SOURCE_NAMES) | set(NAMES))
 
     def test_known_columns(self):
-        self.assertEqual(columns("game_team_shot_zones")[-4:],
-                         ("club_code", "attempts", "made", "points"))
         self.assertIn("counted_possessions", columns("game_team_possessions"))
         self.assertIn("clutch_points_against", columns("game_team_score_flow"))
         self.assertIn("assisted_fg_pct", columns("game_team_shot_splits"))
@@ -75,7 +73,7 @@ class LoaderTests(unittest.TestCase):
         self.assertEqual(db.commits, 1)
 
     def test_failed_insert_rolls_back(self):
-        for name in ("game_team_shot_zones", "game_team_lineup_stints"):
+        for name in ("game_team_shot_splits", "game_team_lineup_stints"):
             with self.subTest(table=name):
                 db = FakeConnection()
                 db.fail_insert = True

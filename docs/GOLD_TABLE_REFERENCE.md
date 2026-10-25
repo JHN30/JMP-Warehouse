@@ -1,6 +1,6 @@
 # Gold table reference
 
-Complete column reference for the 47 registered Gold tables, checked against
+Complete column reference for the 40 registered Gold tables, checked against
 [gold_etl/schema.py](../gold_etl/schema.py) and its imported Silver definitions
 on 2026-10-20. Names, types and primary keys come from the code contract.
 No live schema, data refresh or Neon publish was performed for this document.
@@ -33,10 +33,10 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 
 - **Profiles, roster and schedule:** [seasons](#app_seasons), [clubs](#app_clubs), [people](#app_people), [registrations](#app_registrations), [rounds](#app_rounds), [games](#app_games), [game_officials](#app_game_officials), [players](#app_players), [club_identities](#app_club_identities).
 - **Official box scores and season player feeds:** [game_period_scores](#app_game_period_scores), [game_player_stats](#app_game_player_stats), [game_team_stats](#app_game_team_stats), [season_player_stats_traditional](#app_season_player_stats_traditional), [season_player_stats_advanced](#app_season_player_stats_advanced), [season_player_stats_scoring](#app_season_player_stats_scoring), [season_player_stats_misc](#app_season_player_stats_misc).
-- **Standings, coverage, records and postseason:** [standings](#app_standings), [team_season_stats](#app_team_season_stats), [coverage_seasons](#app_coverage_seasons), [coverage_games](#app_coverage_games), [records_player_seasons](#app_records_player_seasons), [records_single_games](#app_records_single_games), [records_team_seasons](#app_records_team_seasons), [postseason_series](#app_postseason_series).
-- **Calculated team statistics:** [standings_stats](#app_standings_stats), [team_round_stats](#app_team_round_stats), [team_round_ratings](#app_team_round_ratings), [team_round_splits](#app_team_round_splits), [team_pbp_stats](#app_team_pbp_stats), [team_shot_zone_stats](#app_team_shot_zone_stats).
+- **Standings, records and postseason:** [standings](#app_standings), [team_season_stats](#app_team_season_stats), [records_player_seasons](#app_records_player_seasons), [records_single_games](#app_records_single_games), [records_team_seasons](#app_records_team_seasons), [postseason_series](#app_postseason_series).
+- **Calculated team statistics:** [standings_stats](#app_standings_stats), [team_pbp_stats](#app_team_pbp_stats).
 - **Calculated player and lineup statistics:** [player_round_stats](#app_player_round_stats), [player_round_ratings](#app_player_round_ratings), [player_round_win_shares](#app_player_round_win_shares), [player_on_off](#app_player_on_off), [lineup_ratings](#app_lineup_ratings), [player_rapm](#app_player_rapm).
-- **Events and calculated game detail:** [play_by_play](#app_play_by_play), [shots](#app_shots), [game_player_advanced](#app_game_player_advanced), [game_team_advanced](#app_game_team_advanced), [game_team_possessions](#app_game_team_possessions), [game_team_score_flow](#app_game_team_score_flow), [game_team_shot_splits](#app_game_team_shot_splits), [game_team_shot_zones](#app_game_team_shot_zones), [game_player_on_court](#app_game_player_on_court), [game_team_lineup_stints](#app_game_team_lineup_stints), [game_stat_gaps](#app_game_stat_gaps).
+- **Events and calculated game detail:** [play_by_play](#app_play_by_play), [shots](#app_shots), [game_player_advanced](#app_game_player_advanced), [game_team_advanced](#app_game_team_advanced), [game_team_possessions](#app_game_team_possessions), [game_team_score_flow](#app_game_team_score_flow), [game_team_shot_splits](#app_game_team_shot_splits), [game_player_on_court](#app_game_player_on_court), [game_team_lineup_stints](#app_game_team_lineup_stints), [game_stat_gaps](#app_game_stat_gaps).
 
 ## app_seasons
 
@@ -848,47 +848,6 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 
 [Back to catalog](DATA_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
 
-## app_coverage_seasons
-
-**Purpose:** Coverage badges for a season.
-
-**Grain:** one season. **Columns:** 3.
-
-**Primary key:** `competition_code`, `season_code`.
-
-**Definition / implementation:** [gold_etl/coverage.py](../gold_etl/coverage.py).
-
-**Usage and limitations:** items describes eight coverage categories with available/applicable counts. It is evidence of source coverage, not certification of every derived metric.
-
-| Column | PostgreSQL type | Nullable | Key | Description |
-| --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (support is deferred). |
-| `season_code` | `TEXT` | No | PK | Starting-year season code, for example E2025 for 2025-26. |
-| `items` | `JSONB` | No |  | JSON array of eight coverage items; see the JSON contract below. |
-
-[Back to catalog](DATA_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
-
-## app_coverage_games
-
-**Purpose:** Coverage badges for a fixture.
-
-**Grain:** one game. **Columns:** 4.
-
-**Primary key:** `competition_code`, `season_code`, `game_code`.
-
-**Definition / implementation:** [gold_etl/coverage.py](../gold_etl/coverage.py).
-
-**Usage and limitations:** Join to app_games on the complete game key. Some categories have zero applicable items for future fixtures.
-
-| Column | PostgreSQL type | Nullable | Key | Description |
-| --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (support is deferred). |
-| `season_code` | `TEXT` | No | PK | Starting-year season code, for example E2025 for 2025-26. |
-| `game_code` | `INTEGER` | No | PK | Game identifier within competition and season, not globally unique. |
-| `items` | `JSONB` | No |  | JSON array of eight coverage items; see the JSON contract below. |
-
-[Back to catalog](DATA_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
-
 ## app_records_player_seasons
 
 **Purpose:** Historical top player-season leaderboards.
@@ -998,7 +957,7 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 
 ## app_standings_stats
 
-**Purpose:** One frontend-ready team advanced-stat row combining the three team-round tables.
+**Purpose:** One frontend-ready team advanced-stat row: cumulative totals and ratings, league-relative and opponent-adjusted strength, home/away and last-5/last-10 form. It merges three team-round derivations (`team_rounds.py`, `team_ratings.py`, `team_splits.py`) that run in memory and are not stored.
 
 **Grain:** one club-scope-round snapshot. **Columns:** 69.
 
@@ -1082,156 +1041,6 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 
 [Back to catalog](DATA_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
 
-## app_team_round_stats
-
-**Purpose:** Cumulative team totals, possession efficiency and expected wins.
-
-**Grain:** one club-scope-round snapshot. **Columns:** 49.
-
-**Primary key:** `competition_code`, `season_code`, `scope`, `round_number`, `club_code`.
-
-**Definition / implementation:** [gold_etl/team_rounds.py](../gold_etl/team_rounds.py).
-
-**Usage and limitations:** Use the final round within the selected scope for season totals. Idle rounds carry forward. Rates use cumulative totals, not means of game rates. Includes only played games with complete box scores for both sides.
-
-| Column | PostgreSQL type | Nullable | Key | Description |
-| --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (support is deferred). |
-| `season_code` | `TEXT` | No | PK | Starting-year season code, for example E2025 for 2025-26. |
-| `scope` | `TEXT` | No | PK | Aggregation scope: all, one phase, or PS (PI + PO + FF). RAPM supports all only. |
-| `round_number` | `INTEGER` | No | PK | Source game/standings round number; cumulative snapshots include games through this round. |
-| `club_code` | `TEXT` | No | PK | Club identifier, text; join season profiles on competition, season and club. |
-| `club_name` | `TEXT` | Yes |  | Club display name for this season or row. |
-| `games_played` | `INTEGER` | No |  | Games/appearances in the selected row scope; see table notes for counted games and series fixture counts. |
-| `wins` | `INTEGER` | No |  | Games won in this row's scope; source player misc values follow the API. |
-| `losses` | `INTEGER` | No |  | Games lost in this row's scope; source player misc values follow the API. |
-| `points_for` | `NUMERIC` | Yes |  | Points scored by this club or lineup in the row's game, stint or cumulative scope. |
-| `points_against` | `NUMERIC` | Yes |  | Points conceded by this club or lineup in the same sample. |
-| `own_field_goals_made` | `NUMERIC` | Yes |  | Team total: Successful two- and three-point field goals (FGM), excluding free throws. |
-| `own_field_goals_attempted` | `NUMERIC` | Yes |  | Team total: All two- and three-point field-goal attempts (FGA), including blocked attempts. |
-| `own_three_pointers_made` | `NUMERIC` | Yes |  | Team total: Successful three-point field goals (3PM). |
-| `own_free_throws_made` | `NUMERIC` | Yes |  | Team total: Successful free throws (FTM). |
-| `own_free_throws_attempted` | `NUMERIC` | Yes |  | Team total: Free-throw attempts (FTA), including makes. |
-| `own_offensive_rebounds` | `NUMERIC` | Yes |  | Team total: Rebounds recovered after the player's or club's missed shot (OREB). |
-| `own_defensive_rebounds` | `NUMERIC` | Yes |  | Team total: Rebounds recovered after the opponent's missed shot (DREB). |
-| `own_turnovers` | `NUMERIC` | Yes |  | Team total: Lost possessions charged to the player or team (TOV). |
-| `own_assists` | `NUMERIC` | Yes |  | Team total: Official credited assists (AST), including EuroLeague assists that lead to free throws. |
-| `opp_field_goals_made` | `NUMERIC` | Yes |  | Opponent total: Successful two- and three-point field goals (FGM), excluding free throws. |
-| `opp_field_goals_attempted` | `NUMERIC` | Yes |  | Opponent total: All two- and three-point field-goal attempts (FGA), including blocked attempts. |
-| `opp_three_pointers_made` | `NUMERIC` | Yes |  | Opponent total: Successful three-point field goals (3PM). |
-| `opp_free_throws_made` | `NUMERIC` | Yes |  | Opponent total: Successful free throws (FTM). |
-| `opp_free_throws_attempted` | `NUMERIC` | Yes |  | Opponent total: Free-throw attempts (FTA), including makes. |
-| `opp_offensive_rebounds` | `NUMERIC` | Yes |  | Opponent total: Rebounds recovered after the player's or club's missed shot (OREB). |
-| `opp_defensive_rebounds` | `NUMERIC` | Yes |  | Opponent total: Rebounds recovered after the opponent's missed shot (DREB). |
-| `opp_turnovers` | `NUMERIC` | Yes |  | Opponent total: Lost possessions charged to the player or team (TOV). |
-| `opp_assists` | `NUMERIC` | Yes |  | Opponent total: Official credited assists (AST), including EuroLeague assists that lead to free throws. |
-| `game_minutes` | `NUMERIC` | Yes |  | Game-clock minutes, 40 plus 5 per overtime; cumulative sum in team-round rows, not player-minutes. |
-| `possessions` | `NUMERIC` | Yes |  | In calculated team rows: mean of the two clubs' possession estimates, summed for cumulative rows. API player feed possessions has a separate source definition. |
-| `mov` | `NUMERIC` | Yes |  | (points_for - points_against) / games_played, mean margin in points per game. |
-| `pythagorean_exponent` | `NUMERIC` | Yes |  | Fixed exponent 10.25 used in this warehouse's expected-win model. |
-| `pythagorean_win_pct` | `NUMERIC` | Yes |  | PF^10.25 / (PF^10.25 + PA^10.25), expected win fraction from cumulative scores. |
-| `pythagorean_wins` | `NUMERIC` | Yes |  | pythagorean_win_pct * games_played, expected wins. |
-| `pace` | `NUMERIC` | Yes |  | 40 * estimated possessions / game_minutes, possessions per regulation-length team game. |
-| `offensive_rating` | `NUMERIC` | Yes |  | 100 * points_for / estimated possessions, points scored per 100 possessions. |
-| `defensive_rating` | `NUMERIC` | Yes |  | 100 * points_against / estimated possessions, points allowed per 100 possessions; lower is better. |
-| `net_rating` | `NUMERIC` | Yes |  | Offensive rating minus defensive rating; points per 100 possessions. Lineup rows use counted possessions separately on each side. |
-| `efg_pct` | `NUMERIC` | Yes |  | (FGM + 0.5 * 3PM) / FGA, a fraction that can exceed 1. |
-| `tov_pct` | `NUMERIC` | Yes |  | TOV / (FGA + 0.44 * FTA + TOV), a fraction. |
-| `orb_pct` | `NUMERIC` | Yes |  | Offensive rebound share, a fraction; team, player estimated and player on-court denominators differ. See glossary. |
-| `drb_pct` | `NUMERIC` | Yes |  | Defensive rebound share, a fraction; team, player estimated and player on-court denominators differ. See glossary. |
-| `ft_rate` | `NUMERIC` | Yes |  | FTM / FGA, made free throws per field-goal attempt; not FTA / FGA. |
-| `opp_efg_pct` | `NUMERIC` | Yes |  | Opponent total: (FGM + 0.5 * 3PM) / FGA, a fraction that can exceed 1. |
-| `opp_tov_pct` | `NUMERIC` | Yes |  | Opponent total: TOV / (FGA + 0.44 * FTA + TOV), a fraction. |
-| `opp_ft_rate` | `NUMERIC` | Yes |  | Opponent total: FTM / FGA, made free throws per field-goal attempt; not FTA / FGA. |
-| `true_shooting_pct` | `NUMERIC` | Yes |  | PTS / (2 * (FGA + 0.44 * FTA)), a fraction that can exceed 1. |
-| `assist_ratio` | `NUMERIC` | Yes |  | AST / FGM in calculated team tables; not the API assists_ratio. |
-
-[Back to catalog](DATA_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
-
-## app_team_round_ratings
-
-**Purpose:** League-relative and opponent-adjusted team strength.
-
-**Grain:** one club-scope-round snapshot. **Columns:** 17.
-
-**Primary key:** `competition_code`, `season_code`, `scope`, `round_number`, `club_code`.
-
-**Definition / implementation:** [gold_etl/team_ratings.py](../gold_etl/team_ratings.py).
-
-**Usage and limitations:** Same key and counted games as app_team_round_stats. Disconnected schedules give NULL SRS/SOS/SOV and adjusted ratings; bipartite schedules also prevent separation of adjusted offense and defense.
-
-| Column | PostgreSQL type | Nullable | Key | Description |
-| --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (support is deferred). |
-| `season_code` | `TEXT` | No | PK | Starting-year season code, for example E2025 for 2025-26. |
-| `scope` | `TEXT` | No | PK | Aggregation scope: all, one phase, or PS (PI + PO + FF). RAPM supports all only. |
-| `round_number` | `INTEGER` | No | PK | Source game/standings round number; cumulative snapshots include games through this round. |
-| `club_code` | `TEXT` | No | PK | Club identifier, text; join season profiles on competition, season and club. |
-| `connected` | `BOOLEAN` | No |  | True if the played-game graph links every club in this scope-round; governs adjusted-rating availability. |
-| `league_offensive_rating` | `NUMERIC` | Yes |  | 100 * league points / league estimated possessions in this scope through this round, both sides counted. |
-| `league_pace` | `NUMERIC` | Yes |  | 40 * league estimated possessions / league game-clock minutes, both sides counted. |
-| `relative_offensive_rating` | `NUMERIC` | Yes |  | Club offensive_rating minus league_offensive_rating; positive means better offense. |
-| `relative_defensive_rating` | `NUMERIC` | Yes |  | Club defensive_rating minus league_offensive_rating; negative means better defense. |
-| `relative_pace` | `NUMERIC` | Yes |  | Club pace minus league_pace, possessions per 40 minutes above/below the league. |
-| `srs` | `NUMERIC` | Yes |  | Simple Rating System: MOV plus mean opponent SRS, solved with league mean zero; points per game. |
-| `sos` | `NUMERIC` | Yes |  | Strength of schedule: mean opponent SRS over all counted games, equal to SRS - MOV. |
-| `sov` | `NUMERIC` | Yes |  | Strength of victory: mean opponent SRS in games won; NULL without wins. |
-| `adj_offensive_rating` | `NUMERIC` | Yes |  | Possession-weighted opponent-adjusted offensive rating, centered on league offensive rating. |
-| `adj_defensive_rating` | `NUMERIC` | Yes |  | Possession-weighted opponent-adjusted defensive rating, centered on league offensive rating; lower is better. |
-| `adj_net_rating` | `NUMERIC` | Yes |  | Possession-weighted opponent-adjusted net rating, centered on zero; higher is better. |
-
-[Back to catalog](DATA_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
-
-## app_team_round_splits
-
-**Purpose:** Home/away and last-5/last-10 team form.
-
-**Grain:** one club-scope-round snapshot. **Columns:** 33.
-
-**Primary key:** `competition_code`, `season_code`, `scope`, `round_number`, `club_code`.
-
-**Definition / implementation:** [gold_etl/team_splits.py](../gold_etl/team_splits.py).
-
-**Usage and limitations:** Windows use counted games within the scope ordered by round_number, game_code. Early windows can have fewer than 5/10 games. Neutral games retain local/road designation.
-
-| Column | PostgreSQL type | Nullable | Key | Description |
-| --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (support is deferred). |
-| `season_code` | `TEXT` | No | PK | Starting-year season code, for example E2025 for 2025-26. |
-| `scope` | `TEXT` | No | PK | Aggregation scope: all, one phase, or PS (PI + PO + FF). RAPM supports all only. |
-| `round_number` | `INTEGER` | No | PK | Source game/standings round number; cumulative snapshots include games through this round. |
-| `club_code` | `TEXT` | No | PK | Club identifier, text; join season profiles on competition, season and club. |
-| `home_games` | `INTEGER` | No |  | Local-side games in this scope through this round: Count of contributing games, with a table-specific denominator; in postseason_series this is a JSON fixture list. |
-| `home_wins` | `INTEGER` | No |  | Local-side games in this scope through this round: Games won in this row's scope; source player misc values follow the API. |
-| `home_mov` | `NUMERIC` | Yes |  | Local-side games in this scope through this round: (points_for - points_against) / games_played, mean margin in points per game. |
-| `home_offensive_rating` | `NUMERIC` | Yes |  | Local-side games in this scope through this round: 100 * points_for / estimated possessions, points scored per 100 possessions. |
-| `home_defensive_rating` | `NUMERIC` | Yes |  | Local-side games in this scope through this round: 100 * points_against / estimated possessions, points allowed per 100 possessions; lower is better. |
-| `home_net_rating` | `NUMERIC` | Yes |  | Local-side games in this scope through this round: Offensive rating minus defensive rating; points per 100 possessions. Lineup rows use counted possessions separately on each side. |
-| `home_pace` | `NUMERIC` | Yes |  | Local-side games in this scope through this round: 40 * estimated possessions / game_minutes, possessions per regulation-length team game. |
-| `away_games` | `INTEGER` | No |  | Road-side games in this scope through this round: Count of contributing games, with a table-specific denominator; in postseason_series this is a JSON fixture list. |
-| `away_wins` | `INTEGER` | No |  | Road-side games in this scope through this round: Games won in this row's scope; source player misc values follow the API. |
-| `away_mov` | `NUMERIC` | Yes |  | Road-side games in this scope through this round: (points_for - points_against) / games_played, mean margin in points per game. |
-| `away_offensive_rating` | `NUMERIC` | Yes |  | Road-side games in this scope through this round: 100 * points_for / estimated possessions, points scored per 100 possessions. |
-| `away_defensive_rating` | `NUMERIC` | Yes |  | Road-side games in this scope through this round: 100 * points_against / estimated possessions, points allowed per 100 possessions; lower is better. |
-| `away_net_rating` | `NUMERIC` | Yes |  | Road-side games in this scope through this round: Offensive rating minus defensive rating; points per 100 possessions. Lineup rows use counted possessions separately on each side. |
-| `away_pace` | `NUMERIC` | Yes |  | Road-side games in this scope through this round: 40 * estimated possessions / game_minutes, possessions per regulation-length team game. |
-| `last5_games` | `INTEGER` | No |  | Last up to five counted games in this scope: Count of contributing games, with a table-specific denominator; in postseason_series this is a JSON fixture list. |
-| `last5_wins` | `INTEGER` | No |  | Last up to five counted games in this scope: Games won in this row's scope; source player misc values follow the API. |
-| `last5_mov` | `NUMERIC` | Yes |  | Last up to five counted games in this scope: (points_for - points_against) / games_played, mean margin in points per game. |
-| `last5_offensive_rating` | `NUMERIC` | Yes |  | Last up to five counted games in this scope: 100 * points_for / estimated possessions, points scored per 100 possessions. |
-| `last5_defensive_rating` | `NUMERIC` | Yes |  | Last up to five counted games in this scope: 100 * points_against / estimated possessions, points allowed per 100 possessions; lower is better. |
-| `last5_net_rating` | `NUMERIC` | Yes |  | Last up to five counted games in this scope: Offensive rating minus defensive rating; points per 100 possessions. Lineup rows use counted possessions separately on each side. |
-| `last5_pace` | `NUMERIC` | Yes |  | Last up to five counted games in this scope: 40 * estimated possessions / game_minutes, possessions per regulation-length team game. |
-| `last10_games` | `INTEGER` | No |  | Last up to ten counted games in this scope: Count of contributing games, with a table-specific denominator; in postseason_series this is a JSON fixture list. |
-| `last10_wins` | `INTEGER` | No |  | Last up to ten counted games in this scope: Games won in this row's scope; source player misc values follow the API. |
-| `last10_mov` | `NUMERIC` | Yes |  | Last up to ten counted games in this scope: (points_for - points_against) / games_played, mean margin in points per game. |
-| `last10_offensive_rating` | `NUMERIC` | Yes |  | Last up to ten counted games in this scope: 100 * points_for / estimated possessions, points scored per 100 possessions. |
-| `last10_defensive_rating` | `NUMERIC` | Yes |  | Last up to ten counted games in this scope: 100 * points_against / estimated possessions, points allowed per 100 possessions; lower is better. |
-| `last10_net_rating` | `NUMERIC` | Yes |  | Last up to ten counted games in this scope: Offensive rating minus defensive rating; points per 100 possessions. Lineup rows use counted possessions separately on each side. |
-| `last10_pace` | `NUMERIC` | Yes |  | Last up to ten counted games in this scope: 40 * estimated possessions / game_minutes, possessions per regulation-length team game. |
-
-[Back to catalog](DATA_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
-
 ## app_team_pbp_stats
 
 **Purpose:** Season-scope possessions, score flow, clutch and shot-split summaries.
@@ -1275,33 +1084,6 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 | `largest_lead` | `NUMERIC` | Yes |  | Largest positive team margin in a game; maximum across games in season-scope aggregates. |
 | `longest_run` | `NUMERIC` | Yes |  | Most unanswered points scored in a game; maximum across games in season-scope aggregates. |
 | `assisted_fg_pct` | `NUMERIC` | Yes |  | assisted_field_goals / field_goals_made, a fraction. |
-
-[Back to catalog](DATA_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
-
-## app_team_shot_zone_stats
-
-**Purpose:** Season-scope shot map aggregates and shot mix.
-
-**Grain:** one club-zone-scope per season. **Columns:** 10.
-
-**Primary key:** `competition_code`, `season_code`, `scope`, `club_code`, `zone`.
-
-**Definition / implementation:** [gold_etl/team_shot_zones.py](../gold_etl/team_shot_zones.py).
-
-**Usage and limitations:** Only zones with attempts have rows. fg_pct and attempt_share are fractions. E2007+ subject to shot coverage; no synthetic zero rows for absent zones.
-
-| Column | PostgreSQL type | Nullable | Key | Description |
-| --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (support is deferred). |
-| `season_code` | `TEXT` | No | PK | Starting-year season code, for example E2025 for 2025-26. |
-| `scope` | `TEXT` | No | PK | Aggregation scope: all, one phase, or PS (PI + PO + FF). RAPM supports all only. |
-| `club_code` | `TEXT` | No | PK | Club identifier, text; join season profiles on competition, season and club. |
-| `zone` | `TEXT` | No | PK | Source shot-zone label, preserved without a warehouse court taxonomy. |
-| `attempts` | `INTEGER` | Yes |  | Field-goal attempts in this source zone, including makes. |
-| `made` | `INTEGER` | Yes |  | Successful field goals in this source zone. |
-| `points` | `INTEGER` | Yes |  | Scored points; in shots this is points awarded for that shot, and in zone tables points from the zone. |
-| `fg_pct` | `NUMERIC` | Yes |  | made / attempts in this zone, a fraction. |
-| `attempt_share` | `NUMERIC` | Yes |  | Zone attempts / all zone-tagged field-goal attempts for the club in the scope, a fraction. |
 
 [Back to catalog](DATA_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
 
@@ -1780,32 +1562,6 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 
 [Back to catalog](DATA_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
 
-## app_game_team_shot_zones
-
-**Purpose:** Made shots, attempts and points by source zone.
-
-**Grain:** one side-zone per game with zone-tagged shots. **Columns:** 9.
-
-**Primary key:** `competition_code`, `season_code`, `game_code`, `side`, `zone`.
-
-**Definition / implementation:** [postgres_etl/shot_zones.py](../postgres_etl/shot_zones.py).
-
-**Usage and limitations:** E2007+ subject to coverage. Field goals only; only attempted zones are present. Zone codes are source labels, not a warehouse-defined court taxonomy.
-
-| Column | PostgreSQL type | Nullable | Key | Description |
-| --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (support is deferred). |
-| `season_code` | `TEXT` | No | PK | Starting-year season code, for example E2025 for 2025-26. |
-| `game_code` | `INTEGER` | No | PK | Game identifier within competition and season, not globally unique. |
-| `side` | `TEXT` | No | PK | Source side, local or road; local is not proof of a non-neutral home venue. |
-| `zone` | `TEXT` | No | PK | Source shot-zone label, preserved without a warehouse court taxonomy. |
-| `club_code` | `TEXT` | Yes |  | Club identifier, text; join season profiles on competition, season and club. |
-| `attempts` | `INTEGER` | Yes |  | Field-goal attempts in this source zone, including makes. |
-| `made` | `INTEGER` | Yes |  | Successful field goals in this source zone. |
-| `points` | `INTEGER` | Yes |  | Scored points; in shots this is points awarded for that shot, and in zone tables points from the zone. |
-
-[Back to catalog](DATA_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
-
 ## app_game_player_on_court
 
 **Purpose:** Continuous player on-court intervals.
@@ -1894,22 +1650,9 @@ from SQL NULL. Object values can be NULL when the corresponding source is missin
 | Table.column | Array element keys | Meaning / order |
 | --- | --- | --- |
 | `app_players.clubs` | `seasonCode`, `clubCode`, `clubName` | One distinct registered season/club per player; ordered by season and club in the identity builder. |
-| `app_coverage_seasons.items`, `app_coverage_games.items` | `key`, `label`, `status`, `availableCount`, `applicableCount` | Fixed category order shown below. Counts depend on category; not always a numerator/denominator for a percentage. |
 | `app_standings.form` | `resultOrdinal`, `result` | Official recent result labels in resultOrdinal order. |
 | `app_standings.streak_history` | `streakOrdinal`, `startAt`, `endAt`, `winLossRecord` | Official calendar streaks in streakOrdinal order; dates serialized in UTC ISO format with milliseconds. |
 | `app_postseason_series.games` | `gameCode`, `roundNumber`, `scheduledAt`, `localClubCode`, `roadClubCode`, `localScore`, `roadScore`, `winnerClubCode` | Ordered by round then game; includes scheduled fixtures. Future scores/winner are NULL. scheduledAt is UTC ISO text with milliseconds. |
-
-Coverage item order is `boxScores`, `periodScores`, `officialStandings`, `rosters`,
-`playerPhotos`, `seasonStatistics`, `shotLocations`, `playByPlay`. Status is
-`notYetApplicable` when applicableCount is zero, `unavailable` when availableCount
-is zero, `available` when availableCount reaches applicableCount, otherwise
-`incomplete` for standings/rosters/seasonStatistics and `partial` for other items.
-Game items for standings, rosters and seasonStatistics reuse the season summary.
-
-The implementation counts photos as distinct photographed players, compared with
-played games, and season statistics as distinct feed players, compared with clubs.
-Those counts are retained coverage indicators, not percentages of players covered.
-See [coverage.py](../gold_etl/coverage.py) before calculating any badge percentage.
 
 ## Record metric values
 

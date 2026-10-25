@@ -164,21 +164,6 @@ def normalized_name(value):
     return letters.upper() or None
 
 
-def person_code_from_live(value):
-    """Map a legacy live id to the v2 person code used by every other table.
-
-    Every live player id is ``P`` followed by the v2 code, which may be digits
-    or letters (``P014102`` -> ``014102``, ``PKLT`` -> ``KLT``). Ids without
-    the prefix are team/coach markers such as ``AC_A`` or ``CO_B``; they are
-    not people, so they have no person code (NULL). The original id is kept
-    separately in ``player_code``.
-    """
-    value = code(value)
-    if value and len(value) > 1 and value.startswith("P"):
-        return value[1:]
-    return None
-
-
 def integer(value):
     if value is None or value == "":
         return None
@@ -347,7 +332,8 @@ class RawSeason:
         if table in single:
             return single[table]
         if table in ("people", "registrations"):
-            return self._people_pages() + self._paths("v2/rosters/*")
+            # Club rosters (v2/rosters/*, no longer fetched) repeat the season people pages.
+            return self._people_pages()
         patterns = {
             "game_player_stats": "v2/game_stats/*",
             "game_team_stats": "v2/game_stats/*",
@@ -543,6 +529,8 @@ class RawSeason:
                 if not match:
                     raise ValueError(f"Unexpected team stats filename: {path}")
                 feed, phase, mode = match.groups()
+                if feed.startswith("opponents_") or mode == "perGame":
+                    continue  # archived only; no longer fetched and nothing reads them
                 for item in read_json(path).get("teams") or []:
                     yield dict(scope, feed=feed, phase_code=phase, mode=mode,
                                club_code=code(nested(item, "team", "code")), payload=item)

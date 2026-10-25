@@ -15,14 +15,9 @@ from gold_etl.lineup_ratings import read_rows as read_lineup_rows
 from gold_etl.rapm import read_rows as read_rapm_rows
 from gold_etl.player_on_off import read_rows as read_on_off_rows
 from gold_etl.team_pbp import read_rows as read_team_pbp_rows
-from gold_etl.team_shot_zones import read_rows as read_team_zone_rows
-from gold_etl.team_ratings import read_rows as read_rating_rows
-from gold_etl.team_splits import read_rows as read_split_rows
-from gold_etl.team_rounds import read_rows as read_round_rows
 from gold_etl.postseason import TABLES as PS_TABLES, read_rows as read_postseason_rows
 from gold_etl.standings import read_rows as read_standings_rows
 from gold_etl.team_season import read_rows as read_team_rows
-from gold_etl.coverage import read_rows as read_coverage_rows
 from gold_etl.records import read_rows as read_record_rows
 from gold_etl.identity import read_rows as read_identity_rows
 from gold_etl.series import read_rows as read_series_rows
@@ -125,8 +120,6 @@ def read_aggregate_rows(cursor, name, competition_code, season_code):
         return read_on_off_rows(cursor, competition_code, season_code)
     if name == "team_pbp_stats":
         return read_team_pbp_rows(cursor, competition_code, season_code)
-    if name == "team_shot_zone_stats":
-        return read_team_zone_rows(cursor, competition_code, season_code)
     if name == "app_standings_stats":
         return read_standings_stats_rows(cursor, competition_code, season_code)
     if name == "player_round_win_shares":
@@ -135,22 +128,14 @@ def read_aggregate_rows(cursor, name, competition_code, season_code):
         return read_player_rating_rows(cursor, competition_code, season_code)
     if name == "player_round_stats":
         return read_player_rows(cursor, competition_code, season_code)
-    if name == "team_round_splits":
-        return read_split_rows(cursor, competition_code, season_code)
-    if name == "team_round_ratings":
-        return read_rating_rows(cursor, competition_code, season_code)
-    if name == "team_round_stats":
-        return read_round_rows(cursor, competition_code, season_code)
-    if name == "app_team_season_stats":
-        return read_team_rows(cursor, competition_code, season_code)
-    return read_coverage_rows(cursor, competition_code, season_code)[name]
+    return read_team_rows(cursor, competition_code, season_code)
 
 
 def replace_aggregate_scope(connection, name, competition_code, season_code):
     """Replace one registered derived season slice in a single transaction."""
     if name not in SEASON_DERIVED_NAMES:
         raise ValueError(f"Unknown Gold aggregate table: {name}")
-    from psycopg2.extras import Json, execute_values
+    from psycopg2.extras import execute_values
 
     with connection:
         with connection.cursor() as cursor:
@@ -166,8 +151,7 @@ def replace_aggregate_scope(connection, name, competition_code, season_code):
                 fields = columns(name)
                 names = ", ".join(f'"{field}"' for field in fields)
                 values = [tuple(competition_code if field == "competition_code" else
-                                season_code if field == "season_code" else
-                                Json(row[field]) if field == "items" else row.get(field)
+                                season_code if field == "season_code" else row.get(field)
                                 for field in fields) for row in rows]
                 execute_values(cursor, f'INSERT INTO gold."{physical_name(name)}" ({names}) VALUES %s',
                                values, page_size=1000)

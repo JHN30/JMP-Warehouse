@@ -24,7 +24,7 @@ from gold_etl.quality import (check_scope, check_postseason_scope,
                               check_records_scope, check_round_api_scope,
                               check_round_player_api_scope, check_round_rating_invariants,
                               check_round_player_rating_invariants,
-                              check_round_win_share_totals, check_standings_stats_ties,
+                              check_round_win_share_totals,
                               check_pbp_partition, check_on_off_totals, check_lineup_totals,
                               check_round_split_invariants,
                               check_series_scope, check_game_advanced_invariants, check_game_advanced_ranges,
@@ -146,11 +146,6 @@ def main(argv=None):
                     elif args.quality_only:
                         with connection.cursor() as cursor:
                             issues = check_aggregate_scope(cursor, name, *scope)
-                            if name == "team_round_stats" and not issues:
-                                for warning in check_round_api_scope(cursor, *scope):
-                                    print("WARN " + warning, flush=True)
-                            if name == "team_round_ratings" and not issues:
-                                issues = check_round_rating_invariants(cursor, *scope)
                             if name in PBP_NAMES and not issues:
                                 issues = check_pbp_partition(cursor, name, *scope)
                             if name == "lineup_ratings" and not issues:
@@ -158,14 +153,16 @@ def main(argv=None):
                             if name == "player_on_off" and not issues:
                                 issues = check_on_off_totals(cursor, *scope)
                             if name == "app_standings_stats" and not issues:
-                                issues = check_standings_stats_ties(cursor, *scope)
+                                issues = (check_round_rating_invariants(cursor, *scope)
+                                          + check_round_split_invariants(cursor, *scope))
+                                if not issues:
+                                    for warning in check_round_api_scope(cursor, *scope):
+                                        print("WARN " + warning, flush=True)
                             if name == "player_round_win_shares" and not issues:
                                 for warning in check_round_win_share_totals(cursor, *scope):
                                     print("WARN " + warning, flush=True)
                             if name == "player_round_ratings" and not issues:
                                 issues = check_round_player_rating_invariants(cursor, *scope)
-                            if name == "team_round_splits" and not issues:
-                                issues = check_round_split_invariants(cursor, *scope)
                             if name in GAME_ADVANCED_NAMES and not issues:
                                 issues = check_game_advanced_invariants(cursor, name, *scope)
                                 if name == "game_player_advanced":

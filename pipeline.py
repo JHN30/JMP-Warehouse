@@ -343,6 +343,9 @@ def refresh(args, season_code, log, state_file, facts, stage_runner=run_stage,
     interactive = sys.stdin.isatty() if interactive is None else interactive
     python = sys.executable
     child_env = dict(environ, **CHILD_ENV)
+    # Only EuroLeague is published to Neon; other competitions stop after Gold quality.
+    local_only = args.competition != "euroleague"
+    local_pending = {"local_pending": True} if local_only else {}
 
     def stage(title, command, into=None, cwd=ROOT, env=child_env, redact=None):
         log.line(f"\n=== {title}: {' '.join(command[1:])}")
@@ -380,14 +383,19 @@ def refresh(args, season_code, log, state_file, facts, stage_runner=run_stage,
                  f"{len(facts.kept)} stats feed(s) kept from an earlier fetch, "
                  f"{len(facts.behind)} behind the v2 games.")
         if changed:
-            write_state(state_file, publish_pending=True, last_change_count=len(changed))
+            write_state(state_file, publish_pending=True, last_change_count=len(changed),
+                        **local_pending)
 
-    pending = read_state(state_file).get("publish_pending", False)
+    # A local-only run never clears publish_pending, so it skips on its own flag.
+    state = read_state(state_file)
+    pending = (state.get("local_pending", True) if local_only
+               else state.get("publish_pending", False))
     if not (pending or args.force or args.skip_fetch):
-        log.line("Nothing changed; Silver, Gold and Neon left as is.")
+        log.line("Nothing changed; Silver and Gold left as is." if local_only
+                 else "Nothing changed; Silver, Gold and Neon left as is.")
         return 0, "NOTHING TO DO", None
 
-    write_state(state_file, publish_pending=True)
+    write_state(state_file, publish_pending=True, **local_pending)
     code = stage("Load local PostgreSQL",
                  [python, "postgres_etl/main.py", "-cp", args.competition, "-sc", season_code],
                  into=facts.load_lines)
@@ -409,6 +417,9 @@ def refresh(args, season_code, log, state_file, facts, stage_runner=run_stage,
         facts.gold_status = "quality failed"
         return code, f"FAILED at Gold quality (exit {code})", "Fix Gold quality and retry."
     facts.gold_status = "built and quality checked"
+    if local_only:
+        write_state(state_file, local_pending=False)
+        return 0, "OK (local only)", None
 
     url, source = resolve_neon_url(environ, prompt, interactive, dotenv_path)
     if not url:
@@ -438,6 +449,8 @@ def main(argv=None):
     args = parser.parse_args(argv)
     if args.all_history and (args.season_code != "current" or args.dry_run_publish or args.allow_shrink):
         parser.error("--all refreshes local history only; omit -sc, --dry-run-publish and --allow-shrink")
+    if args.competition != "euroleague" and (args.dry_run_publish or args.allow_shrink):
+        parser.error(f"{args.competition} is refreshed locally only; omit --dry-run-publish and --allow-shrink")
     try:
         season_code = "all" if args.all_history else season_code_for(args.competition, args.season_code)
         state_season = season_code_for(args.competition, "current") if args.all_history else season_code

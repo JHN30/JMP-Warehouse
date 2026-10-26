@@ -321,6 +321,11 @@ committed; copy the `.example`). Publishing reads the direct non-pooled
   Never start or register it without the owner's yes.
 - `python pipeline.py --dry-run-publish` builds Gold and checks Neon without
   remote writes; pending state remains true for a later live retry.
+- Refresh the current EuroCup season locally: `python pipeline.py -cp eurocup`
+  (fetch, load, Gold build and quality checks; never connects to Neon and ends
+  `OK (local only)`). `python pipeline.py` stays EuroLeague only. It skips work
+  when nothing changed since its last passing Gold check (`local_pending` in
+  `data/state/`); `--dry-run-publish` and `--allow-shrink` are rejected.
 - Full local history including API fetch: `python pipeline.py --all`. Fetches
   2000 through the current season using existing cache rules, rebuilds Silver
   and Gold and checks Gold quality. Never connects to Neon; leaves the current

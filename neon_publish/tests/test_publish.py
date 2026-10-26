@@ -875,6 +875,62 @@ class PipelineTests(unittest.TestCase):
         self.assertNotIn("neon_publish/main.py", stages)
         self.assertTrue(pending)
 
+    def run_eurocup(self, state_text=None, fetch=False, changed=0, outcomes=None):
+        outcomes = outcomes or {}
+        flags = ["-cp", "eurocup"] + ([] if fetch else ["--skip-fetch"])
+        with tempfile.TemporaryDirectory() as root:
+            state = Path(root) / "state.json"
+            if state_text:
+                state.write_text(state_text)
+            stages = []
+            def runner(command, cwd, env, emit):
+                stages.append(command[1])
+                if command[1] == "main.py":
+                    path = Path(command[command.index("--summary-file") + 1])
+                    path.write_text(json.dumps({"changed_resources":
+                                               [f"resource/{i}" for i in range(changed)],
+                                               "failed_requests": 0}), encoding="utf-8")
+                return outcomes.get(command[1] + (" quality" if "--quality-only" in command
+                                                  else ""), 0)
+            facts = StageFacts()
+            result = refresh(build_parser().parse_args(flags), "U2026", self.Log(), state, facts,
+                             stage_runner=runner, environ={}, interactive=False,
+                             dotenv_path=Path(root) / ".env",
+                             prompt=lambda _: self.fail("prompted in a local-only run"))
+            summary = "\n".join(build_summary("U2026", result[1], facts, 1, "log"))
+            return result, read_state(state), stages, summary
+
+    def test_eurocup_refresh_is_local_only(self):
+        result, state, stages, summary = self.run_eurocup()
+        self.assertEqual(result[:2], (0, "OK (local only)"))
+        self.assertEqual(stages, ["postgres_etl/main.py", "gold_etl/main.py", "gold_etl/main.py"])
+        self.assertEqual((state["publish_pending"], state["local_pending"]), (True, False))
+        self.assertIn("Publish:  skipped", summary)
+
+    def test_eurocup_skips_on_local_pending_not_publish_pending(self):
+        result, state, stages, _ = self.run_eurocup(
+            '{"publish_pending": true, "local_pending": false}', fetch=True)
+        self.assertEqual(result[1], "NOTHING TO DO")
+        self.assertEqual(stages, ["main.py"])
+        result, state, stages, _ = self.run_eurocup('{"publish_pending": true}', fetch=True)
+        self.assertEqual(result[1], "OK (local only)")  # a missing local flag builds
+        result, state, _, _ = self.run_eurocup(
+            '{"local_pending": false}', fetch=True, changed=1,
+            outcomes={"gold_etl/main.py quality": 1})
+        self.assertEqual(result[1], "FAILED at Gold quality (exit 1)")
+        self.assertEqual((state["publish_pending"], state["local_pending"]), (True, True))
+
+    def test_eurocup_rejects_publish_flags(self):
+        import pipeline
+        for flags in (["--dry-run-publish"], ["--allow-shrink"]):
+            with (self.subTest(flags=flags), mock.patch.object(pipeline, "refresh") as single,
+                  mock.patch.object(pipeline, "log_directory") as logs,
+                  mock.patch("sys.stderr", new_callable=io.StringIO), self.assertRaises(SystemExit) as error):
+                pipeline.main(["-cp", "eurocup", *flags])
+            self.assertEqual(error.exception.code, 2)
+            single.assert_not_called()
+            logs.assert_not_called()
+
     def test_publish_output_redacts_url_and_password(self):
         url = "postgresql://user:verysecret@example.test/db"
         cleaned = redactor(url)(f"failed to connect {url}; password verysecret")

@@ -76,7 +76,7 @@ Items 1-8 were already shipped when the Blueprint was adopted (2026-09-24).
 - [ ] 17. **Dependencies and CI** - `requirements.txt` and an automatic test run so the project installs and verifies anywhere
 - [ ] 18. **EuroCup** - download, load and publish EuroCup seasons
   - [x] 18a. **EuroCup Gold tables and records** - build every Gold table for EuroCup (U2002-U2026) from Silver with Gold quality passing, and enable all-time records; postseason outputs (`PS` stats and scope, series) stay empty until 18c; local only
-  - [ ] 18b. **EuroCup daily refresh** - a `pipeline.py` option that skips the Neon publish (stops after Gold quality, never connects to Neon), and the 06:00 scheduled run refreshing the current EuroCup season with it after the EuroLeague run; local only
+  - [x] 18b. **EuroCup refresh command** - `python pipeline.py -cp eurocup` refreshes the current EuroCup season only (fetch, Silver, Gold, quality) and never connects to Neon; EuroLeague's `python pipeline.py` is unchanged; local only
   - [ ] 18c. **EuroCup postseason** - investigate EuroCup's postseason format per era (two-leg aggregate ties, best-of-3, single games, L16/L32 as knockout or group), then derive `PS` stats, the `PS` scope, qualification and postseason series for EuroCup; local only
 - [x] 20. **Scheduled refresh** - run the refresh command automatically (Windows Task Scheduler or GitHub Actions), nightly and after each round
 

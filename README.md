@@ -143,6 +143,9 @@ Run from the repository root:
 # Refresh the current season, build local tables, and preview Neon changes
 python pipeline.py --dry-run-publish
 
+# Refresh the current EuroCup season locally (no Neon connection)
+python pipeline.py -cp eurocup
+
 # Fetch and rebuild all local history (no Neon publish)
 python pipeline.py --all
 
@@ -171,6 +174,8 @@ python tables_to_csv/main.py
 `pipeline.py --all` selects API years from 2000 through the current season automatically, using the fetcher's normal caching rules and refreshing changing current-season feeds. Both full-history commands load all cached seasons into Silver, rebuild all loaded seasons in Gold, and check Gold quality. They always rebuild even if the fetch found no changes, stop at a failed stage, write a refresh log and summary, and never connect to Neon. They leave the current-season publish pending for a later `python pipeline.py`. The same commands are available as VS Code tasks. `--all` rejects `-sc`, `--dry-run-publish`, and `--allow-shrink`.
 
 After explicit owner approval, `python pipeline.py` runs the current-season refresh through live Neon publishing. It skips downstream work when nothing changed and no publish is pending, and finishes with a summary and a log in `logs/refresh/`.
+
+`python pipeline.py -cp eurocup` refreshes the current EuroCup season only: fetch, Silver load, Gold build and Gold quality. EuroCup is not published, so it never looks for a Neon URL and ends with `OK (local only)`. It skips downstream work when nothing changed since its last passing Gold check, and rejects `--dry-run-publish` and `--allow-shrink`. `python pipeline.py` on its own stays EuroLeague only.
 
 Individual fetch and local load/build stages accept season codes, years, ranges such as `2000-2025`, and selectors such as `current` or `all`. The Neon publisher handles one season per invocation. See each stage's README for its exact selectors and options.
 

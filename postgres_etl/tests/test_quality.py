@@ -100,7 +100,7 @@ class QualityRulesTests(unittest.TestCase):
     def test_partial_load_only_checks_its_own_tables(self):
         games_only = checks_for_tables(["games"])
         self.assertEqual({check.code for check in games_only if check.severity == "ERROR"}, {
-            "played_missing_score", "played_missing_winner",
+            "played_missing_score", "played_missing_winner", "draw_without_two_leg_tie",
             "played_missing_identity", "unplayed_has_result",
             "missing_provenance", "missing_load_log", "load_count_mismatch",
         })
@@ -148,6 +148,19 @@ class QualityRulesTests(unittest.TestCase):
         warnings = {(c.code, c.table) for c in checks if c.severity == "WARN"}
         self.assertIn(("unmatched_live_player", "shots"), warnings)
         self.assertIn(("fallback_person_key", "game_player_stats"), warnings)
+
+    def test_drawn_leg_needs_a_two_leg_tie_with_an_aggregate_winner(self):
+        checks = {check.code: check for check in checks_for_tables(["games"])}
+        self.assertIn("row.local_score IS DISTINCT FROM row.road_score",
+                      checks["played_missing_winner"].query)
+        draw = checks["draw_without_two_leg_tie"]
+        self.assertEqual(draw.severity, "ERROR")
+        self.assertEqual(draw.query.count("%s"), 2)  # run with the usual season scope
+        self.assertIn("row.local_score = row.road_score", draw.query)
+        self.assertIn(") = 2 AND EXISTS", draw.query)
+        self.assertIn("leg.local_club_code = row.road_club_code", draw.query)
+        self.assertIn("row.local_score + leg.road_score <> row.road_score + leg.local_score",
+                      draw.query)
 
     def test_bad_played_score_is_an_error(self):
         report = check_season(FakeConnection(bad_scores=1), "euroleague", "E2025",

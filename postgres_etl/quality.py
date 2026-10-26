@@ -162,7 +162,28 @@ def checks_for_tables(names):
                 "games", "row.played IS TRUE AND (row.local_score IS NULL "
                          "OR row.road_score IS NULL)")),
             Check("played_missing_winner", "games", scoped_count(
-                "games", "row.played IS TRUE AND row.match_winner_club_code IS NULL")),
+                "games", "row.played IS TRUE AND row.match_winner_club_code IS NULL "
+                         "AND row.local_score IS DISTINCT FROM row.road_score")),
+            # A drawn leg is valid only in a two-leg tie (EuroCup) whose aggregate
+            # has a winner. Phase flags are unreliable, so any phase qualifies.
+            Check("draw_without_two_leg_tie", "games", scoped_count(
+                "games", "row.played IS TRUE AND row.local_score = row.road_score AND NOT ("
+                f'(SELECT count(*) FROM "{physical_name("games")}" AS pair '
+                "WHERE pair.competition_code = row.competition_code "
+                "AND pair.season_code = row.season_code "
+                "AND pair.phase_code IS NOT DISTINCT FROM row.phase_code "
+                "AND ((pair.local_club_code = row.local_club_code "
+                "AND pair.road_club_code = row.road_club_code) "
+                "OR (pair.local_club_code = row.road_club_code "
+                "AND pair.road_club_code = row.local_club_code))) = 2 "
+                f'AND EXISTS (SELECT 1 FROM "{physical_name("games")}" AS leg '
+                "WHERE leg.competition_code = row.competition_code "
+                "AND leg.season_code = row.season_code "
+                "AND leg.phase_code IS NOT DISTINCT FROM row.phase_code "
+                "AND leg.local_club_code = row.road_club_code "
+                "AND leg.road_club_code = row.local_club_code "
+                "AND leg.played IS TRUE "
+                "AND row.local_score + leg.road_score <> row.road_score + leg.local_score))")),
             Check("played_missing_identity", "games", scoped_count(
                 "games", "row.played IS TRUE AND (row.scheduled_at IS NULL "
                          "OR row.local_club_code IS NULL OR row.road_club_code IS NULL)")),

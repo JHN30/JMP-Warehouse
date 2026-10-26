@@ -43,8 +43,7 @@ class ConfigParser(ArgumentParser):
         "play_by_play",
         "shooting_charts",
     ]
-    # Live API endpoints whose content is covered by v2 game data, play-by-play
-    # or shots (verified on every E2025 game). Requested only when named with -ds.
+    # Live API endpoint for each live dataset (same map as EuroScrapas.LIVE_DATASETS).
     LIVE_ENDPOINTS = {"play_by_play": "PlayByPlay", "shooting_charts": "Points"}
 
     def __init__(self, year_today):

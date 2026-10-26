@@ -84,7 +84,7 @@ These commands build the local database. Neon configuration is needed only for t
   Calculate per-game and cumulative per-round statistics, including possessions, pace, ratings, four factors, player rates, Game Score, PIE, PER, Win Shares, strength-adjusted ratings, and home/away and recent-game splits.
 
 - **Play-by-play and lineup analytics**
-  Count possessions, measure score flow and clutch results, build shot splits and zones, reconstruct on-court intervals and lineup stints, and calculate on/off, 2/3/5-man lineup ratings, and RAPM.
+  Count possessions, measure score flow and clutch results, build shot splits, reconstruct on-court intervals and lineup stints, and calculate on/off, 2/3/5-man lineup ratings, and RAPM.
 
 - **App-ready Gold tables**
   Build standings, team-season totals, all-time records, postseason series, cross-season player and club identities, and player ranking qualification fields. Gold also includes the per-game tables needed for game detail pages.

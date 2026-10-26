@@ -44,35 +44,3 @@ with a passing stage runner, `environ={}`, a missing `dotenv_path`,
 `(1, "FAILED at Publish (missing Neon URL)", ...)` and that `neon_publish/main.py`
 never ran. No current requirement would be lost.
 **Resolution:**
-
-### F-12 [P3] open - Two current docs still describe shot zones as built
-
-**File:** docs/SILVER_CATALOG.md:125
-**Found:** 2026-10-26 by /audit independent (scope: current; lenses: quality, security, performance, tests)
-**Why it matters:** the spec's Build step 2 is done "when no current doc lists the
-seven tables as built or published". `docs/SILVER_CATALOG.md:125` still maps shots to
-"Silver shot zones/splits -> Gold game copies, team zones and team PBP summaries", and
-`README.md:87` still says the pipeline will "build shot splits and zones". Silver
-`game_team_shot_zones`, Gold `app_game_team_shot_zones` and `app_team_shot_zone_stats`
-are no longer built (`postgres_etl/shot_zones.py` and `gold_etl/team_shot_zones.py`
-removed; local tables dropped). Every other current doc was updated. Nothing breaks at
-runtime; a reader would expect tables that do not exist.
-**Suggested fix:** change the SILVER_CATALOG row to "Silver shot splits -> Gold game
-copies and team PBP summaries" and the README bullet to "build shot splits". Nothing
-needs deleting; no current requirement would be lost.
-**Resolution:**
-
-### F-13 [P3] open - Stale comment above LIVE_ENDPOINTS describes the removed optional datasets
-
-**File:** api_requests/utils.py:46
-**Found:** 2026-10-26 by /audit independent (scope: current; lenses: quality, security, performance, tests)
-**Why it matters:** the comment "Live API endpoints whose content is covered by v2 game
-data, play-by-play or shots (verified on every E2025 game). Requested only when named
-with -ds." described the deleted `OPTIONAL_DATASETS`. It now sits directly above
-`LIVE_ENDPOINTS = {"play_by_play": "PlayByPlay", "shooting_charts": "Points"}`, the two
-live endpoints that are part of the default `all` set, so it states the opposite of what
-the constant does.
-**Suggested fix:** replace the two comment lines with one such as "Live API endpoints
-called for the selected live datasets (same map as EuroScrapas.LIVE_DATASETS)". No
-current requirement would be lost.
-**Resolution:**

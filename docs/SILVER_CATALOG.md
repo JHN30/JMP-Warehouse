@@ -122,7 +122,7 @@ JSON file. Paths and response shapes are explained in the Bronze catalog.
 | Player Game Score/PER/Win Shares | Box scores -> player/team Silver rows and game advanced -> player round stats/ratings/win shares and Gold game PER. PER/Win Shares are Gold calculations. |
 | Official standings | Five v3 feeds -> seven normalized Silver tables -> one `gold.app_standings` page table. |
 | Score flow and possessions | Live events + fixtures -> per-game Silver possessions/score-flow tables -> Gold copies and `gold.app_team_pbp_stats`. |
-| Shot maps and scoring splits | Shots + events + fixtures -> Silver shot zones/splits -> Gold game copies, team zones and team PBP summaries. |
+| Shot maps and scoring splits | Shots + events + fixtures -> Silver shot splits -> Gold game copies and team PBP summaries. |
 | Lineups, on/off, RAPM | Starters + events + fixtures -> Silver intervals and complete stints -> Gold copies, lineup ratings, on/off and RAPM. |
 
 The raw team API season feeds stay in Silver for comparison with calculated

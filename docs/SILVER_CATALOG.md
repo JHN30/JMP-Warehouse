@@ -216,6 +216,11 @@ Checked on 2026-10-26 with read-only queries on local Silver and against
     Riga, `L16` round 7; U2025 Hamburg, `RS` round 17); the next round is right.
     `standings_played_not_won_plus_lost` flags them. Standings are not rebuilt
     from games, because official records can include deductions.
+  - Gold quality warns where round totals differ from the API season feeds, and
+    in these seasons that is expected: U2004 and U2005 differ by the points
+    corrections below, which the feeds lack; in U2002, U2003 and U2007 only the
+    API's own rate columns differ (the counting stats match); and the U2026 feed
+    can trail the box scores by a refresh.
   - Box-score points that contradict the game score are corrected at load in
     U2004 games 103 and 138 and U2005 game 4 (`points_corrected` in
     `game_stat_gaps`).

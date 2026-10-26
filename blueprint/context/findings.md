@@ -22,19 +22,6 @@ manifest records show it; a one-off manual re-fetch without the guard (or a
 `--refresh-current` override flag) would accept the correction.
 **Resolution:**
 
-### F-18 [P3] unverified - EuroCup round totals differ slightly from the API feeds
-
-**File:** gold_etl/quality.py:306
-**Found:** 2026-10-26 during features 18a and 18c (EuroCup Gold quality)
-**Why it matters:** 17 warnings in U2002-U2007 (`efg_pct`, `drb_pct`, 1-3 players or
-clubs per season) and 4 in U2026 (`pir` and `turnovers` 1 off for 2 players) say our
-box-score totals differ from the API's season feeds. The early ones are probably
-source differences, the U2026 ones the live feed lagging behind corrected box scores,
-but neither is proven.
-**Suggested fix:** compare one example per season with the box scores; record the
-known source gaps in the data dictionary, and re-check U2026 after a few refreshes.
-**Resolution:**
-
 ### F-20 [P3] open - The Neon preflight looks up seasons with a hard-coded EuroLeague code
 
 **File:** neon_publish/main.py:56

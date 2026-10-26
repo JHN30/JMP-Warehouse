@@ -127,7 +127,7 @@ LIVE_TEAM_MARKER = re.compile(r"(AC|CO)_[AB]")
 def parse_source_timestamp(value):
     """Parse a source timestamp: a datetime, the 14-digit YYYYMMDDHHMMSS form
     (UTC), or ISO 8601 with an optional Z or offset. The loader's TIMESTAMP
-    casts and js_iso share it, so every date is read by one rule."""
+    casts share it, so every date is read by one rule."""
     if isinstance(value, datetime):
         return value
     raw = str(value).strip()
@@ -138,21 +138,11 @@ def parse_source_timestamp(value):
 
 def utc_wall_time(moment):
     """A zone-aware datetime as zone-less UTC; a zone-less one unchanged. Used for
-    TIMESTAMP (without time zone) columns and js_iso, so no session time zone
-    can shift a value."""
+    TIMESTAMP (without time zone) columns, so no session time zone can shift a
+    value."""
     if moment.tzinfo is not None:
         return moment.astimezone(timezone.utc).replace(tzinfo=None)
     return moment
-
-
-def js_iso(value):
-    """Format a source timestamp the way the web app returns it today: a
-    zone-less value read as UTC (zone-aware values converted to UTC), then
-    JavaScript toISOString()."""
-    if code(value) is None:
-        return None
-    moment = utc_wall_time(parse_source_timestamp(value))
-    return f"{moment:%Y-%m-%dT%H:%M:%S}.{moment.microsecond // 1000:03d}Z"
 
 
 def normalized_name(value):

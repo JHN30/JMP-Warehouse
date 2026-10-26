@@ -290,15 +290,9 @@ class RawEtlTests(unittest.TestCase):
             self.assertIn('"season_code"', sql)
             self.assertNotIn("DROP", sql)
 
-    def test_js_iso_and_timestamp_casts_share_one_parsing_rule(self):
+    def test_timestamp_casts_share_one_parsing_rule(self):
         from flat_transform import cast
-        from raw_transform import js_iso, parse_source_timestamp
-        self.assertEqual(js_iso("20250901183000"), "2025-09-01T18:30:00.000Z")
-        self.assertEqual(js_iso("2025-09-01T20:30:00+02:00"), "2025-09-01T18:30:00.000Z")
-        self.assertEqual(js_iso("2025-09-01T18:30:00Z"), "2025-09-01T18:30:00.000Z")
-        self.assertEqual(js_iso("2025-09-01T18:30:00.123456"), "2025-09-01T18:30:00.123Z")
-        self.assertIsNone(js_iso(None))
-        self.assertIsNone(js_iso("   "))
+        from raw_transform import parse_source_timestamp
         for raw in ("20250901183000", "2025-09-01T18:30:00", "2025-09-01T20:30:00+02:00"):
             self.assertEqual(cast(raw, "TIMESTAMPTZ"), parse_source_timestamp(raw))
 

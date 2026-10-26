@@ -72,17 +72,6 @@ but neither is proven.
 known source gaps in the data dictionary, and re-check U2026 after a few refreshes.
 **Resolution:**
 
-### F-19 [P3] open - Data catalogs still describe EuroLeague only
-
-**File:** docs/BRONZE_CATALOG.md:8
-**Found:** 2026-10-26 during feature 18a (doc search)
-**Why it matters:** `docs/BRONZE_CATALOG.md:8`, `docs/SILVER_CATALOG.md:9`,
-`docs/DATA_CATALOG.md:8` and `docs/SILVER_TABLE_REFERENCE.md:8` say EuroCup coverage
-will be documented later, although EuroCup is now in Bronze, Silver and Gold locally.
-**Suggested fix:** add EuroCup coverage (U2002-U2026; U2000-U2001 empty in the API),
-its phase codes and format eras, and its known source gaps to the catalogs.
-**Resolution:**
-
 ### F-20 [P3] open - The Neon preflight looks up seasons with a hard-coded EuroLeague code
 
 **File:** neon_publish/main.py:56

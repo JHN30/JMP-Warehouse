@@ -1,12 +1,14 @@
-# EuroLeague Silver data catalog
+# Silver data catalog
 
-Silver is the local PostgreSQL layer of typed EuroLeague source data and calculated
-game detail. This catalog covers **26 source tables, seven calculated tables and
+Silver is the local PostgreSQL layer of typed EuroLeague and EuroCup source data and
+calculated game detail. This catalog covers **26 source tables, seven calculated tables and
 one load-log table**. It describes the code contract checked on 2026-10-20;
 no API fetch, database rebuild or live coverage query was performed.
 
-Scope is EuroLeague (`competition_code = 'E'`, season codes such as `E2025`).
-EuroCup coverage and rule differences will be documented when that work begins.
+EuroLeague rows use `competition_code = 'E'` and season codes such as `E2025`; the
+examples below use EuroLeague. EuroCup rows (`'U'`, `U2025`) share every table and
+are built locally only; see [EuroCup](#eurocup) for its coverage, formats and
+source quirks.
 
 | Document | Purpose |
 | --- | --- |
@@ -163,6 +165,45 @@ Live `period` is text: FirstQuarter, SecondQuarter, ThirdQuarter, ForthQuarter
 overtime number derived from minute, then event_ordinal. Alphabetic period order
 and play_number are both unsuitable. `person_code` in events/shots resolves to
 the box-score `person_key`, not necessarily the career profile's person_code.
+
+## EuroCup
+
+Checked on 2026-10-26 with read-only queries on local Silver and against
+[qualification.py](../gold_etl/qualification.py).
+
+- **Status:** local only. `python pipeline.py -cp eurocup` refreshes the current
+  season through Bronze, Silver and Gold; nothing is published to Neon until the
+  owner approves it.
+- **Coverage:** 25 seasons, U2002-U2026, with games and box scores
+  (`data/bronze/eurocup/`). U2000 and U2001 are fetched but empty in the API.
+  Play-by-play and shots begin at U2007. U2026 is in progress (64 of 224 games
+  played on the check date).
+- **Phase codes:** the regular season is `RS`; `TS` (U2016-U2020), `L32`
+  (U2013-U2015) and `L16` (U2008-U2012) are later group stages. The knockouts are
+  `8F`, `4F`, `2F` and `Final`, and in U2007 also `L32` and `L16`, which the API
+  marks as groups although they were two-leg knockouts. `Final` can hold a final
+  tournament (semifinals, final and third-place game), not only one final.
+- **Tie formats** (owner-confirmed; the full per-season table is in the
+  [18c archive](../blueprint/history/features/18c-eurocup-postseason.md)):
+
+  | Seasons | Knockout ties |
+  | --- | --- |
+  | U2002-U2015 | Two-leg aggregate in the phases listed in `TWO_LEG_PHASES`; the rest single games |
+  | U2016-U2018, U2020 | `4F`, `2F`, `Final` best-of-three |
+  | U2019 | Cancelled before the playoffs; no postseason and no champion |
+  | U2021-U2022 | Single games |
+  | U2023-U2025 | `8F`, `4F` single games; `2F`, `Final` best-of-three |
+  | U2026 | All knockouts best-of-three (none played yet) |
+
+- **Source quirks:**
+  - 8 played legs ended level (U2004, U2007, U2010, U2014 and U2015), all inside
+    two-leg ties where the aggregate decides; `draw_without_two_leg_tie` is an
+    error for any other draw.
+  - 18 games have `status = cancelled`: U2019's 12 `4F` games and 6 U2021 `RS`
+    games. Cancelled games are left out of series and postseason totals.
+  - Box-score points that contradict the game score are corrected at load in
+    U2004 games 103 and 138 and U2005 game 4 (`points_corrected` in
+    `game_stat_gaps`).
 
 ## Provenance: row -> replacement -> exact Bronze version
 

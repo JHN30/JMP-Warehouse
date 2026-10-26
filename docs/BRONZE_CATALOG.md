@@ -1,11 +1,13 @@
-# EuroLeague Bronze data catalog
+# Bronze data catalog
 
 Bronze is the file archive of original API response bodies. It supplies the
 typed [Silver tables](SILVER_CATALOG.md), which feed the app-facing
-[Gold tables](DATA_CATALOG.md). This catalog describes EuroLeague resources
-implemented by the repository, checked on 2026-10-20. It does not assert that
-every resource exists for every game or that an API response is complete.
-EuroCup documentation will be added when that work begins.
+[Gold tables](DATA_CATALOG.md). This catalog describes the resources
+implemented by the repository, checked on 2026-10-20 with EuroLeague examples. It
+does not assert that every resource exists for every game or that an API response
+is complete. EuroCup uses the same resources under `data/bronze/eurocup/` with
+competition code `U`; its coverage and quirks are in the
+[Silver catalog](SILVER_CATALOG.md#eurocup).
 
 Use the [Silver column reference](SILVER_TABLE_REFERENCE.md) for extracted
 fields and the shared [player/team stats glossary](STAT_GLOSSARY.md) for metric
@@ -33,7 +35,9 @@ data/bronze/euroleague/
     runs/run_<timestamp>.json
 ```
 
-`E2025` means 2025-26. `_catalog` is the competition-wide scope; all other
+`E2025` means 2025-26. EuroCup has the same layout under `data/bronze/eurocup/`
+with `U<year>` seasons (U2000-U2026; U2000 and U2001 are empty in the API).
+`_catalog` is the competition-wide scope; all other
 resource paths below are relative to a season directory. `<fetched_at>` is a UTC
 stamp in `YYYYMMDDTHHMMSSffffffZ` format. `<sha16>` is the first 16 hexadecimal
 characters of the SHA-256 of the uncompressed response bytes.
@@ -61,7 +65,7 @@ Implementation: [common/bronze.py](../common/bronze.py),
 
 | Placeholder | Meaning |
 | --- | --- |
-| `{s}` | EuroLeague season code, for example E2025. |
+| `{s}` | Season code, for example E2025 or U2025. |
 | `{g}` | Game code within the season. |
 | `{club}` | Club code from the season's clubs/fixtures. |
 | `{phase}` | `all` or a phase observed in played fixtures, such as RS, TS, PI, PO or FF. No synthetic PS request. |
@@ -70,7 +74,8 @@ Implementation: [common/bronze.py](../common/bronze.py),
 | `offset_NNNNNN` | Zero-padded numeric people-page offset, starting at 000000. |
 
 v2 and v3 endpoints use `https://api-live.euroleague.net` with competition
-code `E`. Live endpoints use `https://live.euroleague.net/api`.
+code `E` (EuroLeague) or `U` (EuroCup); the tables below show `E`. Live endpoints
+use `https://live.euroleague.net/api` with the season code (`E2025` or `U2025`).
 The paths are the extractor's implemented API contract, not independently
 revalidated live endpoints. The [extractor README](../api_requests/README.md)
 contains command and refresh details.

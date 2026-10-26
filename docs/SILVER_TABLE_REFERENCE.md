@@ -1,11 +1,12 @@
-# EuroLeague Silver table reference
+# Silver table reference
 
 Every column of the 36 registered Silver data tables, plus the load-log metadata
 table. Checked against [flat_schema.py](../postgres_etl/flat_schema.py),
 [raw_transform.py](../postgres_etl/raw_transform.py),
 [flat_transform.py](../postgres_etl/flat_transform.py) and the calculated-table
 modules on 2026-10-20. This is the declared code contract, not a live-schema audit.
-Examples and coverage refer to EuroLeague only.
+Examples use EuroLeague; EuroCup rows share every table (coverage in the
+[Silver catalog](SILVER_CATALOG.md#eurocup)).
 
 Choose tables in the [Silver catalog](SILVER_CATALOG.md), trace resources in the
 [Bronze catalog](BRONZE_CATALOG.md), and read metric definitions in the shared
@@ -66,8 +67,8 @@ established by the warehouse remains marked as such.
 
 | Column | PostgreSQL type | Nullable | Key | Source / derivation | Description |
 | --- | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | `@competition_code` | Competition identifier; this catalog covers EuroLeague rows with E. |
-| `season_code` | `TEXT` | No | PK | `@season_code` | Starting-year EuroLeague season code, for example E2025 for 2025-26. |
+| `competition_code` | `TEXT` | No | PK | `@competition_code` | Competition identifier: E for EuroLeague, U for EuroCup. |
+| `season_code` | `TEXT` | No | PK | `@season_code` | Starting-year season code, for example E2025 or U2025 for 2025-26. |
 | `name` | `TEXT` | Yes |  | `@name` | Display name supplied by the source; identity tables use the latest season profile. |
 | `start_year` | `INTEGER` | Yes |  | `@start_year` | Starting calendar year of the season. |
 | `alias` | `TEXT` | Yes |  | `alias` | Source alternative display name or alias. |
@@ -100,8 +101,8 @@ established by the warehouse remains marked as such.
 
 | Column | PostgreSQL type | Nullable | Key | Source / derivation | Description |
 | --- | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | `@competition_code` | Competition identifier; this catalog covers EuroLeague rows with E. |
-| `season_code` | `TEXT` | No | PK | `@season_code` | Starting-year EuroLeague season code, for example E2025 for 2025-26. |
+| `competition_code` | `TEXT` | No | PK | `@competition_code` | Competition identifier: E for EuroLeague, U for EuroCup. |
+| `season_code` | `TEXT` | No | PK | `@season_code` | Starting-year season code, for example E2025 or U2025 for 2025-26. |
 | `club_code` | `TEXT` | No | PK | `@club_code` | Club code for this row; joins clubs using competition_code, season_code and club_code. |
 | `name` | `TEXT` | Yes |  | `@name` | Display name supplied by the source; identity tables use the latest season profile. |
 | `abbreviated_name` | `TEXT` | Yes |  | `abbreviatedName` | Source shortened display name. |
@@ -145,8 +146,8 @@ established by the warehouse remains marked as such.
 
 | Column | PostgreSQL type | Nullable | Key | Source / derivation | Description |
 | --- | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | `@competition_code` | Competition identifier; this catalog covers EuroLeague rows with E. |
-| `season_code` | `TEXT` | No | PK | `@season_code` | Starting-year EuroLeague season code, for example E2025 for 2025-26. |
+| `competition_code` | `TEXT` | No | PK | `@competition_code` | Competition identifier: E for EuroLeague, U for EuroCup. |
+| `season_code` | `TEXT` | No | PK | `@season_code` | Starting-year season code, for example E2025 or U2025 for 2025-26. |
 | `person_key` | `TEXT` | No | PK | `@person_key` | Season person identity used by box scores and registrations; bridge to career person_code through silver.people. |
 | `person_code` | `TEXT` | Yes |  | `@person_code` | Person identity code in people; in live events it is the resolved box-score person_key. Preserve leading zeroes. |
 | `name` | `TEXT` | Yes |  | `@name` | Display name supplied by the source; identity tables use the latest season profile. |
@@ -190,8 +191,8 @@ established by the warehouse remains marked as such.
 
 | Column | PostgreSQL type | Nullable | Key | Source / derivation | Description |
 | --- | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | `@competition_code` | Competition identifier; this catalog covers EuroLeague rows with E. |
-| `season_code` | `TEXT` | No | PK | `@season_code` | Starting-year EuroLeague season code, for example E2025 for 2025-26. |
+| `competition_code` | `TEXT` | No | PK | `@competition_code` | Competition identifier: E for EuroLeague, U for EuroCup. |
+| `season_code` | `TEXT` | No | PK | `@season_code` | Starting-year season code, for example E2025 or U2025 for 2025-26. |
 | `registration_key` | `TEXT` | No | PK | `@registration_key` | Natural identity of the source registration, not a player identity. |
 | `person_key` | `TEXT` | No |  | `@person_key` | Season person identity used by box scores and registrations; bridge to career person_code through silver.people. |
 | `club_code` | `TEXT` | Yes |  | `@club_code` | Club code for this row; joins clubs using competition_code, season_code and club_code. |
@@ -232,8 +233,8 @@ established by the warehouse remains marked as such.
 
 | Column | PostgreSQL type | Nullable | Key | Source / derivation | Description |
 | --- | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | `@competition_code` | Competition identifier; this catalog covers EuroLeague rows with E. |
-| `season_code` | `TEXT` | No | PK | `@season_code` | Starting-year EuroLeague season code, for example E2025 for 2025-26. |
+| `competition_code` | `TEXT` | No | PK | `@competition_code` | Competition identifier: E for EuroLeague, U for EuroCup. |
+| `season_code` | `TEXT` | No | PK | `@season_code` | Starting-year season code, for example E2025 or U2025 for 2025-26. |
 | `round_key` | `TEXT` | No | PK | `@round_key` | Natural identity of a source round definition. |
 | `phase_code` | `TEXT` | No |  | `@phase_code` | Source phase code such as RS, TS, PI, PO or FF; season statistics also have all. Silver adds no synthetic PS rows. |
 | `round_number` | `INTEGER` | No |  | `@round_number` | Source game or standings round number; not a cumulative snapshot created by Silver. |
@@ -265,8 +266,8 @@ established by the warehouse remains marked as such.
 
 | Column | PostgreSQL type | Nullable | Key | Source / derivation | Description |
 | --- | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | `@competition_code` | Competition identifier; this catalog covers EuroLeague rows with E. |
-| `season_code` | `TEXT` | No | PK | `@season_code` | Starting-year EuroLeague season code, for example E2025 for 2025-26. |
+| `competition_code` | `TEXT` | No | PK | `@competition_code` | Competition identifier: E for EuroLeague, U for EuroCup. |
+| `season_code` | `TEXT` | No | PK | `@season_code` | Starting-year season code, for example E2025 or U2025 for 2025-26. |
 | `game_code` | `INTEGER` | No | PK | `@game_code` | Game identifier within competition and season, not globally unique. |
 | `source_id` | `TEXT` | Yes |  | `id` | Raw source game identity retained alongside game_code. |
 | `identifier` | `TEXT` | Yes |  | `identifier` | Source game identifier label. |
@@ -341,8 +342,8 @@ established by the warehouse remains marked as such.
 
 | Column | PostgreSQL type | Nullable | Key | Source / derivation | Description |
 | --- | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | `@competition_code` | Competition identifier; this catalog covers EuroLeague rows with E. |
-| `season_code` | `TEXT` | No | PK | `@season_code` | Starting-year EuroLeague season code, for example E2025 for 2025-26. |
+| `competition_code` | `TEXT` | No | PK | `@competition_code` | Competition identifier: E for EuroLeague, U for EuroCup. |
+| `season_code` | `TEXT` | No | PK | `@season_code` | Starting-year season code, for example E2025 or U2025 for 2025-26. |
 | `game_code` | `INTEGER` | No | PK | `@game_code` | Game identifier within competition and season, not globally unique. |
 | `official_number` | `INTEGER` | No | PK | `@official_number` | Official's ordinal slot in this game's assignments. |
 | `official_code` | `TEXT` | Yes |  | `@official_code` | Source official identifier. |
@@ -375,8 +376,8 @@ established by the warehouse remains marked as such.
 
 | Column | PostgreSQL type | Nullable | Key | Source / derivation | Description |
 | --- | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | `@competition_code` | Competition identifier; this catalog covers EuroLeague rows with E. |
-| `season_code` | `TEXT` | No | PK | `@season_code` | Starting-year EuroLeague season code, for example E2025 for 2025-26. |
+| `competition_code` | `TEXT` | No | PK | `@competition_code` | Competition identifier: E for EuroLeague, U for EuroCup. |
+| `season_code` | `TEXT` | No | PK | `@season_code` | Starting-year season code, for example E2025 or U2025 for 2025-26. |
 | `game_code` | `INTEGER` | No | PK | `@game_code` | Game identifier within competition and season, not globally unique. |
 | `side` | `TEXT` | No | PK | `@side` | Source side, local or road; local is not proof of a non-neutral home venue. |
 | `period_number` | `INTEGER` | No | PK | `@period_number` | Period number: 1-4 for quarters, 5 and above for overtime. |
@@ -404,8 +405,8 @@ established by the warehouse remains marked as such.
 
 | Column | PostgreSQL type | Nullable | Key | Source / derivation | Description |
 | --- | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | `@competition_code` | Competition identifier; this catalog covers EuroLeague rows with E. |
-| `season_code` | `TEXT` | No | PK | `@season_code` | Starting-year EuroLeague season code, for example E2025 for 2025-26. |
+| `competition_code` | `TEXT` | No | PK | `@competition_code` | Competition identifier: E for EuroLeague, U for EuroCup. |
+| `season_code` | `TEXT` | No | PK | `@season_code` | Starting-year season code, for example E2025 or U2025 for 2025-26. |
 | `game_code` | `INTEGER` | No | PK | `@game_code` | Game identifier within competition and season, not globally unique. |
 | `side` | `TEXT` | No | PK | `@side` | Source side, local or road; local is not proof of a non-neutral home venue. |
 | `person_key` | `TEXT` | No | PK | `@person_key` | Season person identity used by box scores and registrations; bridge to career person_code through silver.people. |
@@ -470,8 +471,8 @@ established by the warehouse remains marked as such.
 
 | Column | PostgreSQL type | Nullable | Key | Source / derivation | Description |
 | --- | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | `@competition_code` | Competition identifier; this catalog covers EuroLeague rows with E. |
-| `season_code` | `TEXT` | No | PK | `@season_code` | Starting-year EuroLeague season code, for example E2025 for 2025-26. |
+| `competition_code` | `TEXT` | No | PK | `@competition_code` | Competition identifier: E for EuroLeague, U for EuroCup. |
+| `season_code` | `TEXT` | No | PK | `@season_code` | Starting-year season code, for example E2025 or U2025 for 2025-26. |
 | `game_code` | `INTEGER` | No | PK | `@game_code` | Game identifier within competition and season, not globally unique. |
 | `side` | `TEXT` | No | PK | `@side` | Source side, local or road; local is not proof of a non-neutral home venue. |
 | `stats_kind` | `TEXT` | No | PK | `@stats_kind` | total is the complete team box score; team is the team-only contribution row. |
@@ -524,8 +525,8 @@ established by the warehouse remains marked as such.
 
 | Column | PostgreSQL type | Nullable | Key | Source / derivation | Description |
 | --- | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | `@competition_code` | Competition identifier; this catalog covers EuroLeague rows with E. |
-| `season_code` | `TEXT` | No | PK | `@season_code` | Starting-year EuroLeague season code, for example E2025 for 2025-26. |
+| `competition_code` | `TEXT` | No | PK | `@competition_code` | Competition identifier: E for EuroLeague, U for EuroCup. |
+| `season_code` | `TEXT` | No | PK | `@season_code` | Starting-year season code, for example E2025 or U2025 for 2025-26. |
 | `game_code` | `INTEGER` | No | PK | `@game_code` | Game identifier within competition and season, not globally unique. |
 | `stat_name` | `TEXT` | No | PK | `@stat_name` | Missing measure's SQL column name; * means no box score for the game. |
 | `reason` | `TEXT` | Yes |  | `@reason` | Explanation of the source gap, retained rather than filling it with zero. |
@@ -552,8 +553,8 @@ established by the warehouse remains marked as such.
 
 | Column | PostgreSQL type | Nullable | Key | Source / derivation | Description |
 | --- | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | `@competition_code` | Competition identifier; this catalog covers EuroLeague rows with E. |
-| `season_code` | `TEXT` | No | PK | `@season_code` | Starting-year EuroLeague season code, for example E2025 for 2025-26. |
+| `competition_code` | `TEXT` | No | PK | `@competition_code` | Competition identifier: E for EuroLeague, U for EuroCup. |
+| `season_code` | `TEXT` | No | PK | `@season_code` | Starting-year season code, for example E2025 or U2025 for 2025-26. |
 | `phase_code` | `TEXT` | No | PK | `@phase_code` | Source phase code such as RS, TS, PI, PO or FF; season statistics also have all. Silver adds no synthetic PS rows. |
 | `mode` | `TEXT` | No | PK | `@mode` | accumulated or perGame as provided by the API; Silver does not synthesize missing perGame rows. |
 | `entry_ordinal` | `INTEGER` | No | PK | `@entry_ordinal` | Zero-based entry position within this category, phase and mode, not a stable player identity. |
@@ -613,8 +614,8 @@ established by the warehouse remains marked as such.
 
 | Column | PostgreSQL type | Nullable | Key | Source / derivation | Description |
 | --- | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | `@competition_code` | Competition identifier; this catalog covers EuroLeague rows with E. |
-| `season_code` | `TEXT` | No | PK | `@season_code` | Starting-year EuroLeague season code, for example E2025 for 2025-26. |
+| `competition_code` | `TEXT` | No | PK | `@competition_code` | Competition identifier: E for EuroLeague, U for EuroCup. |
+| `season_code` | `TEXT` | No | PK | `@season_code` | Starting-year season code, for example E2025 or U2025 for 2025-26. |
 | `phase_code` | `TEXT` | No | PK | `@phase_code` | Source phase code such as RS, TS, PI, PO or FF; season statistics also have all. Silver adds no synthetic PS rows. |
 | `mode` | `TEXT` | No | PK | `@mode` | accumulated or perGame as provided by the API; Silver does not synthesize missing perGame rows. |
 | `entry_ordinal` | `INTEGER` | No | PK | `@entry_ordinal` | Zero-based entry position within this category, phase and mode, not a stable player identity. |
@@ -664,8 +665,8 @@ established by the warehouse remains marked as such.
 
 | Column | PostgreSQL type | Nullable | Key | Source / derivation | Description |
 | --- | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | `@competition_code` | Competition identifier; this catalog covers EuroLeague rows with E. |
-| `season_code` | `TEXT` | No | PK | `@season_code` | Starting-year EuroLeague season code, for example E2025 for 2025-26. |
+| `competition_code` | `TEXT` | No | PK | `@competition_code` | Competition identifier: E for EuroLeague, U for EuroCup. |
+| `season_code` | `TEXT` | No | PK | `@season_code` | Starting-year season code, for example E2025 or U2025 for 2025-26. |
 | `phase_code` | `TEXT` | No | PK | `@phase_code` | Source phase code such as RS, TS, PI, PO or FF; season statistics also have all. Silver adds no synthetic PS rows. |
 | `mode` | `TEXT` | No | PK | `@mode` | accumulated or perGame as provided by the API; Silver does not synthesize missing perGame rows. |
 | `entry_ordinal` | `INTEGER` | No | PK | `@entry_ordinal` | Zero-based entry position within this category, phase and mode, not a stable player identity. |
@@ -714,8 +715,8 @@ established by the warehouse remains marked as such.
 
 | Column | PostgreSQL type | Nullable | Key | Source / derivation | Description |
 | --- | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | `@competition_code` | Competition identifier; this catalog covers EuroLeague rows with E. |
-| `season_code` | `TEXT` | No | PK | `@season_code` | Starting-year EuroLeague season code, for example E2025 for 2025-26. |
+| `competition_code` | `TEXT` | No | PK | `@competition_code` | Competition identifier: E for EuroLeague, U for EuroCup. |
+| `season_code` | `TEXT` | No | PK | `@season_code` | Starting-year season code, for example E2025 or U2025 for 2025-26. |
 | `phase_code` | `TEXT` | No | PK | `@phase_code` | Source phase code such as RS, TS, PI, PO or FF; season statistics also have all. Silver adds no synthetic PS rows. |
 | `mode` | `TEXT` | No | PK | `@mode` | accumulated or perGame as provided by the API; Silver does not synthesize missing perGame rows. |
 | `entry_ordinal` | `INTEGER` | No | PK | `@entry_ordinal` | Zero-based entry position within this category, phase and mode, not a stable player identity. |
@@ -758,8 +759,8 @@ established by the warehouse remains marked as such.
 
 | Column | PostgreSQL type | Nullable | Key | Source / derivation | Description |
 | --- | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | `@competition_code` | Competition identifier; this catalog covers EuroLeague rows with E. |
-| `season_code` | `TEXT` | No | PK | `@season_code` | Starting-year EuroLeague season code, for example E2025 for 2025-26. |
+| `competition_code` | `TEXT` | No | PK | `@competition_code` | Competition identifier: E for EuroLeague, U for EuroCup. |
+| `season_code` | `TEXT` | No | PK | `@season_code` | Starting-year season code, for example E2025 or U2025 for 2025-26. |
 | `phase_code` | `TEXT` | No | PK | `@phase_code` | Source phase code such as RS, TS, PI, PO or FF; season statistics also have all. Silver adds no synthetic PS rows. |
 | `mode` | `TEXT` | No | PK | `@mode` | Always `accumulated`; the per-game team feed is not loaded. |
 | `club_code` | `TEXT` | No | PK | `@club_code` | Club code for this row; joins clubs using competition_code, season_code and club_code. |
@@ -813,8 +814,8 @@ established by the warehouse remains marked as such.
 
 | Column | PostgreSQL type | Nullable | Key | Source / derivation | Description |
 | --- | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | `@competition_code` | Competition identifier; this catalog covers EuroLeague rows with E. |
-| `season_code` | `TEXT` | No | PK | `@season_code` | Starting-year EuroLeague season code, for example E2025 for 2025-26. |
+| `competition_code` | `TEXT` | No | PK | `@competition_code` | Competition identifier: E for EuroLeague, U for EuroCup. |
+| `season_code` | `TEXT` | No | PK | `@season_code` | Starting-year season code, for example E2025 or U2025 for 2025-26. |
 | `phase_code` | `TEXT` | No | PK | `@phase_code` | Source phase code such as RS, TS, PI, PO or FF; season statistics also have all. Silver adds no synthetic PS rows. |
 | `mode` | `TEXT` | No | PK | `@mode` | Always `accumulated`; the per-game team feed is not loaded. |
 | `club_code` | `TEXT` | No | PK | `@club_code` | Club code for this row; joins clubs using competition_code, season_code and club_code. |
@@ -860,8 +861,8 @@ established by the warehouse remains marked as such.
 
 | Column | PostgreSQL type | Nullable | Key | Source / derivation | Description |
 | --- | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | `@competition_code` | Competition identifier; this catalog covers EuroLeague rows with E. |
-| `season_code` | `TEXT` | No | PK | `@season_code` | Starting-year EuroLeague season code, for example E2025 for 2025-26. |
+| `competition_code` | `TEXT` | No | PK | `@competition_code` | Competition identifier: E for EuroLeague, U for EuroCup. |
+| `season_code` | `TEXT` | No | PK | `@season_code` | Starting-year season code, for example E2025 or U2025 for 2025-26. |
 | `phase_code` | `TEXT` | No | PK | `@phase_code` | Source phase code such as RS, TS, PI, PO or FF; season statistics also have all. Silver adds no synthetic PS rows. |
 | `round_number` | `INTEGER` | No | PK | `@round_number` | Source game or standings round number; not a cumulative snapshot created by Silver. |
 | `club_code` | `TEXT` | No | PK | `@club_code` | Club code for this row; joins clubs using competition_code, season_code and club_code. |
@@ -906,8 +907,8 @@ established by the warehouse remains marked as such.
 
 | Column | PostgreSQL type | Nullable | Key | Source / derivation | Description |
 | --- | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | `@competition_code` | Competition identifier; this catalog covers EuroLeague rows with E. |
-| `season_code` | `TEXT` | No | PK | `@season_code` | Starting-year EuroLeague season code, for example E2025 for 2025-26. |
+| `competition_code` | `TEXT` | No | PK | `@competition_code` | Competition identifier: E for EuroLeague, U for EuroCup. |
+| `season_code` | `TEXT` | No | PK | `@season_code` | Starting-year season code, for example E2025 or U2025 for 2025-26. |
 | `phase_code` | `TEXT` | No | PK | `@phase_code` | Source phase code such as RS, TS, PI, PO or FF; season statistics also have all. Silver adds no synthetic PS rows. |
 | `round_number` | `INTEGER` | No | PK | `@round_number` | Source game or standings round number; not a cumulative snapshot created by Silver. |
 | `club_code` | `TEXT` | No | PK | `@club_code` | Club code for this row; joins clubs using competition_code, season_code and club_code. |
@@ -943,8 +944,8 @@ established by the warehouse remains marked as such.
 
 | Column | PostgreSQL type | Nullable | Key | Source / derivation | Description |
 | --- | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | `@competition_code` | Competition identifier; this catalog covers EuroLeague rows with E. |
-| `season_code` | `TEXT` | No | PK | `@season_code` | Starting-year EuroLeague season code, for example E2025 for 2025-26. |
+| `competition_code` | `TEXT` | No | PK | `@competition_code` | Competition identifier: E for EuroLeague, U for EuroCup. |
+| `season_code` | `TEXT` | No | PK | `@season_code` | Starting-year season code, for example E2025 or U2025 for 2025-26. |
 | `phase_code` | `TEXT` | No | PK | `@phase_code` | Source phase code such as RS, TS, PI, PO or FF; season statistics also have all. Silver adds no synthetic PS rows. |
 | `round_number` | `INTEGER` | No | PK | `@round_number` | Source game or standings round number; not a cumulative snapshot created by Silver. |
 | `club_code` | `TEXT` | No | PK | `@club_code` | Club code for this row; joins clubs using competition_code, season_code and club_code. |
@@ -989,8 +990,8 @@ established by the warehouse remains marked as such.
 
 | Column | PostgreSQL type | Nullable | Key | Source / derivation | Description |
 | --- | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | `@competition_code` | Competition identifier; this catalog covers EuroLeague rows with E. |
-| `season_code` | `TEXT` | No | PK | `@season_code` | Starting-year EuroLeague season code, for example E2025 for 2025-26. |
+| `competition_code` | `TEXT` | No | PK | `@competition_code` | Competition identifier: E for EuroLeague, U for EuroCup. |
+| `season_code` | `TEXT` | No | PK | `@season_code` | Starting-year season code, for example E2025 or U2025 for 2025-26. |
 | `phase_code` | `TEXT` | No | PK | `@phase_code` | Source phase code such as RS, TS, PI, PO or FF; season statistics also have all. Silver adds no synthetic PS rows. |
 | `round_number` | `INTEGER` | No | PK | `@round_number` | Source game or standings round number; not a cumulative snapshot created by Silver. |
 | `club_code` | `TEXT` | No | PK | `@club_code` | Club code for this row; joins clubs using competition_code, season_code and club_code. |
@@ -1036,8 +1037,8 @@ established by the warehouse remains marked as such.
 
 | Column | PostgreSQL type | Nullable | Key | Source / derivation | Description |
 | --- | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | `@competition_code` | Competition identifier; this catalog covers EuroLeague rows with E. |
-| `season_code` | `TEXT` | No | PK | `@season_code` | Starting-year EuroLeague season code, for example E2025 for 2025-26. |
+| `competition_code` | `TEXT` | No | PK | `@competition_code` | Competition identifier: E for EuroLeague, U for EuroCup. |
+| `season_code` | `TEXT` | No | PK | `@season_code` | Starting-year season code, for example E2025 or U2025 for 2025-26. |
 | `phase_code` | `TEXT` | No | PK | `@phase_code` | Source phase code such as RS, TS, PI, PO or FF; season statistics also have all. Silver adds no synthetic PS rows. |
 | `round_number` | `INTEGER` | No | PK | `@round_number` | Source game or standings round number; not a cumulative snapshot created by Silver. |
 | `club_code` | `TEXT` | No | PK | `@club_code` | Club code for this row; joins clubs using competition_code, season_code and club_code. |
@@ -1083,8 +1084,8 @@ established by the warehouse remains marked as such.
 
 | Column | PostgreSQL type | Nullable | Key | Source / derivation | Description |
 | --- | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | `@competition_code` | Competition identifier; this catalog covers EuroLeague rows with E. |
-| `season_code` | `TEXT` | No | PK | `@season_code` | Starting-year EuroLeague season code, for example E2025 for 2025-26. |
+| `competition_code` | `TEXT` | No | PK | `@competition_code` | Competition identifier: E for EuroLeague, U for EuroCup. |
+| `season_code` | `TEXT` | No | PK | `@season_code` | Starting-year season code, for example E2025 or U2025 for 2025-26. |
 | `phase_code` | `TEXT` | No | PK | `@phase_code` | Source phase code such as RS, TS, PI, PO or FF; season statistics also have all. Silver adds no synthetic PS rows. |
 | `round_number` | `INTEGER` | No | PK | `@round_number` | Source game or standings round number; not a cumulative snapshot created by Silver. |
 | `club_code` | `TEXT` | No | PK | `@club_code` | Club code for this row; joins clubs using competition_code, season_code and club_code. |
@@ -1115,8 +1116,8 @@ established by the warehouse remains marked as such.
 
 | Column | PostgreSQL type | Nullable | Key | Source / derivation | Description |
 | --- | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | `@competition_code` | Competition identifier; this catalog covers EuroLeague rows with E. |
-| `season_code` | `TEXT` | No | PK | `@season_code` | Starting-year EuroLeague season code, for example E2025 for 2025-26. |
+| `competition_code` | `TEXT` | No | PK | `@competition_code` | Competition identifier: E for EuroLeague, U for EuroCup. |
+| `season_code` | `TEXT` | No | PK | `@season_code` | Starting-year season code, for example E2025 or U2025 for 2025-26. |
 | `phase_code` | `TEXT` | No | PK | `@phase_code` | Source phase code such as RS, TS, PI, PO or FF; season statistics also have all. Silver adds no synthetic PS rows. |
 | `round_number` | `INTEGER` | No | PK | `@round_number` | Source game or standings round number; not a cumulative snapshot created by Silver. |
 | `club_code` | `TEXT` | No | PK | `@club_code` | Club code for this row; joins clubs using competition_code, season_code and club_code. |
@@ -1145,8 +1146,8 @@ established by the warehouse remains marked as such.
 
 | Column | PostgreSQL type | Nullable | Key | Source / derivation | Description |
 | --- | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | `@competition_code` | Competition identifier; this catalog covers EuroLeague rows with E. |
-| `season_code` | `TEXT` | No | PK | `@season_code` | Starting-year EuroLeague season code, for example E2025 for 2025-26. |
+| `competition_code` | `TEXT` | No | PK | `@competition_code` | Competition identifier: E for EuroLeague, U for EuroCup. |
+| `season_code` | `TEXT` | No | PK | `@season_code` | Starting-year season code, for example E2025 or U2025 for 2025-26. |
 | `game_code` | `INTEGER` | No | PK | `@game_code` | Game identifier within competition and season, not globally unique. |
 | `period` | `TEXT` | No | PK | `@period` | Source period label: FirstQuarter, SecondQuarter, ThirdQuarter, ForthQuarter (source spelling), or ExtraTime. Not an integer. |
 | `event_ordinal` | `INTEGER` | No | PK | `@event_ordinal` | Zero-based event order within the source period array; overtime number also comes from minute. |
@@ -1189,8 +1190,8 @@ established by the warehouse remains marked as such.
 
 | Column | PostgreSQL type | Nullable | Key | Source / derivation | Description |
 | --- | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | `@competition_code` | Competition identifier; this catalog covers EuroLeague rows with E. |
-| `season_code` | `TEXT` | No | PK | `@season_code` | Starting-year EuroLeague season code, for example E2025 for 2025-26. |
+| `competition_code` | `TEXT` | No | PK | `@competition_code` | Competition identifier: E for EuroLeague, U for EuroCup. |
+| `season_code` | `TEXT` | No | PK | `@season_code` | Starting-year season code, for example E2025 or U2025 for 2025-26. |
 | `game_code` | `INTEGER` | No | PK | `@game_code` | Game identifier within competition and season, not globally unique. |
 | `shot_ordinal` | `INTEGER` | No | PK | `@shot_ordinal` | Zero-based position in the game response Rows array. |
 | `play_number` | `INTEGER` | Yes |  | `@play_number` | Source event/shot link number; it is not a reliable chronological sort key. |
@@ -1236,8 +1237,8 @@ established by the warehouse remains marked as such.
 
 | Column | PostgreSQL type | Nullable | Key | Source / derivation | Description |
 | --- | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | Derived from Silver | Competition identifier; this catalog covers EuroLeague rows with E. |
-| `season_code` | `TEXT` | No | PK | Derived from Silver | Starting-year EuroLeague season code, for example E2025 for 2025-26. |
+| `competition_code` | `TEXT` | No | PK | Derived from Silver | Competition identifier: E for EuroLeague, U for EuroCup. |
+| `season_code` | `TEXT` | No | PK | Derived from Silver | Starting-year season code, for example E2025 or U2025 for 2025-26. |
 | `game_code` | `INTEGER` | No | PK | Derived from Silver | Game identifier within competition and season, not globally unique. |
 | `side` | `TEXT` | No | PK | Derived from Silver | Source side, local or road; local is not proof of a non-neutral home venue. |
 | `club_code` | `TEXT` | Yes |  | Derived from Silver | Club code for this row; joins clubs using competition_code, season_code and club_code. |
@@ -1284,8 +1285,8 @@ established by the warehouse remains marked as such.
 
 | Column | PostgreSQL type | Nullable | Key | Source / derivation | Description |
 | --- | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | Derived from Silver | Competition identifier; this catalog covers EuroLeague rows with E. |
-| `season_code` | `TEXT` | No | PK | Derived from Silver | Starting-year EuroLeague season code, for example E2025 for 2025-26. |
+| `competition_code` | `TEXT` | No | PK | Derived from Silver | Competition identifier: E for EuroLeague, U for EuroCup. |
+| `season_code` | `TEXT` | No | PK | Derived from Silver | Starting-year season code, for example E2025 or U2025 for 2025-26. |
 | `game_code` | `INTEGER` | No | PK | Derived from Silver | Game identifier within competition and season, not globally unique. |
 | `side` | `TEXT` | No | PK | Derived from Silver | Source side, local or road; local is not proof of a non-neutral home venue. |
 | `person_key` | `TEXT` | No | PK | Derived from Silver | Season person identity used by box scores and registrations; bridge to career person_code through silver.people. |
@@ -1326,8 +1327,8 @@ established by the warehouse remains marked as such.
 
 | Column | PostgreSQL type | Nullable | Key | Source / derivation | Description |
 | --- | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | Derived from Silver | Competition identifier; this catalog covers EuroLeague rows with E. |
-| `season_code` | `TEXT` | No | PK | Derived from Silver | Starting-year EuroLeague season code, for example E2025 for 2025-26. |
+| `competition_code` | `TEXT` | No | PK | Derived from Silver | Competition identifier: E for EuroLeague, U for EuroCup. |
+| `season_code` | `TEXT` | No | PK | Derived from Silver | Starting-year season code, for example E2025 or U2025 for 2025-26. |
 | `game_code` | `INTEGER` | No | PK | Derived from Silver | Game identifier within competition and season, not globally unique. |
 | `side` | `TEXT` | No | PK | Derived from Silver | Source side, local or road; local is not proof of a non-neutral home venue. |
 | `club_code` | `TEXT` | Yes |  | Derived from Silver | Club code for this row; joins clubs using competition_code, season_code and club_code. |
@@ -1359,8 +1360,8 @@ established by the warehouse remains marked as such.
 
 | Column | PostgreSQL type | Nullable | Key | Source / derivation | Description |
 | --- | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | Derived from Silver | Competition identifier; this catalog covers EuroLeague rows with E. |
-| `season_code` | `TEXT` | No | PK | Derived from Silver | Starting-year EuroLeague season code, for example E2025 for 2025-26. |
+| `competition_code` | `TEXT` | No | PK | Derived from Silver | Competition identifier: E for EuroLeague, U for EuroCup. |
+| `season_code` | `TEXT` | No | PK | Derived from Silver | Starting-year season code, for example E2025 or U2025 for 2025-26. |
 | `game_code` | `INTEGER` | No | PK | Derived from Silver | Game identifier within competition and season, not globally unique. |
 | `side` | `TEXT` | No | PK | Derived from Silver | Source side, local or road; local is not proof of a non-neutral home venue. |
 | `club_code` | `TEXT` | Yes |  | Derived from Silver | Club code for this row; joins clubs using competition_code, season_code and club_code. |
@@ -1401,8 +1402,8 @@ established by the warehouse remains marked as such.
 
 | Column | PostgreSQL type | Nullable | Key | Source / derivation | Description |
 | --- | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | Derived from Silver | Competition identifier; this catalog covers EuroLeague rows with E. |
-| `season_code` | `TEXT` | No | PK | Derived from Silver | Starting-year EuroLeague season code, for example E2025 for 2025-26. |
+| `competition_code` | `TEXT` | No | PK | Derived from Silver | Competition identifier: E for EuroLeague, U for EuroCup. |
+| `season_code` | `TEXT` | No | PK | Derived from Silver | Starting-year season code, for example E2025 or U2025 for 2025-26. |
 | `game_code` | `INTEGER` | No | PK | Derived from Silver | Game identifier within competition and season, not globally unique. |
 | `side` | `TEXT` | No | PK | Derived from Silver | Source side, local or road; local is not proof of a non-neutral home venue. |
 | `club_code` | `TEXT` | Yes |  | Derived from Silver | Club code for this row; joins clubs using competition_code, season_code and club_code. |
@@ -1437,8 +1438,8 @@ established by the warehouse remains marked as such.
 
 | Column | PostgreSQL type | Nullable | Key | Source / derivation | Description |
 | --- | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | Derived from Silver | Competition identifier; this catalog covers EuroLeague rows with E. |
-| `season_code` | `TEXT` | No | PK | Derived from Silver | Starting-year EuroLeague season code, for example E2025 for 2025-26. |
+| `competition_code` | `TEXT` | No | PK | Derived from Silver | Competition identifier: E for EuroLeague, U for EuroCup. |
+| `season_code` | `TEXT` | No | PK | Derived from Silver | Starting-year season code, for example E2025 or U2025 for 2025-26. |
 | `game_code` | `INTEGER` | No | PK | Derived from Silver | Game identifier within competition and season, not globally unique. |
 | `side` | `TEXT` | No | PK | Derived from Silver | Source side, local or road; local is not proof of a non-neutral home venue. |
 | `person_key` | `TEXT` | No | PK | Derived from Silver | Season person identity used by box scores and registrations; bridge to career person_code through silver.people. |
@@ -1469,8 +1470,8 @@ established by the warehouse remains marked as such.
 
 | Column | PostgreSQL type | Nullable | Key | Source / derivation | Description |
 | --- | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | Derived from Silver | Competition identifier; this catalog covers EuroLeague rows with E. |
-| `season_code` | `TEXT` | No | PK | Derived from Silver | Starting-year EuroLeague season code, for example E2025 for 2025-26. |
+| `competition_code` | `TEXT` | No | PK | Derived from Silver | Competition identifier: E for EuroLeague, U for EuroCup. |
+| `season_code` | `TEXT` | No | PK | Derived from Silver | Starting-year season code, for example E2025 or U2025 for 2025-26. |
 | `game_code` | `INTEGER` | No | PK | Derived from Silver | Game identifier within competition and season, not globally unique. |
 | `side` | `TEXT` | No | PK | Derived from Silver | Source side, local or road; local is not proof of a non-neutral home venue. |
 | `stint_ordinal` | `INTEGER` | No | PK | Derived from Silver | Stored lineup stint number within the game, starting at 1. |
@@ -1503,7 +1504,7 @@ established by the warehouse remains marked as such.
 
 | Column | PostgreSQL type | Nullable | Key | Source / derivation | Description |
 | --- | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | Load writer | EuroLeague competition identifier E. |
+| `competition_code` | `TEXT` | No | PK | Load writer | Competition identifier: E for EuroLeague, U for EuroCup. |
 | `season_code` | `TEXT` | No | PK | Load writer | Starting-year season code of the replacement. |
 | `table_name` | `TEXT` | No | PK | Load writer | Logical Silver data-table name whose scope was replaced. |
 | `load_id` | `UUID` | No | PK | Load writer | UUID identifying this successful replacement; retained across later loads. |

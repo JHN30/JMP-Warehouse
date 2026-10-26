@@ -5,8 +5,10 @@ Gold tables**, what one row represents, and which table serves each use case.
 The names, columns and keys were checked against the repository on 2026-10-20.
 This is a code contract, not a live database or frontend completeness audit.
 
-This catalog currently documents EuroLeague coverage. EuroCup coverage and rule
-differences will be added when that implementation begins.
+EuroLeague (`competition_code = 'E'`) is built and published to Neon. EuroCup
+(`'U'`) fills the same Gold tables locally only and is not published until the
+owner approves it; its coverage, knockout formats and source quirks are in the
+[Silver catalog](SILVER_CATALOG.md#eurocup).
 
 | Document | Use it for |
 | --- | --- |

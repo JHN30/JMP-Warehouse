@@ -245,6 +245,13 @@ class RawEtlTests(unittest.TestCase):
             "make missing": (1, side([player("A", 30, 10, 25, made3=None),
                                       player("B", 60, 30, 40)], 90),
                              road, {"A": (30, 25), "B": (60, 40)}),
+            # The team's makes reach the score but the players' do not: correcting A to 20
+            # would leave the players at 70, not 80, so the makes prove nothing.
+            "players miss the score": (1, side([player("A", 30, 10, 25), player("B", 50, 25, 40)], 90),
+                                       road, {"A": (30, 25), "B": (50, 40)}),
+            # The total (95) is not the players' 90, so a corrected total would miss 80.
+            "total off its players": (1, side([player("A", 30, 10, 25), player("B", 60, 30, 40)], 95),
+                                      road, {"A": (30, 25), "B": (60, 40)}),
             "unplayed": (2, wrong, road, {"A": (30, 25), "B": (60, 40)}),
             "not in games": (3, wrong, road, {"A": (30, 25), "B": (60, 40)}),
         }

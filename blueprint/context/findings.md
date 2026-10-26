@@ -32,18 +32,3 @@ hard-coded. Harmless today, because the publisher refuses any other competition
 **Suggested fix:** pass the competition through when EuroCup publishing is built; no
 change needed before then.
 **Resolution:**
-
-### F-21 [P3] unverified - A points correction can leave the team total off the score while saying it was corrected
-
-**File:** postgres_etl/raw_transform.py:536
-**Found:** 2026-10-26 by /audit (scope: current; lenses: quality, security, performance, tests)
-**Why it matters:** the corrected team total is the source total plus the players'
-point changes, not a value checked against the score. That equals the score only when
-the source total equals the sum of its players' points. Today it always does (0 team
-totals differ from their player sums in either competition), so all three corrected
-games end at their scores; a future source row with an inconsistent total would get a
-`points` correction row while `team_points_differ_from_score` still fires.
-**Suggested fix:** in `points_corrections`, correct a side only when its corrected
-player points add up to the game score; otherwise leave it as given (the warnings
-already show it). No current requirement would be lost.
-**Resolution:**

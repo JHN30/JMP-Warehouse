@@ -58,9 +58,10 @@ def made_points(stats):
 def points_corrections(response, scores):
     """Player points the source got wrong, per side: {side: {ordinal: corrected}}.
 
-    Only when a team's makes add up to its game score but its points do not: then
-    the makes prove each player's points. Any other mismatch is left as the source
-    gives it (quality warnings show it).
+    Only when a team's makes add up to its game score but its points do not, its total
+    equals its players' points, and the corrected player points then add up to the
+    score: then the makes prove each player's points, and the total lands on the score. Any other mismatch is left as the source gives it (quality
+    warnings show it).
     """
     corrections = {}
     for side, score in zip(("local", "road"), scores or ()):
@@ -68,10 +69,14 @@ def points_corrections(response, scores):
         total = side_data.get("total") or {}
         if score is None or total.get("points") in (None, score) or made_points(total) != score:
             continue
-        fixed = {ordinal: made for ordinal, item in enumerate(side_data.get("players") or [])
+        players = side_data.get("players") or []
+        fixed = {ordinal: made for ordinal, item in enumerate(players)
                  if (made := made_points(item.get("stats"))) is not None
                  and (item.get("stats") or {}).get("points") not in (None, made)}
-        if fixed:
+        given = [(item.get("stats") or {}).get("points") for item in players]
+        points = [fixed.get(ordinal, value) for ordinal, value in enumerate(given)]
+        if (fixed and None not in given and sum(given) == total["points"]
+                and sum(points) == score):
             corrections[side] = fixed
     return corrections
 

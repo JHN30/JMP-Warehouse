@@ -72,13 +72,11 @@ Items 1-8 were already shipped when the Blueprint was adopted (2026-09-24).
 - [x] 30i. **Publish per-game play-by-play tables** - build and publish `app_game_team_possessions`, `app_game_team_score_flow`, `app_game_team_shot_splits` and `app_game_team_shot_zones` from the item 19 Silver tables for E2025 and E2026 (about 25 MB for all of 30h-30j in Neon)
 - [x] 30j. **Publish on-court, stints and stat gaps** - build and publish `app_game_player_on_court`, `app_game_team_lineup_stints` and `app_game_stat_gaps` for E2025 and E2026
 - [x] 32. **On-court player rates** - per-game usage, assist, rebound, steal and block % counted from team and opponent play-by-play events during each player's on-court stretches (E2007+), replacing the box-score estimate in `silver.game_player_advanced` and its Gold copy; before E2007, and for game PER, keep the estimate and store NULL below 3 minutes; republishing E2025 and E2026 needs owner approval
-- [ ] 15. **Historical seasons in Neon** - publish older seasons once Neon storage allows (app tables for all seasons are about 237 MB)
+- [x] 15. **Historical seasons in Neon** - publish older seasons once Neon storage allows (app tables for all seasons are about 237 MB)
 - [ ] 17. **Dependencies and CI** - `requirements.txt` and an automatic test run so the project installs and verifies anywhere
 - [ ] 18. **EuroCup** - download, load and publish EuroCup seasons
 - [x] 20. **Scheduled refresh** - run the refresh command automatically (Windows Task Scheduler or GitHub Actions), nightly and after each round
 
-> Item 15 depends on your Neon plan's storage limit.
->
 > Layers (agreed 2026-09-27): bronze = the downloaded files; `silver` = cleaned,
 > standardized per-record tables (plus per-record enrichment); `gold` =
 > aggregates, page-shaped and identity tables, and what Neon gets. The web app

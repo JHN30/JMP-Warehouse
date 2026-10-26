@@ -22,7 +22,7 @@ manifest records show it; a one-off manual re-fetch without the guard (or a
 `--refresh-current` override flag) would accept the correction.
 **Resolution:**
 
-### F-11 [P3] open - The unattended missing-URL branch the scheduled run relies on has no unit test
+### F-11 [P3] fixed - The unattended missing-URL branch the scheduled run relies on has no unit test
 
 **File:** pipeline.py:219
 **Found:** 2026-10-24 by /audit independent (scope: current; lenses: quality, security, performance, tests)
@@ -43,4 +43,4 @@ with a passing stage runner, `environ={}`, a missing `dotenv_path`,
 `interactive=False` and a prompt that fails the test. Assert the result is
 `(1, "FAILED at Publish (missing Neon URL)", ...)` and that `neon_publish/main.py`
 never ran. No current requirement would be lost.
-**Resolution:**
+**Resolution:** fixed 2026-10-26 on fix/test-the-unattended-missing-neon-url-branch: added `test_unattended_run_without_neon_url_fails_without_prompting` in neon_publish/tests/test_publish.py (missing-URL failure, no prompt, no publish stage, pending kept); it fails when the `if not interactive` guard is removed.

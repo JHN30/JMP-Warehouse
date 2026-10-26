@@ -858,6 +858,23 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(prompts, [])
         self.assertNotIn("neon_publish/main.py", stages)
 
+    def test_unattended_run_without_neon_url_fails_without_prompting(self):
+        args = build_parser().parse_args(["--skip-fetch"])
+        with tempfile.TemporaryDirectory() as root:
+            state = Path(root) / "state.json"
+            stages = []
+            def runner(command, cwd, env, emit):
+                stages.append(command[1])
+                return 0
+            result = refresh(args, "E2025", self.Log(), state, StageFacts(),
+                             stage_runner=runner, environ={}, interactive=False,
+                             dotenv_path=Path(root) / ".env",
+                             prompt=lambda _: self.fail("prompted without a console"))
+            pending = read_state(state).get("publish_pending")
+        self.assertEqual(result[:2], (1, "FAILED at Publish (missing Neon URL)"))
+        self.assertNotIn("neon_publish/main.py", stages)
+        self.assertTrue(pending)
+
     def test_publish_output_redacts_url_and_password(self):
         url = "postgresql://user:verysecret@example.test/db"
         cleaned = redactor(url)(f"failed to connect {url}; password verysecret")

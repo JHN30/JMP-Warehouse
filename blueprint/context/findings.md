@@ -22,29 +22,6 @@ manifest records show it; a one-off manual re-fetch without the guard (or a
 `--refresh-current` override flag) would accept the correction.
 **Resolution:**
 
-### F-16 [P3] unverified - New U2026 games have on-court time and lineup stint gaps
-
-**File:** postgres_etl/on_court.py
-**Found:** 2026-10-26 by the first `python pipeline.py -cp eurocup` refresh (feature 18b)
-**Why it matters:** the games fetched that day added Silver warnings
-`seconds_differ_from_box_score` (14 player rows) and
-`stints_cover_little_of_the_game` (2 games) for U2026. If the reconstruction misreads
-the current live play-by-play format, every new EuroCup game is affected.
-**Suggested fix:** list the affected U2026 games, compare with EuroLeague E2026, and
-check whether they are source gaps (missing substitutions) or a reconstruction defect.
-**Resolution:**
-
-### F-17 [P3] unverified - EuroCup standings rows with games played not equal to wins plus losses
-
-**File:** postgres_etl/quality.py:226
-**Found:** 2026-10-26 during the EuroCup Silver quality runs
-**Why it matters:** `standings_played_not_won_plus_lost` warns for 1 row in U2011 and 1
-in U2025. Neither season has drawn games, so it is likely an API standings feed error,
-but it is not yet confirmed which club and round.
-**Suggested fix:** identify the two rows and compare them with the games; document them
-as known source gaps or correct the derivation if Silver is wrong.
-**Resolution:**
-
 ### F-18 [P3] unverified - EuroCup round totals differ slightly from the API feeds
 
 **File:** gold_etl/quality.py:306

@@ -207,6 +207,15 @@ Checked on 2026-10-26 with read-only queries on local Silver and against
     but the order-dependent calculated tables (possessions, score flow, on-court
     intervals and lineup stints) skip them, and their player rates are box-score
     estimates. Shot splits are kept, since they do not depend on event order.
+  - Live substitutions can contradict the box score: some feeds log a phantom
+    block of substitutions that repeats later real ones (U2026 games 10 and 18,
+    and a few games in other seasons). On-court time and lineup stints are kept
+    as the feed gives them; `seconds_differ_from_box_score` and
+    `stints_cover_little_of_the_game` flag the affected games.
+  - Two official standings snapshots miss one result for one round (U2011 VEF
+    Riga, `L16` round 7; U2025 Hamburg, `RS` round 17); the next round is right.
+    `standings_played_not_won_plus_lost` flags them. Standings are not rebuilt
+    from games, because official records can include deductions.
   - Box-score points that contradict the game score are corrected at load in
     U2004 games 103 and 138 and U2005 game 4 (`points_corrected` in
     `game_stat_gaps`).

@@ -9,6 +9,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from quality import check_season, checks_for_tables
+from raw_transform import CORRECTED_REASON, UNRECORDED_REASON
 import main as etl_main
 
 
@@ -174,8 +175,12 @@ class QualityRulesTests(unittest.TestCase):
                 self.assertEqual(found[key].query.count("%s"), 2)
         self.assertIn("stats_kind = 'total'", found[("team_points_differ_from_score",
                                                      "game_team_stats")].query)
-        self.assertIn("NOT LIKE '%%corrected%%'", found[("unrecorded_stat_nulled",
-                                                         "game_stat_gaps")].query)
+        self.assertIn(f"row.reason = '{UNRECORDED_REASON}'",
+                      found[("unrecorded_stat_nulled", "game_stat_gaps")].query)
+        self.assertIn(f"row.reason LIKE '{CORRECTED_REASON}%%'",
+                      found[("points_corrected", "game_stat_gaps")].query)
+        for reason in (UNRECORDED_REASON, CORRECTED_REASON):
+            self.assertFalse(set(reason) & set("'%_"), reason)  # safe as SQL literals
         self.assertNotIn(("team_points_differ_from_score", "game_team_stats"),
                          {(c.code, c.table) for c in checks_for_tables(["game_team_stats"])})
 

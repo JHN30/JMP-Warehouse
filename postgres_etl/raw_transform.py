@@ -29,6 +29,11 @@ NEVER_ALL_ZERO = (
     "foulsReceived", "plusMinus",
 )
 NO_BOX_SCORE = "*"
+# game_stat_gaps reasons. quality.py matches on them to tell unrecorded stats from
+# points corrections, so they stay plain text (no ', % or _) for its SQL literals.
+UNRECORDED_REASON = "0 for every player: not recorded; stored as NULL"
+CORRECTED_REASON = ("team makes equal the score but points do not; points (and PIR "
+                    "by the same amount) corrected from the makes: ")
 
 
 def box_score_gaps(response):
@@ -510,7 +515,7 @@ class RawSeason:
                     for name in sorted(gaps if gaps != NO_BOX_SCORE else ()):
                         yield dict(scope, game_code=game,
                                    stat_name=COLUMN_NAMES.get(snake(name), snake(name)),
-                                   reason="0 for every player: not recorded; stored as NULL",
+                                   reason=UNRECORDED_REASON,
                                    payload={})
                     if corrections:
                         changes = []
@@ -520,8 +525,7 @@ class RawSeason:
                                 name = nested(players[ordinal], "player", "person", "name") or "unknown"
                                 changes.append(f"{side} {name} {players[ordinal]['stats']['points']:g} -> {points:g}")
                         yield dict(scope, game_code=game, stat_name="points",
-                                   reason="team makes equal the score but points do not; points (and PIR "
-                                          "by the same amount) corrected from the makes: " + "; ".join(changes),
+                                   reason=CORRECTED_REASON + "; ".join(changes),
                                    payload={})
                     continue
                 for side in ("local", "road"):

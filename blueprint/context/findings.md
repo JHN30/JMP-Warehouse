@@ -22,29 +22,6 @@ manifest records show it; a one-off manual re-fetch without the guard (or a
 `--refresh-current` override flag) would accept the correction.
 **Resolution:**
 
-### F-11 [P3] fixed - The unattended missing-URL branch the scheduled run relies on has no unit test
-
-**File:** pipeline.py:219
-**Found:** 2026-10-24 by /audit independent (scope: current; lenses: quality, security, performance, tests)
-**Why it matters:** the spec's unattended-safety contract is that the scheduled
-run "never waits at a hidden prompt" and fails with "FAILED at Publish (missing
-Neon URL)". The task action provides the non-console stdin (probe: the exact
-action string gives `stdin.isatty()` False in a new hidden console, against True
-without the empty pipe). The Python half is `resolve_neon_url`'s
-`if not interactive: return None, ...` branch and `refresh`'s missing-URL return.
-No test covers that case. Tests at neon_publish/tests/test_publish.py:765 and :870
-pass `interactive=False` only with a URL present, and :843 only checks that the
-prompt waits for Gold quality. If that guard regressed, `getpass` on Windows reads
-the console directly, not stdin. The scheduled run would then hang in its hidden
-window until the 2-hour limit, with no log result or summary. The code is correct
-today; this is a coverage gap on behavior the feature now depends on.
-**Suggested fix:** add one unit test that calls `refresh(build_parser().parse_args(["--skip-fetch"]), "E2025", ...)`
-with a passing stage runner, `environ={}`, a missing `dotenv_path`,
-`interactive=False` and a prompt that fails the test. Assert the result is
-`(1, "FAILED at Publish (missing Neon URL)", ...)` and that `neon_publish/main.py`
-never ran. No current requirement would be lost.
-**Resolution:** fixed 2026-10-26 on fix/test-the-unattended-missing-neon-url-branch: added `test_unattended_run_without_neon_url_fails_without_prompting` in neon_publish/tests/test_publish.py (missing-URL failure, no prompt, no publish stage, pending kept); it fails when the `if not interactive` guard is removed.
-
 ### F-15 [P3] unverified - On-court assist % above 100% for two EuroCup players
 
 **File:** postgres_etl/advanced.py:309
@@ -130,29 +107,4 @@ games end at their scores; a future source row with an inconsistent total would 
 **Suggested fix:** in `points_corrections`, correct a side only when its corrected
 player points add up to the game score; otherwise leave it as given (the warnings
 already show it). No current requirement would be lost.
-**Resolution:**
-
-### F-22 [P3] open - The points correction's skip paths have no tests
-
-**File:** postgres_etl/tests/test_raw_etl.py:195
-**Found:** 2026-10-26 by /audit (scope: current; lenses: quality, security, performance, tests)
-**Why it matters:** the one new test covers a corrected team and a team left as given.
-Nothing tests that the correction is skipped when `points` is unrecorded for the game
-(`"points" in gaps`), when the game has no box score (`*`), when a player's makes are
-missing (`made_points` returns `None`), or when the game is unplayed (no score). A
-regression there would silently rewrite source values.
-**Suggested fix:** add one test with those four cases, asserting unchanged points and
-no `points` gap row. No current requirement would be lost.
-**Resolution:**
-
-### F-23 [P3] open - Gap warnings tell corrections from unrecorded stats by reason text
-
-**File:** postgres_etl/quality.py:245
-**Found:** 2026-10-26 by /audit (scope: current; lenses: quality, security, performance, tests)
-**Why it matters:** `unrecorded_stat_nulled` and `points_corrected` separate rows of
-`game_stat_gaps` with `reason LIKE '%corrected%'`. Rewording either reason in
-`raw_transform.py` would silently move rows between the two warnings.
-**Suggested fix:** share one reason prefix constant between `raw_transform.py` and
-`quality.py` (or match on the full corrected-reason prefix), keeping the current
-`game_stat_gaps` columns. No current requirement would be lost.
 **Resolution:**

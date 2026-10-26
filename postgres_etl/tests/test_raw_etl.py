@@ -1,4 +1,5 @@
 import json
+import shutil
 import sys
 import tempfile
 import types
@@ -15,7 +16,7 @@ from main import available_seasons, build_parser, requested_seasons
 from flat_loader import FlatDatabaseLoader
 from flat_schema import TABLES, create_table_sql
 from flat_transform import FlatSeason
-from raw_transform import RawSeason
+from raw_transform import CORRECTED_REASON, RawSeason
 from shared import BronzeStore
 
 
@@ -219,6 +220,47 @@ class RawEtlTests(unittest.TestCase):
         self.assertEqual([(g["game_code"], g["stat_name"]) for g in gaps], [(1, "points")])
         self.assertIn("local A 30 -> 20", gaps[0]["reason"])
         self.assertIn("corrected", gaps[0]["reason"])
+
+    def test_points_correction_skips_unproven_games(self):
+        def player(code, points, made2, valuation, made3=0):
+            stats = {"points": points, "fieldGoalsMade2": made2, "fieldGoalsMade3": made3,
+                     "freeThrowsMade": 0, "valuation": valuation, "timePlayed": 600}
+            if made3 is None:
+                del stats["fieldGoalsMade3"]
+            return {"player": {"person": {"code": code, "name": code}, "club": {"code": "MAD"}},
+                    "stats": stats}
+        def side(players, points):
+            return {"players": players, "total": {"points": points, "fieldGoalsMade2": 40,
+                                                  "fieldGoalsMade3": 0, "freeThrowsMade": 0}}
+        # Each local side's makes add up to 80, which is game 1's score, and its points
+        # do not, so only the skip under test keeps the correction from running.
+        # Points count as unrecorded only when they are 0 for every player of the game.
+        wrong = side([player("A", 30, 10, 25), player("B", 60, 30, 40)], 90)
+        road = side([player("C", 70, 35, 50)], 70)
+        cases = {
+            "points unrecorded": (1, side([player("A", 0, 10, 25), player("B", 0, 30, 40)], 0),
+                                  side([player("C", 0, 35, 50)], 0),
+                                  {"A": (None, 25), "B": (None, 40)}),
+            "no box score": (1, side([], 90), side([], 70), {}),
+            "make missing": (1, side([player("A", 30, 10, 25, made3=None),
+                                      player("B", 60, 30, 40)], 90),
+                             road, {"A": (30, 25), "B": (60, 40)}),
+            "unplayed": (2, wrong, road, {"A": (30, 25), "B": (60, 40)}),
+            "not in games": (3, wrong, road, {"A": (30, 25), "B": (60, 40)}),
+        }
+        for name, (game, local, road_side, expected) in cases.items():
+            with self.subTest(name):
+                for old in list((self.root / "bronze").rglob("game_stats")):
+                    shutil.rmtree(old)  # one box score per case
+                self.write(f"v2/game_stats/{game}.json", {"local": local, "road": road_side})
+                players = {p["person_key"]: (p["points"], p["payload"]["stats"]["valuation"])
+                           for p in self.season().rows("game_player_stats")
+                           if p["person_key"] != "C"}
+                self.assertEqual(players, expected)
+                gaps = list(self.season().rows("game_stat_gaps"))
+                self.assertFalse([g for g in gaps if g["reason"].startswith(CORRECTED_REASON)])
+                if name == "no box score":  # the game really has no box score
+                    self.assertEqual([g["stat_name"] for g in gaps], ["*"])
 
     def test_forfeit_without_players_gets_null_team_stats(self):
         self.write("v2/game_stats/2.json", {

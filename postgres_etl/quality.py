@@ -5,6 +5,7 @@ from time import monotonic
 
 from flat_schema import TABLES, TEAM_STATS_TABLES, physical_name
 from flat_transform import FlatSeason
+from raw_transform import CORRECTED_REASON, UNRECORDED_REASON
 from shared import COMPETITION_CODES, connect, elapsed
 
 
@@ -242,9 +243,9 @@ def anomaly_checks(names):
         checks.append(Check("game_without_player_box_score", "game_stat_gaps", scoped_count(
             "game_stat_gaps", "row.stat_name = '*'"), "WARN"))
         checks.append(Check("unrecorded_stat_nulled", "game_stat_gaps", scoped_count(
-            "game_stat_gaps", "row.stat_name <> '*' AND row.reason NOT LIKE '%%corrected%%'"), "WARN"))
+            "game_stat_gaps", f"row.stat_name <> '*' AND row.reason = '{UNRECORDED_REASON}'"), "WARN"))
         checks.append(Check("points_corrected", "game_stat_gaps", scoped_count(
-            "game_stat_gaps", "row.stat_name = 'points' AND row.reason LIKE '%%corrected%%'"), "WARN"))
+            "game_stat_gaps", f"row.stat_name = 'points' AND row.reason LIKE '{CORRECTED_REASON}%%'"), "WARN"))
     # Source points that do not add up: to the game score (team totals) or to the
     # shooting makes. Only provable cases are corrected at load (points_corrected).
     if {"games", "game_team_stats"} <= names:

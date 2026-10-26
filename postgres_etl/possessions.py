@@ -33,6 +33,42 @@ PLAYS = MADE | MISSED | FREE_THROWS | {"TO", "O", "D"}
 TECHNICAL = {"CMT", "CMTI", "C", "B"}
 
 
+# A few EuroCup feeds (U2008-U2013) are stat sheets, not play-by-play: nearly every event
+# sits at one moment, listed player by player, so walking them in clock order is
+# meaningless. A game where more than this share of events falls on one
+# (period, marker_time) is treated as a game without play-by-play. Real games peak at 0.34;
+# games with fewer events than the smallest such feed (20) are not judged.
+CLOCKLESS_SHARE = Decimal("0.5")
+CLOCKLESS_MIN_EVENTS = 20
+# The same rule over Silver: the game codes of one competition and season (two %s).
+CLOCKLESS_GAMES_SQL = (
+    'SELECT game_code FROM (SELECT game_code, count(*) AS events, '
+    'max(count(*)) OVER (PARTITION BY game_code) AS top '
+    'FROM "play_by_play" WHERE competition_code = %s AND season_code = %s '
+    'GROUP BY game_code, period, marker_time) AS moments '
+    f'GROUP BY game_code, top HAVING sum(events) >= {CLOCKLESS_MIN_EVENTS} '
+    f'AND top > {CLOCKLESS_SHARE} * sum(events)')
+
+
+def events_by_game(events):
+    """{game_code: events}, leaving out games whose events have no usable clock."""
+    by_game = {}
+    for event in events:
+        by_game.setdefault(event["game_code"], []).append(event)
+    return {code: game_events for code, game_events in by_game.items()
+            if not _clockless(game_events)}
+
+
+def _clockless(events):
+    if len(events) < CLOCKLESS_MIN_EVENTS:
+        return False
+    moments = {}
+    for event in events:
+        moment = (event["period"], event.get("marker_time"))
+        moments[moment] = moments.get(moment, 0) + 1
+    return max(moments.values()) > CLOCKLESS_SHARE * len(events)
+
+
 def _overtime(event):
     minute = event.get("minute")
     return 1 if minute is None or minute <= 40 else (minute - 41) // 5 + 1
@@ -174,9 +210,7 @@ def _ratio(numerator, denominator):
 def derive_rows(games, team_advanced, events):
     """Rows for `game_team_possessions`, sorted by game and side."""
     advanced = {(row["game_code"], row["side"]): row for row in team_advanced}
-    by_game = {}
-    for event in events:
-        by_game.setdefault(event["game_code"], []).append(event)
+    by_game = events_by_game(events)
     rows = []
     for game in sorted(games, key=lambda row: row["game_code"]):
         code = game["game_code"]

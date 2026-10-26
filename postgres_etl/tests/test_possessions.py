@@ -25,6 +25,31 @@ def count(events):
     return possessions._count(events, {"A", "B"})
 
 
+class ClocklessTests(unittest.TestCase):
+    @staticmethod
+    def game(code, stacked, spread):
+        """`stacked` events at one moment and `spread` events at distinct ones."""
+        events = [ev("A", "2FGM", "10:00", n, game=code) for n in range(stacked)]
+        return events + [ev("A", "2FGM", f"09:{n:02d}", stacked + n, game=code)
+                         for n in range(spread)]
+
+    def test_games_with_most_events_at_one_moment_are_left_out(self):
+        events = (self.game(1, 0, 20)      # a normal game
+                  + self.game(2, 15, 5)    # 75% at one moment: a stat sheet, not a clock
+                  + self.game(3, 10, 10)   # exactly half is still a game
+                  + self.game(4, 5, 0))    # too few events to judge
+        by_game = possessions.events_by_game(events)
+        self.assertEqual(sorted(by_game), [1, 3, 4])
+        self.assertEqual(len(by_game[1]), 20)
+
+    def test_the_sql_rule_matches_the_python_rule(self):
+        self.assertIn(f"sum(events) >= {possessions.CLOCKLESS_MIN_EVENTS}",
+                      possessions.CLOCKLESS_GAMES_SQL)
+        self.assertIn(f"top > {possessions.CLOCKLESS_SHARE} * sum(events)",
+                      possessions.CLOCKLESS_GAMES_SQL)
+        self.assertEqual(possessions.CLOCKLESS_GAMES_SQL.count("%s"), 2)
+
+
 class ClockTests(unittest.TestCase):
     def test_quarters_and_overtimes_become_elapsed_seconds(self):
         self.assertEqual(possessions._clock(ev("A", "2FGM", "09:40", 1)), 20)

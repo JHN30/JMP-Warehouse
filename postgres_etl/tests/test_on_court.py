@@ -34,6 +34,10 @@ def spans(events, person, game=GAME, side="local"):
 
 
 class DeriveTests(unittest.TestCase):
+    def test_a_game_without_a_clock_has_no_intervals(self):
+        sheet = [sub("2FGM", "a1", "10:00", n) for n in range(20)] + [sub("OUT", "a1", "10:00", 20)]
+        self.assertEqual(on_court.derive_rows([GAME], PLAYERS, sheet), [])
+
     def test_starters_without_substitutions_play_the_whole_game(self):
         self.assertEqual(spans([sub("TO", "a1", "09:00", 1)], "a1"), [(0, 2400)])
         self.assertEqual(spans([sub("TO", "a1", "09:00", 1)], "a6"), [])

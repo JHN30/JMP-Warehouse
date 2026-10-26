@@ -9,6 +9,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from quality import check_season, checks_for_tables
+from possessions import CLOCKLESS_GAMES_SQL
 from raw_transform import CORRECTED_REASON, UNRECORDED_REASON
 import main as etl_main
 
@@ -183,6 +184,15 @@ class QualityRulesTests(unittest.TestCase):
             self.assertFalse(set(reason) & set("'%_"), reason)  # safe as SQL literals
         self.assertNotIn(("team_points_differ_from_score", "game_team_stats"),
                          {(c.code, c.table) for c in checks_for_tables(["game_team_stats"])})
+
+    def test_play_by_play_without_a_clock_is_a_season_scoped_warning(self):
+        checks = {check.code: check for check in checks_for_tables(["play_by_play"])}
+        clockless = checks["play_by_play_without_clock"]
+        self.assertEqual((clockless.table, clockless.severity), ("play_by_play", "WARN"))
+        self.assertEqual(clockless.query.count("%s"), 2)  # run with the usual season scope
+        self.assertIn(CLOCKLESS_GAMES_SQL, clockless.query)
+        self.assertNotIn("play_by_play_without_clock",
+                         {check.code for check in checks_for_tables(["games"])})
 
     def test_bad_played_score_is_an_error(self):
         report = check_season(FakeConnection(bad_scores=1), "euroleague", "E2025",

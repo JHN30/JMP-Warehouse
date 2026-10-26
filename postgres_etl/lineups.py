@@ -10,7 +10,8 @@ runner. Nothing reads Gold or Neon.
 import sys
 
 from on_court import _at
-from possessions import (_count, _dict_rows, _game_end, _sort_key,
+from possessions import (CLOCKLESS_GAMES_SQL, _count, _dict_rows, _game_end, _sort_key,
+                         events_by_game,
                          differences_from_derivation, main as _main,
                          replace_season as _replace, run_seasons as _run, stored_rows)
 
@@ -72,9 +73,7 @@ def _walk(ordered, clubs, starters, end):
 
 def derive_rows(games, players, events):
     """Rows for `game_team_lineup_stints`, sorted by game, side and stint."""
-    by_game, starters = {}, {}
-    for event in events:
-        by_game.setdefault(event["game_code"], []).append(event)
+    by_game, starters = events_by_game(events), {}
     for player in players:
         if player.get("started"):
             starters.setdefault((player["game_code"], player["side"]), []).append(
@@ -141,6 +140,7 @@ WARNING_QUERY = (
     'WHERE a.competition_code = %s AND a.season_code = %s AND a.game_minutes IS NOT NULL '
     'AND EXISTS (SELECT 1 FROM "play_by_play" AS p WHERE p.competition_code = a.competition_code '
     'AND p.season_code = a.season_code AND p.game_code = a.game_code) '
+    f'AND a.game_code NOT IN ({CLOCKLESS_GAMES_SQL}) '
     'AND COALESCE(s.covered, 0) < %s * a.game_minutes * 60')
 
 
@@ -154,7 +154,7 @@ def check_season(connection, competition_code, season_code):
         actual = stored_rows(cursor, TABLE, competition_code, season_code)
         issues = differences_from_derivation(
             TABLE, actual, expected, columns=("game_code", "side", "stint_ordinal"))
-        cursor.execute(WARNING_QUERY, (competition_code, season_code) * 2
+        cursor.execute(WARNING_QUERY, (competition_code, season_code) * 3
                        + (COVERAGE_MINIMUM,))
         uncovered = cursor.fetchone()[0]
     if uncovered:

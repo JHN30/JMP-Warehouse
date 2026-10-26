@@ -179,6 +179,12 @@ class OnCourtTests(unittest.TestCase):
         self.assertEqual(estimate["rate_source"], "estimate")
         self.assertIsNone(estimate["usage_pct"])                  # under the 3-minute floor
 
+    def test_a_game_without_a_clock_falls_back_to_estimates(self):
+        sheet = ([event("AS", "AAA", "10:00", n, "k") for n in range(19)]
+                 + [event("OUT", "AAA", "10:00", 19, "k")])
+        rows = derive(players=self.lines(assists=19), events=sheet)[1]
+        self.assertEqual({r["rate_source"] for r in rows}, {"estimate"})
+
     def test_an_assist_on_free_throws_counts_the_trip_as_a_chance(self):
         events = [event("2FGM", "AAA", "09:00", 1, "a2", 2, 0), event("AS", "AAA", "09:00", 2, "a1"),
                   event("AS", "AAA", "08:00", 3, "a1"), event("RV", "AAA", "08:00", 4, "a3"),

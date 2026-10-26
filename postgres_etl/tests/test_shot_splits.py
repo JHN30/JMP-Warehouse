@@ -34,6 +34,12 @@ EVENTS = [event("A", "2FGM", "09:40", 1)]
 
 
 class PointSplitTests(unittest.TestCase):
+    def test_a_game_without_a_clock_keeps_its_splits(self):
+        # Nothing here depends on event order, unlike the other play-by-play tables.
+        sheet = [event("A", "2FGM", "10:00", n) for n in range(20)] + [event("A", "AS", "10:00", 20)]
+        local, _ = rows([shot("A", 2)], sheet)
+        self.assertEqual(local["assisted_field_goals"], 1)
+
     def test_points_of_flagged_made_shots_including_free_throws(self):
         local, road = rows([
             shot("A", 2, fast=True), shot("A", 3, second=True), shot("A", 1, turnover=True),

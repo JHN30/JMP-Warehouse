@@ -201,6 +201,12 @@ Checked on 2026-10-26 with read-only queries on local Silver and against
     error for any other draw.
   - 18 games have `status = cancelled`: U2019's 12 `4F` games and 6 U2021 `RS`
     games. Cancelled games are left out of series and postseason totals.
+  - 6 games (U2008 32, U2009 15, U2010 32, U2012 89, U2013 2 and 75) have a
+    stat-sheet feed instead of play-by-play: nearly every event sits at Q1 10:00.
+    Their raw events stay in `play_by_play` (`play_by_play_without_clock` warns),
+    but the order-dependent calculated tables (possessions, score flow, on-court
+    intervals and lineup stints) skip them, and their player rates are box-score
+    estimates. Shot splits are kept, since they do not depend on event order.
   - Box-score points that contradict the game score are corrected at load in
     U2004 games 103 and 138 and U2005 game 4 (`points_corrected` in
     `game_stat_gaps`).

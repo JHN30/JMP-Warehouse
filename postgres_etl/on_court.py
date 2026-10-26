@@ -7,6 +7,7 @@ storage and season runner. Nothing reads Gold or Neon.
 import sys
 
 from possessions import (_clock, _dict_rows, _game_end, _period_bounds, _sort_key,
+                         events_by_game,
                          differences_from_derivation,
                          main as _main, replace_season as _replace, run_seasons as _run,
                          stored_rows)
@@ -64,9 +65,7 @@ def _side_intervals(starters, events, club, end):
 
 def derive_rows(games, players, events):
     """Rows for `game_player_on_court`, sorted by game, side, player and interval."""
-    by_game, roster = {}, {}
-    for event in events:
-        by_game.setdefault(event["game_code"], []).append(event)
+    by_game, roster = events_by_game(events), {}
     for player in players:
         roster.setdefault((player["game_code"], player["side"]), []).append(player)
     rows = []

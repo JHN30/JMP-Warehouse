@@ -12,7 +12,8 @@ is pure; `advanced.read_rows` reads the inputs. Nothing reads Gold or Neon.
 from decimal import Decimal
 
 from lineups import _walk
-from possessions import FREE_THROWS, MADE, MISSED, PLAYS, _count, _game_end, _sort_key
+from possessions import (FREE_THROWS, MADE, MISSED, PLAYS, _count, _game_end, _sort_key,
+                         events_by_game)
 
 THREES = {"3FGM", "3FGA", "3FGAB"}
 # Count names per play type; `two_pa` is added for field-goal attempts that are not threes.
@@ -63,9 +64,7 @@ def derive_counts(games, players, events):
     `opp_possessions`. A side qualifies when its game is played, has events, both clubs are
     known and the side has starters; its players never seen on court get zero counts.
     """
-    by_game, roster, starters = {}, {}, {}
-    for event in events:
-        by_game.setdefault(event["game_code"], []).append(event)
+    by_game, roster, starters = events_by_game(events), {}, {}
     for player in players:
         key = (player["game_code"], player["side"])
         roster.setdefault(key, []).append(player["person_key"])

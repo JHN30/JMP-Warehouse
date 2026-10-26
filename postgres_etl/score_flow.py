@@ -7,7 +7,7 @@ storage and season runner. Nothing reads Gold or Neon.
 import sys
 from decimal import Decimal
 
-from possessions import (_clock, _dict_rows, _game_end, _sort_key,
+from possessions import (_clock, _dict_rows, _game_end, _sort_key, events_by_game,
                          differences_from_derivation, main as _main, replace_season as _replace,
                          run_seasons as _run, stored_rows)
 
@@ -88,9 +88,7 @@ def _walk(events):
 
 def derive_rows(games, events):
     """Rows for `game_team_score_flow`, sorted by game and side."""
-    by_game = {}
-    for event in events:
-        by_game.setdefault(event["game_code"], []).append(event)
+    by_game = events_by_game(events)
     rows = []
     for game in sorted(games, key=lambda row: row["game_code"]):
         code = game["game_code"]

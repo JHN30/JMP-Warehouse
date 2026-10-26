@@ -22,20 +22,6 @@ manifest records show it; a one-off manual re-fetch without the guard (or a
 `--refresh-current` override flag) would accept the correction.
 **Resolution:**
 
-### F-15 [P3] unverified - On-court assist % above 100% for two EuroCup players
-
-**File:** postgres_etl/advanced.py:309
-**Found:** 2026-10-26 during feature 18a (EuroCup Gold), Silver warning `on_court_rate_out_of_range`
-**Why it matters:** two on-court rows exceed the 0-1 range: U2008 game 32 player
-`000529` (assist_pct 2.0, usage_pct 0.92, 1,912 s) and U2009 game 15 player `002042`
-(assist_pct 1.67, 1,415 s). Either the on-court intervals miss part of the player's
-time (so too few teammate baskets are counted), or the play-by-play is incomplete for
-those games. The values reach `app_game_player_advanced` and the round tables.
-**Suggested fix:** inspect both games' on-court intervals against box-score minutes and
-the play-by-play; fix the reconstruction if it is wrong, otherwise keep the warning and
-document the source gap.
-**Resolution:**
-
 ### F-16 [P3] unverified - New U2026 games have on-court time and lineup stint gaps
 
 **File:** postgres_etl/on_court.py

@@ -5,6 +5,7 @@ from time import monotonic
 
 from flat_schema import TABLES, TEAM_STATS_TABLES, physical_name
 from flat_transform import FlatSeason
+from possessions import CLOCKLESS_GAMES_SQL
 from raw_transform import CORRECTED_REASON, UNRECORDED_REASON
 from shared import COMPETITION_CODES, connect, elapsed
 
@@ -228,6 +229,10 @@ def anomaly_checks(names):
             "games", "row.audience_note IS NOT NULL"), "WARN"))
         checks.append(Check("cancelled_inferred", "games", scoped_count(
             "games", "row.status = 'cancelled' AND row.status_note LIKE '%%inferred%%'"), "WARN"))
+    if "play_by_play" in names:
+        # Stat-sheet feeds with no usable clock; the play-by-play tables skip these games.
+        checks.append(Check("play_by_play_without_clock", "play_by_play",
+                            f"SELECT count(*) FROM ({CLOCKLESS_GAMES_SQL}) AS clockless", "WARN"))
     for name in ("play_by_play", "shots"):
         if {"games", name} <= names:
             # The live API has data from E2007; earlier seasons have none by design.

@@ -242,7 +242,25 @@ def anomaly_checks(names):
         checks.append(Check("game_without_player_box_score", "game_stat_gaps", scoped_count(
             "game_stat_gaps", "row.stat_name = '*'"), "WARN"))
         checks.append(Check("unrecorded_stat_nulled", "game_stat_gaps", scoped_count(
-            "game_stat_gaps", "row.stat_name <> '*'"), "WARN"))
+            "game_stat_gaps", "row.stat_name <> '*' AND row.reason NOT LIKE '%%corrected%%'"), "WARN"))
+        checks.append(Check("points_corrected", "game_stat_gaps", scoped_count(
+            "game_stat_gaps", "row.stat_name = 'points' AND row.reason LIKE '%%corrected%%'"), "WARN"))
+    # Source points that do not add up: to the game score (team totals) or to the
+    # shooting makes. Only provable cases are corrected at load (points_corrected).
+    if {"games", "game_team_stats"} <= names:
+        checks.append(Check("team_points_differ_from_score", "game_team_stats", (
+            f'SELECT count(*) FROM "{physical_name("game_team_stats")}" AS row '
+            f'JOIN "{physical_name("games")}" AS game ON game.competition_code = row.competition_code '
+            'AND game.season_code = row.season_code AND game.game_code = row.game_code '
+            'WHERE row.competition_code = %s AND row.season_code = %s '
+            "AND game.played IS TRUE AND row.stats_kind = 'total' AND row.points <> "
+            "CASE row.side WHEN 'local' THEN game.local_score ELSE game.road_score END"
+        ), "WARN"))
+    for name, condition in (("game_player_stats", ""), ("game_team_stats", " AND row.stats_kind = 'total'")):
+        if name in names:
+            checks.append(Check("points_differ_from_makes", name, scoped_count(
+                name, "row.points <> 2 * row.two_pointers_made + 3 * row.three_pointers_made "
+                      "+ row.free_throws_made" + condition), "WARN"))
     if "standings_basic" in names:
         checks.append(Check("standings_played_not_won_plus_lost", "standings_basic",
                             scoped_count("standings_basic",

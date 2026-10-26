@@ -162,6 +162,23 @@ class QualityRulesTests(unittest.TestCase):
         self.assertIn("row.local_score + leg.road_score <> row.road_score + leg.local_score",
                       draw.query)
 
+    def test_points_checks_are_season_scoped_warnings(self):
+        checks = checks_for_tables(["games", "game_team_stats", "game_player_stats", "game_stat_gaps"])
+        found = {(check.code, check.table): check for check in checks}
+        for key in (("team_points_differ_from_score", "game_team_stats"),
+                    ("points_differ_from_makes", "game_team_stats"),
+                    ("points_differ_from_makes", "game_player_stats"),
+                    ("points_corrected", "game_stat_gaps")):
+            with self.subTest(key=key):
+                self.assertEqual(found[key].severity, "WARN")
+                self.assertEqual(found[key].query.count("%s"), 2)
+        self.assertIn("stats_kind = 'total'", found[("team_points_differ_from_score",
+                                                     "game_team_stats")].query)
+        self.assertIn("NOT LIKE '%%corrected%%'", found[("unrecorded_stat_nulled",
+                                                         "game_stat_gaps")].query)
+        self.assertNotIn(("team_points_differ_from_score", "game_team_stats"),
+                         {(c.code, c.table) for c in checks_for_tables(["game_team_stats"])})
+
     def test_bad_played_score_is_an_error(self):
         report = check_season(FakeConnection(bad_scores=1), "euroleague", "E2025",
                               ["games", "clubs"])

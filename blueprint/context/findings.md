@@ -45,26 +45,6 @@ with a passing stage runner, `environ={}`, a missing `dotenv_path`,
 never ran. No current requirement would be lost.
 **Resolution:** fixed 2026-10-26 on fix/test-the-unattended-missing-neon-url-branch: added `test_unattended_run_without_neon_url_fails_without_prompting` in neon_publish/tests/test_publish.py (missing-URL failure, no prompt, no publish stage, pending kept); it fails when the `if not interactive` guard is removed.
 
-### F-14 [P2] open - Silver accepts a team box score whose points do not match the game score
-
-**File:** postgres_etl/quality.py:161
-**Found:** 2026-10-26 by owner review during feature 18c (EuroCup postseason)
-**Why it matters:** in U2005 game 4 (AMS 76-58 ASV, RS round 1) the source gives
-ASV's Stephen Brun (`KSK`) 11 points and PIR 12 in 4 minutes with 0/1 twos, 0/1
-threes and no free throws. ASV's team `total` row then says 69 points, while the game
-result is 58 and ASV's makes add up to 58 (19x2 + 2x3 + 14). Nothing in Silver
-compares team box-score points with the game score, so the wrong 69 flows into ASV's
-per-game and per-round ratings and team totals; only Gold's
-`true_shooting_pct below 0 or above 2` warning catches the player row. Owner wants
-this fixed.
-**Suggested fix:** add a Silver quality check for played games whose team `total`
-points differ from `local_score`/`road_score` (and, as a second check, points that
-differ from 2x two-pointers + 3x threes + free throws). Then decide with the owner
-whether to correct a proven source error in Silver (for example points from the
-shooting makes, recorded in `game_stat_gaps` or a corrections list) or only warn.
-Run it over both competitions to see how many games are affected.
-**Resolution:**
-
 ### F-15 [P3] unverified - On-court assist % above 100% for two EuroCup players
 
 **File:** postgres_etl/advanced.py:309
@@ -135,4 +115,44 @@ hard-coded. Harmless today, because the publisher refuses any other competition
 (`neon_publish/publish.py:179`), but it must change when EuroCup publishing is approved.
 **Suggested fix:** pass the competition through when EuroCup publishing is built; no
 change needed before then.
+**Resolution:**
+
+### F-21 [P3] unverified - A points correction can leave the team total off the score while saying it was corrected
+
+**File:** postgres_etl/raw_transform.py:536
+**Found:** 2026-10-26 by /audit (scope: current; lenses: quality, security, performance, tests)
+**Why it matters:** the corrected team total is the source total plus the players'
+point changes, not a value checked against the score. That equals the score only when
+the source total equals the sum of its players' points. Today it always does (0 team
+totals differ from their player sums in either competition), so all three corrected
+games end at their scores; a future source row with an inconsistent total would get a
+`points` correction row while `team_points_differ_from_score` still fires.
+**Suggested fix:** in `points_corrections`, correct a side only when its corrected
+player points add up to the game score; otherwise leave it as given (the warnings
+already show it). No current requirement would be lost.
+**Resolution:**
+
+### F-22 [P3] open - The points correction's skip paths have no tests
+
+**File:** postgres_etl/tests/test_raw_etl.py:195
+**Found:** 2026-10-26 by /audit (scope: current; lenses: quality, security, performance, tests)
+**Why it matters:** the one new test covers a corrected team and a team left as given.
+Nothing tests that the correction is skipped when `points` is unrecorded for the game
+(`"points" in gaps`), when the game has no box score (`*`), when a player's makes are
+missing (`made_points` returns `None`), or when the game is unplayed (no score). A
+regression there would silently rewrite source values.
+**Suggested fix:** add one test with those four cases, asserting unchanged points and
+no `points` gap row. No current requirement would be lost.
+**Resolution:**
+
+### F-23 [P3] open - Gap warnings tell corrections from unrecorded stats by reason text
+
+**File:** postgres_etl/quality.py:245
+**Found:** 2026-10-26 by /audit (scope: current; lenses: quality, security, performance, tests)
+**Why it matters:** `unrecorded_stat_nulled` and `points_corrected` separate rows of
+`game_stat_gaps` with `reason LIKE '%corrected%'`. Rewording either reason in
+`raw_transform.py` would silently move rows between the two warnings.
+**Suggested fix:** share one reason prefix constant between `raw_transform.py` and
+`quality.py` (or match on the full corrected-reason prefix), keeping the current
+`game_stat_gaps` columns. No current requirement would be lost.
 **Resolution:**

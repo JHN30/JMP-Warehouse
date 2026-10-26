@@ -192,6 +192,34 @@ class RawEtlTests(unittest.TestCase):
         self.assertEqual([(g["game_code"], g["stat_name"]) for g in gaps],
                          [(1, "fouls_drawn"), (1, "plus_minus")])
 
+    def test_points_are_corrected_only_when_the_makes_prove_them(self):
+        def player(code, points, made2, made3, valuation):
+            return {"player": {"person": {"code": code, "name": code}, "club": {"code": "MAD"}},
+                    "stats": {"points": points, "fieldGoalsMade2": made2, "fieldGoalsMade3": made3,
+                              "freeThrowsMade": 0, "valuation": valuation, "timePlayed": 600}}
+        # Game 1 ends MAD 80-70 BAR. MAD's makes add up to 80 but its points to 90,
+        # so A's 30 points are wrong. BAR's points match the score while a make is
+        # off (68): no rule knows which value is right, so BAR is left as given.
+        self.write("v2/game_stats/1.json", {
+            "local": {"players": [player("A", 30, 10, 0, 25), player("B", 60, 21, 6, 40)],
+                      "total": {"points": 90, "fieldGoalsMade2": 31, "fieldGoalsMade3": 6,
+                                "freeThrowsMade": 0, "valuation": 65}},
+            "road": {"players": [player("C", 70, 34, 0, 50)],
+                     "total": {"points": 70, "fieldGoalsMade2": 34, "fieldGoalsMade3": 0,
+                               "freeThrowsMade": 0, "valuation": 50}},
+        })
+        players = {p["person_key"]: p for p in self.season().rows("game_player_stats")}
+        self.assertEqual({key: (p["points"], p["payload"]["stats"]["valuation"])
+                          for key, p in players.items()},
+                         {"A": (20, 15), "B": (60, 40), "C": (70, 50)})
+        teams = list(self.season().rows("game_team_stats"))
+        self.assertEqual([(t["points"], t["payload"]["total"]["valuation"]) for t in teams],
+                         [(80, 55), (70, 50)])
+        gaps = list(self.season().rows("game_stat_gaps"))
+        self.assertEqual([(g["game_code"], g["stat_name"]) for g in gaps], [(1, "points")])
+        self.assertIn("local A 30 -> 20", gaps[0]["reason"])
+        self.assertIn("corrected", gaps[0]["reason"])
+
     def test_forfeit_without_players_gets_null_team_stats(self):
         self.write("v2/game_stats/2.json", {
             "local": {"players": [], "total": {"points": 0.0, "totalRebounds": 0.0}},

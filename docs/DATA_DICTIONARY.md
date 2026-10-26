@@ -551,7 +551,14 @@ columns use one name across v2 and v3:
 
 `game_stat_gaps.stat_name` uses these silver names, or `*` for no box score.
 Source zeros that mean a stat was not recorded become SQL `NULL` and are
-listed there. Future fixtures remain in `games` with `played = false` and
+listed there. Box-score points are checked against the game score and the
+shooting makes (warnings `team_points_differ_from_score`, `points_differ_from_makes`).
+Only a provable error is corrected: when a team's makes equal its game score but
+its points do not, each player's points become his makes and his PIR moves by the
+same amount; the game gets a `points` row whose reason names the players and
+source values (`points_corrected`; U2004 games 103 and 138, U2005 game 4). The
+API season feeds keep the source values, so those players and clubs differ from
+the feeds in Gold quality warnings. Future fixtures remain in `games` with `played = false` and
 NULL result scores. Quarter and overtime scores have separate child rows.
 The source's `winner` object is the season champion;
 `match_winner_club_code` is the winner of a played game. V3 percentage strings

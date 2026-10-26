@@ -44,6 +44,40 @@ def box_score_gaps(response):
             and any(entry.get(name) == 0 for entry in stats)}
 
 
+def made_points(stats):
+    """Points from the shooting makes, or None when a make is missing."""
+    makes = [(stats or {}).get(name) for name in ("fieldGoalsMade2", "fieldGoalsMade3", "freeThrowsMade")]
+    return None if None in makes else 2 * makes[0] + 3 * makes[1] + makes[2]
+
+
+def points_corrections(response, scores):
+    """Player points the source got wrong, per side: {side: {ordinal: corrected}}.
+
+    Only when a team's makes add up to its game score but its points do not: then
+    the makes prove each player's points. Any other mismatch is left as the source
+    gives it (quality warnings show it).
+    """
+    corrections = {}
+    for side, score in zip(("local", "road"), scores or ()):
+        side_data = response.get(side) or {}
+        total = side_data.get("total") or {}
+        if score is None or total.get("points") in (None, score) or made_points(total) != score:
+            continue
+        fixed = {ordinal: made for ordinal, item in enumerate(side_data.get("players") or [])
+                 if (made := made_points(item.get("stats"))) is not None
+                 and (item.get("stats") or {}).get("points") not in (None, made)}
+        if fixed:
+            corrections[side] = fixed
+    return corrections
+
+
+def with_points(stats, points):
+    """Stats with corrected points; PIR moves by the same amount."""
+    delta = points - stats["points"]
+    valuation = stats.get("valuation")
+    return dict(stats, points=points, valuation=None if valuation is None else valuation + delta)
+
+
 def without_measures(values, gaps):
     """Copy a stats object with unrecorded measures set to None."""
     if not isinstance(values, dict):
@@ -190,7 +224,8 @@ class RawSeason:
     def begin_table(self):
         """Start a fresh dependency set, including data held in lookup caches."""
         self._used_versions.clear()
-        for name in ("_box_people_cache", "_season_person_codes_cache", "_pbp_people_cache"):
+        for name in ("_box_people_cache", "_season_person_codes_cache", "_pbp_people_cache",
+                     "_game_scores_cache"):
             self.__dict__.pop(name, None)
 
     def bronze_versions(self):
@@ -239,6 +274,13 @@ class RawSeason:
                         by_name[(club, name)] = person_code
             cache[game] = (codes, by_number, by_name)
         return cache[game]
+
+    def _game_scores(self):
+        """Game code -> (local score, road score) for played games, from the game list."""
+        if "_game_scores_cache" not in self.__dict__:
+            self._game_scores_cache = {row["game_code"]: (row["local_score"], row["road_score"])
+                                       for row in self.rows("games") if row.get("played")}
+        return self._game_scores_cache
 
     def _season_person_codes(self):
         if "_season_person_codes_cache" not in self.__dict__:
@@ -458,6 +500,8 @@ class RawSeason:
                     continue
                 response = read_json(path)
                 gaps = box_score_gaps(response)
+                corrections = ({} if gaps == NO_BOX_SCORE or "points" in gaps
+                               else points_corrections(response, self._game_scores().get(game)))
                 if table == "game_stat_gaps":
                     if gaps == NO_BOX_SCORE:
                         yield dict(scope, game_code=game, stat_name=NO_BOX_SCORE,
@@ -468,9 +512,29 @@ class RawSeason:
                                    stat_name=COLUMN_NAMES.get(snake(name), snake(name)),
                                    reason="0 for every player: not recorded; stored as NULL",
                                    payload={})
+                    if corrections:
+                        changes = []
+                        for side, fixed in sorted(corrections.items()):
+                            players = response[side]["players"]
+                            for ordinal, points in sorted(fixed.items()):
+                                name = nested(players[ordinal], "player", "person", "name") or "unknown"
+                                changes.append(f"{side} {name} {players[ordinal]['stats']['points']:g} -> {points:g}")
+                        yield dict(scope, game_code=game, stat_name="points",
+                                   reason="team makes equal the score but points do not; points (and PIR "
+                                          "by the same amount) corrected from the makes: " + "; ".join(changes),
+                                   payload={})
                     continue
                 for side in ("local", "road"):
                     side_data = response.get(side) or {}
+                    fixed = corrections.get(side, {})
+                    if fixed:
+                        players = [dict(item, stats=with_points(item["stats"], fixed[ordinal]))
+                                   if ordinal in fixed else item
+                                   for ordinal, item in enumerate(side_data.get("players") or [])]
+                        total = side_data["total"]
+                        delta = sum(fixed[o] - side_data["players"][o]["stats"]["points"] for o in fixed)
+                        side_data = dict(side_data, players=players,
+                                         total=with_points(total, total["points"] + delta))
                     if table == "game_team_stats":
                         if side_data:
                             compact = {"coach": side_data.get("coach"),

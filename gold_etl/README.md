@@ -82,9 +82,10 @@ derived `PS` slice; a source rerun preserves existing `PS` rows until they are
 recalculated. `-tb app_standings` selects only the standings page table; the
 team-season table can also be selected alone. The quality path compares
 full source and derived values.
-Records always read every locally loaded EuroLeague season and replace the
-selected table's full leaderboard once per invocation, even with `-sc E2025`.
-EuroCup records are not supported. The identity tables also use every locally
+Records always read every locally loaded season of the selected competition and
+replace that competition's full leaderboard once per invocation, even with
+`-sc E2025`. EuroCup Gold, records included, is built locally only and is not
+published. The identity tables also use every locally
 loaded Silver season for the selected competition and replace one full
 competition scope per table, regardless of `-sc`. `app_players` includes only
 player registrations; `app_club_identities` stores the latest profile and season

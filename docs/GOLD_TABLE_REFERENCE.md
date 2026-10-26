@@ -52,7 +52,7 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (support is deferred). |
+| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (built locally; not published to Neon). |
 | `season_code` | `TEXT` | No | PK | Starting-year season code, for example E2025 for 2025-26. |
 | `name` | `TEXT` | Yes |  | Display name supplied by the source; identity tables use the latest season profile. |
 | `start_year` | `INTEGER` | Yes |  | Starting calendar year of the season. |
@@ -80,7 +80,7 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (support is deferred). |
+| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (built locally; not published to Neon). |
 | `season_code` | `TEXT` | No | PK | Starting-year season code, for example E2025 for 2025-26. |
 | `club_code` | `TEXT` | No | PK | Club identifier, text; join season profiles on competition, season and club. |
 | `name` | `TEXT` | Yes |  | Display name supplied by the source; identity tables use the latest season profile. |
@@ -119,7 +119,7 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (support is deferred). |
+| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (built locally; not published to Neon). |
 | `season_code` | `TEXT` | No | PK | Starting-year season code, for example E2025 for 2025-26. |
 | `person_key` | `TEXT` | No | PK | Season person identity used by box scores; bridge to career person_code through app_people. |
 | `person_code` | `TEXT` | Yes |  | Person code; career identity in profiles, resolved box-score person_key in live-event tables. |
@@ -158,7 +158,7 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (support is deferred). |
+| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (built locally; not published to Neon). |
 | `season_code` | `TEXT` | No | PK | Starting-year season code, for example E2025 for 2025-26. |
 | `registration_key` | `TEXT` | No | PK | Natural identity of the source registration, not a player identity. |
 | `person_key` | `TEXT` | No |  | Season person identity used by box scores; bridge to career person_code through app_people. |
@@ -194,7 +194,7 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (support is deferred). |
+| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (built locally; not published to Neon). |
 | `season_code` | `TEXT` | No | PK | Starting-year season code, for example E2025 for 2025-26. |
 | `round_key` | `TEXT` | No | PK | Natural identity of a source round definition. |
 | `phase_code` | `TEXT` | No |  | Phase identifier: all, RS, TS, PI, PO, FF or derived PS as supported by this table. |
@@ -221,7 +221,7 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (support is deferred). |
+| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (built locally; not published to Neon). |
 | `season_code` | `TEXT` | No | PK | Starting-year season code, for example E2025 for 2025-26. |
 | `game_code` | `INTEGER` | No | PK | Game identifier within competition and season, not globally unique. |
 | `source_id` | `TEXT` | Yes |  | Raw source game identity retained alongside game_code. |
@@ -291,7 +291,7 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (support is deferred). |
+| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (built locally; not published to Neon). |
 | `season_code` | `TEXT` | No | PK | Starting-year season code, for example E2025 for 2025-26. |
 | `game_code` | `INTEGER` | No | PK | Game identifier within competition and season, not globally unique. |
 | `official_number` | `INTEGER` | No | PK | Official's ordinal slot in this game's assignments. |
@@ -319,7 +319,7 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (support is deferred). |
+| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (built locally; not published to Neon). |
 | `person_code` | `TEXT` | No | PK | Person code; career identity in profiles, resolved box-score person_key in live-event tables. |
 | `name` | `TEXT` | Yes |  | Display name supplied by the source; identity tables use the latest season profile. |
 | `country_code` | `TEXT` | Yes |  | Source country code for the person, club or official. |
@@ -352,7 +352,7 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (support is deferred). |
+| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (built locally; not published to Neon). |
 | `club_code` | `TEXT` | No | PK | Club identifier, text; join season profiles on competition, season and club. |
 | `name` | `TEXT` | Yes |  | Display name supplied by the source; identity tables use the latest season profile. |
 | `crest_url` | `TEXT` | Yes |  | Source team crest image URL. |
@@ -378,7 +378,7 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (support is deferred). |
+| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (built locally; not published to Neon). |
 | `season_code` | `TEXT` | No | PK | Starting-year season code, for example E2025 for 2025-26. |
 | `game_code` | `INTEGER` | No | PK | Game identifier within competition and season, not globally unique. |
 | `side` | `TEXT` | No | PK | Source side, local or road; local is not proof of a non-neutral home venue. |
@@ -401,7 +401,7 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (support is deferred). |
+| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (built locally; not published to Neon). |
 | `season_code` | `TEXT` | No | PK | Starting-year season code, for example E2025 for 2025-26. |
 | `game_code` | `INTEGER` | No | PK | Game identifier within competition and season, not globally unique. |
 | `side` | `TEXT` | No | PK | Source side, local or road; local is not proof of a non-neutral home venue. |
@@ -461,7 +461,7 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (support is deferred). |
+| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (built locally; not published to Neon). |
 | `season_code` | `TEXT` | No | PK | Starting-year season code, for example E2025 for 2025-26. |
 | `game_code` | `INTEGER` | No | PK | Game identifier within competition and season, not globally unique. |
 | `side` | `TEXT` | No | PK | Source side, local or road; local is not proof of a non-neutral home venue. |
@@ -509,7 +509,7 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (support is deferred). |
+| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (built locally; not published to Neon). |
 | `season_code` | `TEXT` | No | PK | Starting-year season code, for example E2025 for 2025-26. |
 | `phase_code` | `TEXT` | No | PK | Phase identifier: all, RS, TS, PI, PO, FF or derived PS as supported by this table. |
 | `mode` | `TEXT` | No | PK | accumulated or perGame; select one before reading player season measures. |
@@ -567,7 +567,7 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (support is deferred). |
+| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (built locally; not published to Neon). |
 | `season_code` | `TEXT` | No | PK | Starting-year season code, for example E2025 for 2025-26. |
 | `phase_code` | `TEXT` | No | PK | Phase identifier: all, RS, TS, PI, PO, FF or derived PS as supported by this table. |
 | `mode` | `TEXT` | No | PK | accumulated or perGame; select one before reading player season measures. |
@@ -615,7 +615,7 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (support is deferred). |
+| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (built locally; not published to Neon). |
 | `season_code` | `TEXT` | No | PK | Starting-year season code, for example E2025 for 2025-26. |
 | `phase_code` | `TEXT` | No | PK | Phase identifier: all, RS, TS, PI, PO, FF or derived PS as supported by this table. |
 | `mode` | `TEXT` | No | PK | accumulated or perGame; select one before reading player season measures. |
@@ -662,7 +662,7 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (support is deferred). |
+| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (built locally; not published to Neon). |
 | `season_code` | `TEXT` | No | PK | Starting-year season code, for example E2025 for 2025-26. |
 | `phase_code` | `TEXT` | No | PK | Phase identifier: all, RS, TS, PI, PO, FF or derived PS as supported by this table. |
 | `mode` | `TEXT` | No | PK | accumulated or perGame; select one before reading player season measures. |
@@ -703,7 +703,7 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (support is deferred). |
+| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (built locally; not published to Neon). |
 | `season_code` | `TEXT` | No | PK | Starting-year season code, for example E2025 for 2025-26. |
 | `phase_code` | `TEXT` | No | PK | Phase identifier: all, RS, TS, PI, PO, FF or derived PS as supported by this table. |
 | `round_number` | `INTEGER` | No | PK | Source game/standings round number; cumulative snapshots include games through this round. |
@@ -799,7 +799,7 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (support is deferred). |
+| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (built locally; not published to Neon). |
 | `season_code` | `TEXT` | No | PK | Starting-year season code, for example E2025 for 2025-26. |
 | `phase_code` | `TEXT` | No | PK | Phase identifier: all, RS, TS, PI, PO, FF or derived PS as supported by this table. |
 | `club_code` | `TEXT` | No | PK | Club identifier, text; join season profiles on competition, season and club. |
@@ -858,11 +858,11 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 
 **Definition / implementation:** [gold_etl/records.py](../gold_etl/records.py).
 
-**Usage and limitations:** Built from all loaded EuroLeague seasons regardless of the selected build season. Filter metric before ordering by rank_ordinal. See metric values below.
+**Usage and limitations:** Built from all loaded seasons of the selected competition regardless of the selected build season. Filter metric before ordering by rank_ordinal. See metric values below.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (support is deferred). |
+| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (built locally; not published to Neon). |
 | `metric` | `TEXT` | No | PK | Leaderboard measure name; filter this before interpreting value or rank_ordinal. |
 | `rank_ordinal` | `INTEGER` | No | PK | Stored top-50 slot within a competition and metric; ties occupy separate slots. |
 | `season_code` | `TEXT` | No |  | Starting-year season code, for example E2025 for 2025-26. |
@@ -888,7 +888,7 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (support is deferred). |
+| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (built locally; not published to Neon). |
 | `metric` | `TEXT` | No | PK | Leaderboard measure name; filter this before interpreting value or rank_ordinal. |
 | `rank_ordinal` | `INTEGER` | No | PK | Stored top-50 slot within a competition and metric; ties occupy separate slots. |
 | `season_code` | `TEXT` | No |  | Starting-year season code, for example E2025 for 2025-26. |
@@ -916,7 +916,7 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (support is deferred). |
+| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (built locally; not published to Neon). |
 | `metric` | `TEXT` | No | PK | Leaderboard measure name; filter this before interpreting value or rank_ordinal. |
 | `rank_ordinal` | `INTEGER` | No | PK | Stored top-50 slot within a competition and metric; ties occupy separate slots. |
 | `season_code` | `TEXT` | No |  | Starting-year season code, for example E2025 for 2025-26. |
@@ -940,7 +940,7 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (support is deferred). |
+| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (built locally; not published to Neon). |
 | `season_code` | `TEXT` | No | PK | Starting-year season code, for example E2025 for 2025-26. |
 | `phase_code` | `TEXT` | No | PK | Phase identifier: all, RS, TS, PI, PO, FF or derived PS as supported by this table. |
 | `club_a_code` | `TEXT` | No | PK | Lexicographically first code in this postseason pairing. |
@@ -969,7 +969,7 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (support is deferred). |
+| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (built locally; not published to Neon). |
 | `season_code` | `TEXT` | No | PK | Starting-year season code, for example E2025 for 2025-26. |
 | `scope` | `TEXT` | No | PK | Aggregation scope: all, one phase, or PS (PI + PO + FF). RAPM supports all only. |
 | `round_number` | `INTEGER` | No | PK | Source game/standings round number; cumulative snapshots include games through this round. |
@@ -1055,7 +1055,7 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (support is deferred). |
+| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (built locally; not published to Neon). |
 | `season_code` | `TEXT` | No | PK | Starting-year season code, for example E2025 for 2025-26. |
 | `scope` | `TEXT` | No | PK | Aggregation scope: all, one phase, or PS (PI + PO + FF). RAPM supports all only. |
 | `club_code` | `TEXT` | No | PK | Club identifier, text; join season profiles on competition, season and club. |
@@ -1101,7 +1101,7 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (support is deferred). |
+| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (built locally; not published to Neon). |
 | `season_code` | `TEXT` | No | PK | Starting-year season code, for example E2025 for 2025-26. |
 | `scope` | `TEXT` | No | PK | Aggregation scope: all, one phase, or PS (PI + PO + FF). RAPM supports all only. |
 | `round_number` | `INTEGER` | No | PK | Source game/standings round number; cumulative snapshots include games through this round. |
@@ -1164,7 +1164,7 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (support is deferred). |
+| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (built locally; not published to Neon). |
 | `season_code` | `TEXT` | No | PK | Starting-year season code, for example E2025 for 2025-26. |
 | `scope` | `TEXT` | No | PK | Aggregation scope: all, one phase, or PS (PI + PO + FF). RAPM supports all only. |
 | `round_number` | `INTEGER` | No | PK | Source game/standings round number; cumulative snapshots include games through this round. |
@@ -1193,7 +1193,7 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (support is deferred). |
+| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (built locally; not published to Neon). |
 | `season_code` | `TEXT` | No | PK | Starting-year season code, for example E2025 for 2025-26. |
 | `scope` | `TEXT` | No | PK | Aggregation scope: all, one phase, or PS (PI + PO + FF). RAPM supports all only. |
 | `round_number` | `INTEGER` | No | PK | Source game/standings round number; cumulative snapshots include games through this round. |
@@ -1223,7 +1223,7 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (support is deferred). |
+| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (built locally; not published to Neon). |
 | `season_code` | `TEXT` | No | PK | Starting-year season code, for example E2025 for 2025-26. |
 | `scope` | `TEXT` | No | PK | Aggregation scope: all, one phase, or PS (PI + PO + FF). RAPM supports all only. |
 | `club_code` | `TEXT` | No | PK | Club identifier, text; join season profiles on competition, season and club. |
@@ -1266,7 +1266,7 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (support is deferred). |
+| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (built locally; not published to Neon). |
 | `season_code` | `TEXT` | No | PK | Starting-year season code, for example E2025 for 2025-26. |
 | `scope` | `TEXT` | No | PK | Aggregation scope: all, one phase, or PS (PI + PO + FF). RAPM supports all only. |
 | `club_code` | `TEXT` | No | PK | Club identifier, text; join season profiles on competition, season and club. |
@@ -1299,7 +1299,7 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (support is deferred). |
+| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (built locally; not published to Neon). |
 | `season_code` | `TEXT` | No | PK | Starting-year season code, for example E2025 for 2025-26. |
 | `scope` | `TEXT` | No | PK | Aggregation scope: all, one phase, or PS (PI + PO + FF). RAPM supports all only. |
 | `person_key` | `TEXT` | No | PK | Season person identity used by box scores; bridge to career person_code through app_people. |
@@ -1328,7 +1328,7 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (support is deferred). |
+| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (built locally; not published to Neon). |
 | `season_code` | `TEXT` | No | PK | Starting-year season code, for example E2025 for 2025-26. |
 | `game_code` | `INTEGER` | No | PK | Game identifier within competition and season, not globally unique. |
 | `period` | `TEXT` | No | PK | Source period label: FirstQuarter, SecondQuarter, ThirdQuarter, ForthQuarter or ExtraTime. Sort using period rank and overtime number from minute, not alphabetically. |
@@ -1366,7 +1366,7 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (support is deferred). |
+| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (built locally; not published to Neon). |
 | `season_code` | `TEXT` | No | PK | Starting-year season code, for example E2025 for 2025-26. |
 | `game_code` | `INTEGER` | No | PK | Game identifier within competition and season, not globally unique. |
 | `shot_ordinal` | `INTEGER` | No | PK | Source shot row order within the game. |
@@ -1407,7 +1407,7 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (support is deferred). |
+| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (built locally; not published to Neon). |
 | `season_code` | `TEXT` | No | PK | Starting-year season code, for example E2025 for 2025-26. |
 | `game_code` | `INTEGER` | No | PK | Game identifier within competition and season, not globally unique. |
 | `side` | `TEXT` | No | PK | Source side, local or road; local is not proof of a non-neutral home venue. |
@@ -1445,7 +1445,7 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (support is deferred). |
+| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (built locally; not published to Neon). |
 | `season_code` | `TEXT` | No | PK | Starting-year season code, for example E2025 for 2025-26. |
 | `game_code` | `INTEGER` | No | PK | Game identifier within competition and season, not globally unique. |
 | `side` | `TEXT` | No | PK | Source side, local or road; local is not proof of a non-neutral home venue. |
@@ -1484,7 +1484,7 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (support is deferred). |
+| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (built locally; not published to Neon). |
 | `season_code` | `TEXT` | No | PK | Starting-year season code, for example E2025 for 2025-26. |
 | `game_code` | `INTEGER` | No | PK | Game identifier within competition and season, not globally unique. |
 | `side` | `TEXT` | No | PK | Source side, local or road; local is not proof of a non-neutral home venue. |
@@ -1511,7 +1511,7 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (support is deferred). |
+| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (built locally; not published to Neon). |
 | `season_code` | `TEXT` | No | PK | Starting-year season code, for example E2025 for 2025-26. |
 | `game_code` | `INTEGER` | No | PK | Game identifier within competition and season, not globally unique. |
 | `side` | `TEXT` | No | PK | Source side, local or road; local is not proof of a non-neutral home venue. |
@@ -1547,7 +1547,7 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (support is deferred). |
+| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (built locally; not published to Neon). |
 | `season_code` | `TEXT` | No | PK | Starting-year season code, for example E2025 for 2025-26. |
 | `game_code` | `INTEGER` | No | PK | Game identifier within competition and season, not globally unique. |
 | `side` | `TEXT` | No | PK | Source side, local or road; local is not proof of a non-neutral home venue. |
@@ -1576,7 +1576,7 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (support is deferred). |
+| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (built locally; not published to Neon). |
 | `season_code` | `TEXT` | No | PK | Starting-year season code, for example E2025 for 2025-26. |
 | `game_code` | `INTEGER` | No | PK | Game identifier within competition and season, not globally unique. |
 | `side` | `TEXT` | No | PK | Source side, local or road; local is not proof of a non-neutral home venue. |
@@ -1602,7 +1602,7 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (support is deferred). |
+| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (built locally; not published to Neon). |
 | `season_code` | `TEXT` | No | PK | Starting-year season code, for example E2025 for 2025-26. |
 | `game_code` | `INTEGER` | No | PK | Game identifier within competition and season, not globally unique. |
 | `side` | `TEXT` | No | PK | Source side, local or road; local is not proof of a non-neutral home venue. |
@@ -1634,7 +1634,7 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
-| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (support is deferred). |
+| `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (built locally; not published to Neon). |
 | `season_code` | `TEXT` | No | PK | Starting-year season code, for example E2025 for 2025-26. |
 | `game_code` | `INTEGER` | No | PK | Game identifier within competition and season, not globally unique. |
 | `stat_name` | `TEXT` | No | PK | Missing measure's SQL column name; * means no box score for the game. |

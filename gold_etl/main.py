@@ -78,8 +78,6 @@ def main(argv=None):
     if "all" in args.table and len(args.table) != 1:
         parser.error("'all' must be used alone with --table")
     tables = BUILD_NAMES if args.table == ["all"] else tuple(dict.fromkeys(args.table))
-    if args.competition == "eurocup" and any(name in RECORDS_TABLES for name in tables):
-        parser.error("EuroCup records are not supported; select non-record tables")
     connection = None
     try:
         connection = connect(args.config)
@@ -94,7 +92,7 @@ def main(argv=None):
         print(f"Seasons: {', '.join(seasons)}")
         print(f"Tables: {', '.join(map(physical_name, tables))}")
         if any(name in RECORDS_TABLES for name in tables):
-            print("Records scope: all locally loaded EuroLeague seasons", flush=True)
+            print(f"Records scope: all locally loaded {args.competition} seasons", flush=True)
         if any(name in IDENTITY_TABLES for name in tables):
             print("Identity scope: all locally loaded Silver seasons", flush=True)
         print("Mode: " + ("read-only dry run" if args.dry_run else

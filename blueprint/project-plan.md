@@ -82,13 +82,11 @@ details are in `build-plan.md`.
 - **Advanced stats grain:** cumulative after every round, for the scopes `all`,
   each phase (`RS`, `PI`, `PO`, `FF`, older `TS`) and `PS` (all postseason
   phases).
-- **Neon:** today the `app_*` tables in `public`, for E2025 and E2026 only (all
-  seasons of the app tables would be about 237 MB; play-by-play and shots for
-  all seasons about 1.5 GB, too large for the current plan). Target: gold tables
-  published with a read-only role (feature 30); the web app is still in
-  development and is updated after the rename, so no compatibility views.
-  Per-round team advanced stats go to Neon for the standings
-  page; per-round player advanced stats stay local because of storage.
+- **Neon:** the `app_*` tables in `public` for every local EuroLeague season
+  (E2000-E2026; E2007+ for play-by-play, shot and lineup tables), published on
+  2026-10-21 (feature 15); about 1.85 GB in total on 2026-10-25. Gold tables are
+  published with a read-only role (feature 30), including per-round team and
+  player advanced stats. EuroCup is not published.
 - Keys are source natural keys scoped by `competition_code` + `season_code`.
   `person_code` is stable across seasons.
 
@@ -129,5 +127,7 @@ warnings explain every known source gap.
 - `NULL` means unavailable, never 0. Every season row carries
   `competition_code` + `season_code`. Known source problems stay visible.
 - One owner per aggregation: a figure is computed either here or in the API.
-- EuroLeague only for now; EuroCup is deferred.
+- EuroCup (feature 18) is built and tested locally only (Silver and Gold, with
+  all-time records); the web app shows it only locally for now. Publishing
+  EuroCup to Neon is a later, separate owner decision.
 - Be polite to the EuroLeague API (2.5 s between requests).

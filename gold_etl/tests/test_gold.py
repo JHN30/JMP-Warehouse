@@ -267,7 +267,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(replace.call_count, 3)
         self.assertEqual([call.args[1:] for call in replace.call_args_list],
                          [(name, "E") for name in names])
-        self.assertIn("Records scope: all locally loaded EuroLeague seasons", out)
+        self.assertIn("Records scope: all locally loaded euroleague seasons", out)
         with patch.object(main, "read_record_rows", return_value=[{}]):
             code, out, _, db = self.run_cli(["-sc", "2025", "-tb", names[0],
                                              "--dry-run"])
@@ -281,7 +281,7 @@ class CliTests(unittest.TestCase):
         self.assertTrue(db.readonly)
         self.assertIn("record drift", err)
 
-    def test_series_scopes_and_eurocup_records_rejected(self):
+    def test_series_scopes_and_eurocup_records(self):
         with patch.object(main, "replace_series_scope", return_value=2) as replace:
             code, out, _, db = self.run_cli(["-sc", "all", "-tb",
                                              "app_postseason_series"])
@@ -299,10 +299,14 @@ class CliTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertTrue(db.readonly)
         self.assertIn("series drift", err)
-        with contextlib.redirect_stderr(io.StringIO()) as stderr:
-            with self.assertRaises(SystemExit):
-                main.main(["-cp", "eurocup", "-tb", "app_records_single_games"])
-        self.assertIn("EuroCup records are not supported", stderr.getvalue())
+        with patch.object(main, "available_seasons", return_value=["U2025"]), \
+                patch.object(main, "replace_records_scope", return_value=200) as replace:
+            code, out, _, db = self.run_cli(["-cp", "eurocup", "-sc", "all", "-tb",
+                                             "app_records_single_games"])
+        self.assertEqual(code, 0)
+        self.assertEqual([call.args[1:] for call in replace.call_args_list],
+                         [("app_records_single_games", "U")])
+        self.assertIn("Records scope: all locally loaded eurocup seasons", out)
 
     def run_cli(self, args, db=None):
         db = db or FakeConnection()

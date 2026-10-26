@@ -76,8 +76,6 @@ def select_sql(name):
 
 
 def read_rows(cursor, name, competition_code):
-    if competition_code != "E":
-        raise ValueError("EuroCup records are not supported")
     query, count = select_sql(name)
     cursor.execute(query, (competition_code,) * count)
     return _dict_rows(cursor)

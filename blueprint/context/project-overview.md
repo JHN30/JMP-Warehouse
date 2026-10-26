@@ -1,6 +1,6 @@
 # EuroLeague Data ETL - Project Overview
 
-<!-- blueprint:source-hash a1faea46badf5fb36b4d826f2817b1779d3462dd0ab86c9647a758dbe764ef68 -->
+<!-- blueprint:source-hash c0bb6f720a5cc36690b0bdfcc66e3a11d153a45b29442c112fc41e3f0d89e162 -->
 
 > The data pipeline behind the JMP EuroLeague web app: EuroLeague API data into
 > exact bronze files, typed tables in local PostgreSQL, advanced statistics, and
@@ -30,12 +30,15 @@ what the app reads.
 - `NULL` means unavailable, never 0. Every season row carries
   `competition_code` + `season_code`. Known source problems stay visible.
 - One owner per aggregation: a figure is computed here or in the app API, not both.
-- EuroLeague only for now; EuroCup deferred. 2.5 s between API requests.
+- EuroCup (feature 18) is built and tested locally only (Silver and Gold, with
+  all-time records); the web app shows it only locally for now. Publishing
+  EuroCup to Neon is a later, separate owner decision.
+- 2.5 s between API requests.
 
 ## Features
 
 In build-plan order (IDs are stable, so order is not numeric). Completion state
-lives in `build-plan.md`; open items are 30 (parent), 32, 15, 17, 18 and 20.
+lives in `build-plan.md`; open items are 30 (parent), 17 and 18.
 
 1. **Bronze fetch** - v2/v3 plus live play-by-play and shots into exact, gzipped, versioned files with a manifest.
 2. **Current-season refresh** - recent rounds' standings, stats and rosters re-fetched; season-level data re-checked daily.
@@ -69,9 +72,9 @@ lives in `build-plan.md`; open items are 30 (parent), 32, 15, 17, 18 and 20.
 30i. **Publish per-game play-by-play tables** - `app_game_team_possessions`, `_score_flow`, `_shot_splits`, `_shot_zones`; E2025 and E2026.
 30j. **Publish on-court, stints and stat gaps** - `app_game_player_on_court`, `app_game_team_lineup_stints`, `app_game_stat_gaps`; E2025 and E2026. 30h-30j add about 25 MB to Neon.
 32. **On-court player rates** - per-game usage, assist, rebound, steal and block % from team and opponent play-by-play events during each player's on-court stretches (E2007+), replacing the box-score estimate in `silver.game_player_advanced` and its Gold copy; before E2007 and for game PER the estimate stays, NULL below 3 minutes; republishing E2025 and E2026 needs owner approval.
-15. **Historical seasons in Neon** - when Neon storage allows (about 237 MB for all seasons of the app tables).
+15. **Historical seasons in Neon** - every local EuroLeague season published (2026-10-21).
 17. **Dependencies and CI** - `requirements.txt` and an automatic test run.
-18. **EuroCup** - download, load and publish.
+18. **EuroCup** - download, load and publish; per the project plan, built and tested locally only for now.
 20. **Scheduled refresh** - run the refresh command automatically (Task Scheduler or GitHub Actions).
 
 Advanced stats scope: everything computable from API data (box scores,
@@ -92,7 +95,7 @@ Every season table's primary key starts with `competition_code` (`E`, `U`) and
 | Bronze | `data/bronze/<competition>/<scope>/<resource>/<fetched_at>_<sha16>.json.gz` + `manifest.jsonl`; files, not in the database |
 | Silver (16) | `silver.<name>`: 28 clean source tables with provenance, API data only, plus per-game enrichment (25, 19a-19c, 29a-29b, 32) |
 | Gold (30) | Built from Silver: source projections, page and aggregate tables, identities, per-round advanced stats (26-29) and per-game copies (30h-30j) |
-| Neon | The app-facing subset of Gold in `public.app_*`, season-scoped tables for E2025 and E2026 plus competition-wide records and identities |
+| Neon | The app-facing subset of Gold in `public.app_*`: every local EuroLeague season (E2000-E2026; E2007+ for play-by-play, shot and lineup tables), about 1.85 GB on 2026-10-25, plus competition-wide records and identities; no EuroCup |
 
 Rule: Gold is built from Silver, never the reverse. The 30f in-place Neon cutover
 and first E2026 publish completed on 2026-09-28; future live runs require owner approval.
@@ -170,5 +173,14 @@ a short run summary, and a quality report that explains every known source gap.
 
 ## Open questions
 
-> - Feature 15 depends on the Neon plan's storage limit.
+> - Feature 18's build-plan line says "download, load and publish", but the
+>   project plan keeps EuroCup local only; publishing is a later owner decision.
+> - Feature 18 must settle EuroCup's postseason formats per era (two-leg
+>   aggregate ties, best-of-3, single games) before EuroCup postseason series.
+> - Parent 30 is unchecked although 30a-30j are all checked.
+> - Plan text predating the 2026-10-26 cleanup: coverage tables (12, 30c), the
+>   opponents feeds and per-game team mode (24), `app_game_team_shot_zones` (30i)
+>   and the stored team round tables (26a) are retired; project-plan section 3
+>   still lists coverage, and section 4 still describes the pre-Silver `public`
+>   layout, "28" Silver tables and a EuroLeague-only Bronze size.
 > - Monetization of the web app, if any, is unconfirmed (project-plan TODO).

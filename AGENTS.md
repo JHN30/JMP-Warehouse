@@ -354,7 +354,7 @@ committed; copy the `.example`). Publishing reads the direct non-pooled
 - Build only local standings: `python gold_etl/main.py -sc <seasons> -tb app_standings`
 - Build local team-season totals: `python gold_etl/main.py -sc <seasons> -tb app_team_season_stats`
 - Build local records and postseason series: `python gold_etl/main.py -sc <seasons> -tb app_records_player_seasons app_records_single_games app_records_team_seasons app_postseason_series`.
-  Records use all loaded EuroLeague seasons regardless of `-sc`; series uses the selected seasons.
+  Records use all loaded seasons of the selected competition regardless of `-sc`; series uses the selected seasons.
 - Build local player and club identities: `python gold_etl/main.py -sc all -tb app_players app_club_identities`.
   Identities use every loaded Silver season for the selected competition, regardless of `-sc`.
 - Build local player round stats (cumulative rates, per-100, Game Score, PIE; published to Neon by 30g):

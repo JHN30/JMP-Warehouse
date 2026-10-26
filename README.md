@@ -131,7 +131,7 @@ Trace upstream data with the [Bronze resource catalog](docs/BRONZE_CATALOG.md), 
 
 Silver, provenance, historical checks and publishing rules remain in the [pipeline data dictionary](docs/DATA_DICTIONARY.md).
 
-JMP Rating, win probabilities, and prediction work belong to the separate [JMP Rating](https://github.com/JHN30/JMP-Rating) project. EuroCup expansion and dependency packaging and CI remain planned work.
+JMP Rating, win probabilities, and prediction work belong to the separate [JMP Rating](https://github.com/JHN30/JMP-Rating) project. EuroCup Gold is built locally (not published); EuroCup postseason outputs, a EuroCup daily refresh, and dependency packaging and CI remain planned work.
 
 ---
 

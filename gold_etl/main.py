@@ -29,7 +29,7 @@ from gold_etl.quality import (check_scope, check_postseason_scope,
                               check_round_split_invariants,
                               check_series_scope, check_game_advanced_invariants, check_game_advanced_ranges,
                               check_identity_scope, check_player_stats_flags,
-                              check_player_stats_warnings)  # noqa: E402
+                              check_player_stats_warnings, check_postseason_phases)  # noqa: E402
 from gold_etl.schema import LOGICAL_NAMES, physical_name  # noqa: E402
 from gold_etl.schema import (GAME_ADVANCED_NAMES, GAME_COURT_NAMES, GAME_PBP_NAMES, PBP_NAMES, DERIVED_NAMES, IDENTITY_TABLES, PLAYER_STATS, RECORDS_TABLES, ROUND_NAMES,
                              SEASON_DERIVED_NAMES, SOURCE_NAMES, count_sql)  # noqa: E402
@@ -112,6 +112,8 @@ def main(argv=None):
                     elif args.quality_only:
                         with connection.cursor() as cursor:
                             issues = check_series_scope(cursor, *scope)
+                            for warning in check_postseason_phases(cursor, *scope):
+                                print("WARN " + warning, flush=True)
                         for issue in issues:
                             print(issue, file=sys.stderr, flush=True)
                         passed &= not issues

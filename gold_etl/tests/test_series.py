@@ -8,13 +8,21 @@ from gold_etl.loader import replace_series_scope
 from gold_etl.series import derive_rows
 
 
-def game(code, phase="PO", local="A", road="B", winner=None, played=True, round_no=1):
+def game(code, phase="PO", local="A", road="B", winner=None, played=True, round_no=1,
+         score=(80, 70), status="completed"):
     return {"game_code": code, "phase_code": phase, "round_number": round_no,
             "scheduled_at": datetime(2025, 4, 1, 22, tzinfo=timezone(timedelta(hours=2))),
             "local_club_code": local, "road_club_code": road,
             "local_club_name": local, "road_club_name": road,
-            "played": played, "local_score": 80, "road_score": 70,
-            "match_winner_club_code": winner}
+            "played": played, "local_score": score[0] if played else None,
+            "road_score": score[1] if played else None,
+            "match_winner_club_code": winner, "status": status}
+
+
+def leg(code, local, road, local_score, road_score, phase="8F", played=True):
+    winner = (None if not played or local_score == road_score else
+              local if local_score > road_score else road)
+    return game(code, phase, local, road, winner, played, code, (local_score, road_score))
 
 
 class DerivationTests(unittest.TestCase):
@@ -44,6 +52,43 @@ class DerivationTests(unittest.TestCase):
         self.assertTrue(all(row["games_played"] == 1 for row in rows))
         self.assertEqual(next(row for row in rows if row["phase_code"] == "FF")
                          ["winner_club_code"], "B")
+
+    def test_two_leg_tie_is_won_on_aggregate(self):
+        split = [leg(1, "A", "B", 80, 70), leg(2, "B", "A", 85, 72)]  # 1-1, B 155-152
+        row = derive_rows(split, "U2015")[0]
+        self.assertEqual((row["club_a_wins"], row["club_b_wins"], row["winner_club_code"]),
+                         (1, 1, "B"))
+        draw = [leg(1, "A", "B", 81, 81), leg(2, "B", "A", 97, 81)]  # U2014 LIE-KSK shape
+        self.assertEqual(derive_rows(draw, "U2014")[0]["winner_club_code"], "B")
+        sweep = [leg(1, "A", "B", 80, 70), leg(2, "B", "A", 70, 75)]
+        self.assertEqual(derive_rows(sweep, "U2015")[0]["winner_club_code"], "A")
+
+    def test_two_leg_without_both_legs_or_with_level_aggregate_has_no_winner(self):
+        level = [leg(1, "A", "B", 80, 70), leg(2, "B", "A", 80, 70)]
+        self.assertIsNone(derive_rows(level, "U2015")[0]["winner_club_code"])
+        pending = [leg(1, "A", "B", 90, 70), leg(2, "B", "A", 0, 0, played=False)]
+        self.assertIsNone(derive_rows(pending, "U2015")[0]["winner_club_code"])
+
+    def test_other_eurocup_ties_are_won_on_game_wins(self):
+        best_of_three = [leg(1, "A", "B", 80, 70, "4F"), leg(2, "B", "A", 90, 60, "4F"),
+                         leg(3, "A", "B", 71, 70, "4F")]
+        row = derive_rows(best_of_three, "U2018")[0]
+        self.assertEqual((row["club_a_wins"], row["club_b_wins"], row["winner_club_code"]),
+                         (2, 1, "A"))
+        sweep = [leg(1, "A", "B", 80, 70, "Final"), leg(2, "B", "A", 60, 61, "Final")]
+        self.assertEqual(derive_rows(sweep, "U2024")[0]["winner_club_code"], "A")
+        split = [leg(1, "A", "B", 80, 70, "4F"), leg(2, "B", "A", 99, 70, "4F")]
+        self.assertIsNone(derive_rows(split, "U2018")[0]["winner_club_code"])
+
+    def test_eurocup_phases_cancelled_games_and_euroleague(self):
+        games = [leg(1, "A", "B", 80, 70, "L16"), leg(2, "B", "A", 80, 70, "L16")]
+        self.assertEqual(len(derive_rows(games, "U2007")), 1)
+        self.assertEqual(derive_rows(games, "U2008"), [])
+        cancelled = [game(1, "4F", "A", "B", played=False, status="cancelled")]
+        self.assertEqual(derive_rows(cancelled, "U2019"), [])
+        split = [leg(1, "A", "B", 80, 70, "PO"), leg(2, "B", "A", 90, 60, "PO")]
+        self.assertIsNone(derive_rows(split, "E2025")[0]["winner_club_code"])
+        self.assertEqual(derive_rows([leg(1, "A", "B", 80, 70, "8F")], "E2025"), [])
 
     def test_empty_and_missing_clubs(self):
         self.assertEqual(derive_rows([]), [])

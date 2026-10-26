@@ -360,6 +360,7 @@ committed; copy the `.example`). Publishing reads the direct non-pooled
 - Build local team-season totals: `python gold_etl/main.py -sc <seasons> -tb app_team_season_stats`
 - Build local records and postseason series: `python gold_etl/main.py -sc <seasons> -tb app_records_player_seasons app_records_single_games app_records_team_seasons app_postseason_series`.
   Records use all loaded seasons of the selected competition regardless of `-sc`; series uses the selected seasons.
+  EuroCup's postseason is its knockout phases (`8F`, `4F`, `2F`, `Final`, plus `L32` and `L16` in U2007); two-leg ties (U2002-U2015, listed in `gold_etl/qualification.py`) are won on aggregate points, every other tie on game wins, and cancelled games (U2019) are left out.
 - Build local player and club identities: `python gold_etl/main.py -sc all -tb app_players app_club_identities`.
   Identities use every loaded Silver season for the selected competition, regardless of `-sc`.
 - Build local player round stats (cumulative rates, per-100, Game Score, PIE; published to Neon by 30g):

@@ -35,6 +35,7 @@ def derive_rows(games, stints, players):
     """Rows for `player_on_off`, sorted by scope, club and player."""
     phases = {game["game_code"]: game["phase_code"] for game in games
               if game.get("played") is True and game.get("phase_code")}
+    seasons = {game["game_code"]: game.get("season_code") for game in games}
     names = {}
     for player in players:
         if player.get("person_name") and player["person_key"] not in names:
@@ -47,7 +48,7 @@ def derive_rows(games, stints, players):
         if phase is None or not row.get("club_code"):
             continue
         values = _stint_values(row)
-        for scope in _scopes(phase):
+        for scope in _scopes(phase, seasons.get(row["game_code"])):
             for index, value in enumerate(values):
                 team[(scope, row["club_code"])][index] += value
             for person in row["players"].split(","):

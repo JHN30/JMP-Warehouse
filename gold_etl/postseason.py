@@ -3,7 +3,7 @@
 from collections import defaultdict
 from decimal import Decimal, ROUND_HALF_EVEN
 
-from gold_etl.qualification import POSTSEASON_PHASES as PHASES, min_games
+from gold_etl.qualification import min_games, postseason_phases
 
 
 COUNTING = (
@@ -39,7 +39,7 @@ def _double_count(row):
     return sum((row.get(metric) or 0) >= 10 for metric in DOUBLE_MEASURES)
 
 
-def derive_rows(games, box_scores, identities=None, clubs=None):
+def derive_rows(games, box_scores, identities=None, clubs=None, season_code=None):
     """Return table -> sorted PS rows, ready for registered Gold columns.
 
     Games and box scores use Silver column names. Identity and club maps supply
@@ -47,9 +47,10 @@ def derive_rows(games, box_scores, identities=None, clubs=None):
     """
     identities = identities or {}
     clubs = clubs or {}
+    phases = postseason_phases(season_code)
     postseason = sorted(
         (game for game in games if game["played"] is True and
-         game["phase_code"] in PHASES),
+         game["phase_code"] in phases),
         key=lambda game: (str(game.get("scheduled_at") or ""), game["game_code"]),
     )
     game_by_code = {game["game_code"]: game for game in postseason}
@@ -140,11 +141,12 @@ def _dict_rows(cursor):
 def read_rows(cursor, competition_code, season_code):
     """Build expected PS rows from Silver only, including optional v3 display fields."""
     scope = (competition_code, season_code)
+    phases = sorted(postseason_phases(season_code))
     cursor.execute(
         'SELECT game_code, played, phase_code, round_number, scheduled_at, local_club_code, '
         'road_club_code, local_score, road_score FROM silver.games '
         'WHERE competition_code = %s AND season_code = %s '
-        "AND played IS TRUE AND phase_code IN ('PI', 'PO', 'FF')", scope,
+        "AND played IS TRUE AND phase_code = ANY(%s)", (*scope, phases),
     )
     games = _dict_rows(cursor)
     if not games:
@@ -157,7 +159,7 @@ def read_rows(cursor, competition_code, season_code):
         'JOIN silver.games AS g ON g.competition_code = p.competition_code '
         'AND g.season_code = p.season_code AND g.game_code = p.game_code '
         'WHERE p.competition_code = %s AND p.season_code = %s '
-        "AND g.played IS TRUE AND g.phase_code IN ('PI', 'PO', 'FF')", scope,
+        "AND g.played IS TRUE AND g.phase_code = ANY(%s)", (*scope, phases),
     )
     box_scores = _dict_rows(cursor)
     cursor.execute(
@@ -173,4 +175,4 @@ def read_rows(cursor, competition_code, season_code):
         identities.setdefault(row["person_key"], row)
         if row["club_code"]:
             clubs.setdefault(row["club_code"], row)
-    return derive_rows(games, box_scores, identities, clubs)
+    return derive_rows(games, box_scores, identities, clubs, season_code)

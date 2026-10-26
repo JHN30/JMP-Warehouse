@@ -77,7 +77,7 @@ Items 1-8 were already shipped when the Blueprint was adopted (2026-09-24).
 - [ ] 18. **EuroCup** - download, load and publish EuroCup seasons
   - [x] 18a. **EuroCup Gold tables and records** - build every Gold table for EuroCup (U2002-U2026) from Silver with Gold quality passing, and enable all-time records; postseason outputs (`PS` stats and scope, series) stay empty until 18c; local only
   - [x] 18b. **EuroCup refresh command** - `python pipeline.py -cp eurocup` refreshes the current EuroCup season only (fetch, Silver, Gold, quality) and never connects to Neon; EuroLeague's `python pipeline.py` is unchanged; local only
-  - [ ] 18c. **EuroCup postseason** - investigate EuroCup's postseason format per era (two-leg aggregate ties, best-of-3, single games, L16/L32 as knockout or group), then derive `PS` stats, the `PS` scope, qualification and postseason series for EuroCup; local only
+  - [x] 18c. **EuroCup postseason** - investigate EuroCup's postseason format per era (two-leg aggregate ties, best-of-3, single games, L16/L32 as knockout or group), then derive `PS` stats, the `PS` scope, qualification and postseason series for EuroCup; local only
 - [x] 20. **Scheduled refresh** - run the refresh command automatically (Windows Task Scheduler or GitHub Actions), nightly and after each round
 
 > Layers (agreed 2026-09-27): bronze = the downloaded files; `silver` = cleaned,

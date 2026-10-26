@@ -8,7 +8,7 @@ Documentation: [table catalog](../docs/DATA_CATALOG.md),
 source tables, plus six per-game tables (below). It reads only the registered Silver columns,
 leaving `load_id` and `loaded_at` in Silver. It keeps source values, NULLs,
 types, and primary keys. It also derives traditional and misc player-season
-`PS` rows from played PI/PO/FF box scores, builds `gold.app_standings` from
+`PS` rows from played postseason box scores (EuroLeague PI/PO/FF, EuroCup knockout phases), builds `gold.app_standings` from
 the seven Silver standings feeds, and derives team-season totals from Silver. It also builds three full-history top-50 record
 tables and season-scoped postseason series. Cross-season player and club identity
 tables are also built from Silver. Advanced and scoring player stats
@@ -91,7 +91,9 @@ competition scope per table, regardless of `-sc`. `app_players` includes only
 player registrations; `app_club_identities` stores the latest profile and season
 span for each club code. `app_postseason_series` uses the selected
 seasons and is replaced one season at a time. Its game list includes scheduled
-fixtures; only played games count as wins. The stage reads no Bronze files and
+fixtures; only played games count as wins. EuroCup's postseason is its knockout phases (`8F`, `4F`, `2F`, `Final`, plus `L32` and `L16` in U2007); two-leg ties (U2002-U2015, listed in `gold_etl/qualification.py`) are won on aggregate points, every other tie on game wins, and cancelled games (U2019) are left out. A `Final` phase can
+hold a final tournament or a third-place game as separate pairings; the
+championship pairing is the one the season champion wins. The stage reads no Bronze files and
 never writes Silver or Neon. Publishing to Neon is a separate, owner-approved step; see
 [neon_publish/README.md](../neon_publish/README.md).
 

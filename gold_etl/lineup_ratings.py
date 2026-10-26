@@ -20,6 +20,7 @@ def derive_rows(games, stints, players):
     """Rows for `lineup_ratings`, sorted by scope, club, size and lineup."""
     phases = {game["game_code"]: game["phase_code"] for game in games
               if game.get("played") is True and game.get("phase_code")}
+    seasons = {game["game_code"]: game.get("season_code") for game in games}
     names = {}
     for player in players:
         if player.get("person_name") and player["person_key"] not in names:
@@ -32,7 +33,7 @@ def derive_rows(games, stints, players):
             continue
         values = _stint_values(row)
         members = row["players"].split(",")
-        for scope in _scopes(phase):
+        for scope in _scopes(phase, seasons.get(row["game_code"])):
             for size in SIZES:
                 for group in combinations(members, size):
                     key = (scope, row["club_code"], size, ",".join(group))

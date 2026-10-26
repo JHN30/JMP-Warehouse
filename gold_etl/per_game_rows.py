@@ -87,7 +87,7 @@ def set_qualification(cursor, name, competition_code, season_code, phases=None):
             (competition_code, season_code))
         phases = [phase for (phase,) in cursor.fetchall()]
     for phase in phases:
-        threshold = scope_min_games(rounds, phase)
+        threshold = scope_min_games(rounds, phase, season_code)
         cursor.execute(
             f'UPDATE gold."{physical_name(name)}" SET "min_games" = %s, "qualified" = "games_played" >= %s '
             'WHERE competition_code = %s AND season_code = %s AND phase_code = %s',

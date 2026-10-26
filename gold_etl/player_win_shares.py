@@ -195,7 +195,7 @@ def derive_rows(games, team_stats, advanced, clubs, player_stats):
                for entry in entries}
     scope_entries = defaultdict(list)
     for entry in entries:
-        for scope in _scopes(entry["phase"]):
+        for scope in _scopes(entry["phase"], entry["season"]):
             scope_entries[scope].append(entry)
     appearances = defaultdict(lambda: defaultdict(list))   # scope -> player -> [(entry, row)]
     for row in player_stats:
@@ -203,7 +203,7 @@ def derive_rows(games, team_stats, advanced, clubs, player_stats):
         seconds = row.get("seconds_played")
         if entry is None or seconds is None or seconds <= 0:
             continue
-        for scope in _scopes(entry["phase"]):
+        for scope in _scopes(entry["phase"], entry["season"]):
             appearances[scope][row["person_key"]].append((entry, row))
     rows = []
     for scope in sorted(appearances):

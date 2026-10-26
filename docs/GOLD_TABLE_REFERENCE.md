@@ -197,7 +197,7 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 | `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (built locally; not published to Neon). |
 | `season_code` | `TEXT` | No | PK | Starting-year season code, for example E2025 for 2025-26. |
 | `round_key` | `TEXT` | No | PK | Natural identity of a source round definition. |
-| `phase_code` | `TEXT` | No |  | Phase identifier: all, RS, TS, PI, PO, FF or derived PS as supported by this table. |
+| `phase_code` | `TEXT` | No |  | Phase identifier: all, RS, TS, PI, PO, FF (EuroCup: 8F, 4F, 2F, Final, L32, L16) or derived PS as supported by this table. |
 | `round_number` | `INTEGER` | No |  | Source game/standings round number; cumulative snapshots include games through this round. |
 | `round_index` | `INTEGER` | Yes |  | Source index of this round definition, distinct from round_number. |
 | `name` | `TEXT` | Yes |  | Display name supplied by the source; identity tables use the latest season profile. |
@@ -226,7 +226,7 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 | `game_code` | `INTEGER` | No | PK | Game identifier within competition and season, not globally unique. |
 | `source_id` | `TEXT` | Yes |  | Raw source game identity retained alongside game_code. |
 | `identifier` | `TEXT` | Yes |  | Source game identifier label. |
-| `phase_code` | `TEXT` | Yes |  | Phase identifier: all, RS, TS, PI, PO, FF or derived PS as supported by this table. |
+| `phase_code` | `TEXT` | Yes |  | Phase identifier: all, RS, TS, PI, PO, FF (EuroCup: 8F, 4F, 2F, Final, L32, L16) or derived PS as supported by this table. |
 | `phase_name` | `TEXT` | Yes |  | Source phase display name. |
 | `phase_alias` | `TEXT` | Yes |  | Source phase alias. |
 | `phase_is_group` | `BOOLEAN` | Yes |  | Source flag that this phase is a group stage. |
@@ -511,7 +511,7 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 | --- | --- | --- | --- | --- |
 | `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (built locally; not published to Neon). |
 | `season_code` | `TEXT` | No | PK | Starting-year season code, for example E2025 for 2025-26. |
-| `phase_code` | `TEXT` | No | PK | Phase identifier: all, RS, TS, PI, PO, FF or derived PS as supported by this table. |
+| `phase_code` | `TEXT` | No | PK | Phase identifier: all, RS, TS, PI, PO, FF (EuroCup: 8F, 4F, 2F, Final, L32, L16) or derived PS as supported by this table. |
 | `mode` | `TEXT` | No | PK | accumulated or perGame; select one before reading player season measures. |
 | `entry_ordinal` | `INTEGER` | No | PK | Feed row ordinal within phase and mode, not a stable player identifier. |
 | `person_key` | `TEXT` | No |  | Season person identity used by box scores; bridge to career person_code through app_people. |
@@ -569,7 +569,7 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 | --- | --- | --- | --- | --- |
 | `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (built locally; not published to Neon). |
 | `season_code` | `TEXT` | No | PK | Starting-year season code, for example E2025 for 2025-26. |
-| `phase_code` | `TEXT` | No | PK | Phase identifier: all, RS, TS, PI, PO, FF or derived PS as supported by this table. |
+| `phase_code` | `TEXT` | No | PK | Phase identifier: all, RS, TS, PI, PO, FF (EuroCup: 8F, 4F, 2F, Final, L32, L16) or derived PS as supported by this table. |
 | `mode` | `TEXT` | No | PK | accumulated or perGame; select one before reading player season measures. |
 | `entry_ordinal` | `INTEGER` | No | PK | Feed row ordinal within phase and mode, not a stable player identifier. |
 | `person_key` | `TEXT` | No |  | Season person identity used by box scores; bridge to career person_code through app_people. |
@@ -617,7 +617,7 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 | --- | --- | --- | --- | --- |
 | `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (built locally; not published to Neon). |
 | `season_code` | `TEXT` | No | PK | Starting-year season code, for example E2025 for 2025-26. |
-| `phase_code` | `TEXT` | No | PK | Phase identifier: all, RS, TS, PI, PO, FF or derived PS as supported by this table. |
+| `phase_code` | `TEXT` | No | PK | Phase identifier: all, RS, TS, PI, PO, FF (EuroCup: 8F, 4F, 2F, Final, L32, L16) or derived PS as supported by this table. |
 | `mode` | `TEXT` | No | PK | accumulated or perGame; select one before reading player season measures. |
 | `entry_ordinal` | `INTEGER` | No | PK | Feed row ordinal within phase and mode, not a stable player identifier. |
 | `person_key` | `TEXT` | No |  | Season person identity used by box scores; bridge to career person_code through app_people. |
@@ -664,7 +664,7 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 | --- | --- | --- | --- | --- |
 | `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (built locally; not published to Neon). |
 | `season_code` | `TEXT` | No | PK | Starting-year season code, for example E2025 for 2025-26. |
-| `phase_code` | `TEXT` | No | PK | Phase identifier: all, RS, TS, PI, PO, FF or derived PS as supported by this table. |
+| `phase_code` | `TEXT` | No | PK | Phase identifier: all, RS, TS, PI, PO, FF (EuroCup: 8F, 4F, 2F, Final, L32, L16) or derived PS as supported by this table. |
 | `mode` | `TEXT` | No | PK | accumulated or perGame; select one before reading player season measures. |
 | `entry_ordinal` | `INTEGER` | No | PK | Feed row ordinal within phase and mode, not a stable player identifier. |
 | `person_key` | `TEXT` | No |  | Season person identity used by box scores; bridge to career person_code through app_people. |
@@ -705,7 +705,7 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 | --- | --- | --- | --- | --- |
 | `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (built locally; not published to Neon). |
 | `season_code` | `TEXT` | No | PK | Starting-year season code, for example E2025 for 2025-26. |
-| `phase_code` | `TEXT` | No | PK | Phase identifier: all, RS, TS, PI, PO, FF or derived PS as supported by this table. |
+| `phase_code` | `TEXT` | No | PK | Phase identifier: all, RS, TS, PI, PO, FF (EuroCup: 8F, 4F, 2F, Final, L32, L16) or derived PS as supported by this table. |
 | `round_number` | `INTEGER` | No | PK | Source game/standings round number; cumulative snapshots include games through this round. |
 | `club_code` | `TEXT` | No | PK | Club identifier, text; join season profiles on competition, season and club. |
 | `club_name` | `TEXT` | Yes |  | Club display name for this season or row. |
@@ -801,7 +801,7 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 | --- | --- | --- | --- | --- |
 | `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (built locally; not published to Neon). |
 | `season_code` | `TEXT` | No | PK | Starting-year season code, for example E2025 for 2025-26. |
-| `phase_code` | `TEXT` | No | PK | Phase identifier: all, RS, TS, PI, PO, FF or derived PS as supported by this table. |
+| `phase_code` | `TEXT` | No | PK | Phase identifier: all, RS, TS, PI, PO, FF (EuroCup: 8F, 4F, 2F, Final, L32, L16) or derived PS as supported by this table. |
 | `club_code` | `TEXT` | No | PK | Club identifier, text; join season profiles on competition, season and club. |
 | `club_name` | `TEXT` | Yes |  | Club display name for this season or row. |
 | `games_played` | `INTEGER` | No |  | Games/appearances in the selected row scope; see table notes for counted games and series fixture counts. |
@@ -928,7 +928,7 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 
 ## app_postseason_series
 
-**Purpose:** Play-in, playoff and Final Four pairings with game lists.
+**Purpose:** Postseason pairings with game lists: EuroLeague play-in, playoff and Final Four; EuroCup knockout phases.
 
 **Grain:** one sorted club pair per postseason phase and season. **Columns:** 12.
 
@@ -936,13 +936,13 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 
 **Definition / implementation:** [gold_etl/series.py](../gold_etl/series.py).
 
-**Usage and limitations:** club_a/club_b are sorted codes, not home/away. games_played currently counts all listed fixtures, including scheduled ones. Wins count played fixtures only. winner_club_code is the current wins leader and can exist before a series is decided.
+**Usage and limitations:** club_a/club_b are sorted codes, not home/away. games_played currently counts all listed fixtures, including scheduled ones. Wins count played fixtures only. winner_club_code is the current wins leader and can exist before a series is decided. EuroCup's postseason is its knockout phases (`8F`, `4F`, `2F`, `Final`, plus `L32` and `L16` in U2007); two-leg ties (U2002-U2015, listed in `gold_etl/qualification.py`) are won on aggregate points, every other tie on game wins, and cancelled games (U2019) are left out. For a two-leg tie, club_a_wins and club_b_wins can be level while winner_club_code is set. A Final phase can hold a final tournament or third-place game as separate pairings; the championship pairing is the one won by the season champion.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
 | `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (built locally; not published to Neon). |
 | `season_code` | `TEXT` | No | PK | Starting-year season code, for example E2025 for 2025-26. |
-| `phase_code` | `TEXT` | No | PK | Phase identifier: all, RS, TS, PI, PO, FF or derived PS as supported by this table. |
+| `phase_code` | `TEXT` | No | PK | Phase identifier: all, RS, TS, PI, PO, FF (EuroCup: 8F, 4F, 2F, Final, L32, L16) or derived PS as supported by this table. |
 | `club_a_code` | `TEXT` | No | PK | Lexicographically first code in this postseason pairing. |
 | `club_b_code` | `TEXT` | No | PK | Lexicographically second code in this postseason pairing. |
 | `club_a_name` | `TEXT` | Yes |  | Display name of club A in this pairing. |
@@ -971,7 +971,7 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 | --- | --- | --- | --- | --- |
 | `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (built locally; not published to Neon). |
 | `season_code` | `TEXT` | No | PK | Starting-year season code, for example E2025 for 2025-26. |
-| `scope` | `TEXT` | No | PK | Aggregation scope: all, one phase, or PS (PI + PO + FF). RAPM supports all only. |
+| `scope` | `TEXT` | No | PK | Aggregation scope: all, one phase, or PS (postseason: PI + PO + FF; EuroCup knockout phases). RAPM supports all only. |
 | `round_number` | `INTEGER` | No | PK | Source game/standings round number; cumulative snapshots include games through this round. |
 | `club_code` | `TEXT` | No | PK | Club identifier, text; join season profiles on competition, season and club. |
 | `club_name` | `TEXT` | Yes |  | Club display name for this season or row. |
@@ -1057,7 +1057,7 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 | --- | --- | --- | --- | --- |
 | `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (built locally; not published to Neon). |
 | `season_code` | `TEXT` | No | PK | Starting-year season code, for example E2025 for 2025-26. |
-| `scope` | `TEXT` | No | PK | Aggregation scope: all, one phase, or PS (PI + PO + FF). RAPM supports all only. |
+| `scope` | `TEXT` | No | PK | Aggregation scope: all, one phase, or PS (postseason: PI + PO + FF; EuroCup knockout phases). RAPM supports all only. |
 | `club_code` | `TEXT` | No | PK | Club identifier, text; join season profiles on competition, season and club. |
 | `games` | `INTEGER` | Yes |  | Count of contributing games, with a table-specific denominator; in postseason_series this is a JSON fixture list. |
 | `counted_possessions` | `NUMERIC` | Yes |  | Team possessions closed by the play-by-play state machine; summed in season-scope aggregates. |
@@ -1103,7 +1103,7 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 | --- | --- | --- | --- | --- |
 | `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (built locally; not published to Neon). |
 | `season_code` | `TEXT` | No | PK | Starting-year season code, for example E2025 for 2025-26. |
-| `scope` | `TEXT` | No | PK | Aggregation scope: all, one phase, or PS (PI + PO + FF). RAPM supports all only. |
+| `scope` | `TEXT` | No | PK | Aggregation scope: all, one phase, or PS (postseason: PI + PO + FF; EuroCup knockout phases). RAPM supports all only. |
 | `round_number` | `INTEGER` | No | PK | Source game/standings round number; cumulative snapshots include games through this round. |
 | `person_key` | `TEXT` | No | PK | Season person identity used by box scores; bridge to career person_code through app_people. |
 | `club_code` | `TEXT` | Yes |  | Club identifier, text; join season profiles on competition, season and club. |
@@ -1166,7 +1166,7 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 | --- | --- | --- | --- | --- |
 | `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (built locally; not published to Neon). |
 | `season_code` | `TEXT` | No | PK | Starting-year season code, for example E2025 for 2025-26. |
-| `scope` | `TEXT` | No | PK | Aggregation scope: all, one phase, or PS (PI + PO + FF). RAPM supports all only. |
+| `scope` | `TEXT` | No | PK | Aggregation scope: all, one phase, or PS (postseason: PI + PO + FF; EuroCup knockout phases). RAPM supports all only. |
 | `round_number` | `INTEGER` | No | PK | Source game/standings round number; cumulative snapshots include games through this round. |
 | `person_key` | `TEXT` | No | PK | Season person identity used by box scores; bridge to career person_code through app_people. |
 | `club_code` | `TEXT` | Yes |  | Club identifier, text; join season profiles on competition, season and club. |
@@ -1195,7 +1195,7 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 | --- | --- | --- | --- | --- |
 | `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (built locally; not published to Neon). |
 | `season_code` | `TEXT` | No | PK | Starting-year season code, for example E2025 for 2025-26. |
-| `scope` | `TEXT` | No | PK | Aggregation scope: all, one phase, or PS (PI + PO + FF). RAPM supports all only. |
+| `scope` | `TEXT` | No | PK | Aggregation scope: all, one phase, or PS (postseason: PI + PO + FF; EuroCup knockout phases). RAPM supports all only. |
 | `round_number` | `INTEGER` | No | PK | Source game/standings round number; cumulative snapshots include games through this round. |
 | `person_key` | `TEXT` | No | PK | Season person identity used by box scores; bridge to career person_code through app_people. |
 | `club_code` | `TEXT` | Yes |  | Club identifier, text; join season profiles on competition, season and club. |
@@ -1225,7 +1225,7 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 | --- | --- | --- | --- | --- |
 | `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (built locally; not published to Neon). |
 | `season_code` | `TEXT` | No | PK | Starting-year season code, for example E2025 for 2025-26. |
-| `scope` | `TEXT` | No | PK | Aggregation scope: all, one phase, or PS (PI + PO + FF). RAPM supports all only. |
+| `scope` | `TEXT` | No | PK | Aggregation scope: all, one phase, or PS (postseason: PI + PO + FF; EuroCup knockout phases). RAPM supports all only. |
 | `club_code` | `TEXT` | No | PK | Club identifier, text; join season profiles on competition, season and club. |
 | `person_key` | `TEXT` | No | PK | Season person identity used by box scores; bridge to career person_code through app_people. |
 | `player_name` | `TEXT` | Yes |  | Player display name; cumulative round rows use the latest appearance's name. |
@@ -1268,7 +1268,7 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 | --- | --- | --- | --- | --- |
 | `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (built locally; not published to Neon). |
 | `season_code` | `TEXT` | No | PK | Starting-year season code, for example E2025 for 2025-26. |
-| `scope` | `TEXT` | No | PK | Aggregation scope: all, one phase, or PS (PI + PO + FF). RAPM supports all only. |
+| `scope` | `TEXT` | No | PK | Aggregation scope: all, one phase, or PS (postseason: PI + PO + FF; EuroCup knockout phases). RAPM supports all only. |
 | `club_code` | `TEXT` | No | PK | Club identifier, text; join season profiles on competition, season and club. |
 | `lineup_size` | `INTEGER` | No | PK | Number of players in the combination: 2, 3 or 5. |
 | `lineup` | `TEXT` | No | PK | Sorted comma-separated person_key values identifying this pair, triple or five. |
@@ -1301,7 +1301,7 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 | --- | --- | --- | --- | --- |
 | `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (built locally; not published to Neon). |
 | `season_code` | `TEXT` | No | PK | Starting-year season code, for example E2025 for 2025-26. |
-| `scope` | `TEXT` | No | PK | Aggregation scope: all, one phase, or PS (PI + PO + FF). RAPM supports all only. |
+| `scope` | `TEXT` | No | PK | Aggregation scope: all, one phase, or PS (postseason: PI + PO + FF; EuroCup knockout phases). RAPM supports all only. |
 | `person_key` | `TEXT` | No | PK | Season person identity used by box scores; bridge to career person_code through app_people. |
 | `player_name` | `TEXT` | Yes |  | Player display name; cumulative round rows use the latest appearance's name. |
 | `seconds` | `INTEGER` | Yes |  | Elapsed on-court time in complete stored stints, summed over the row's sample. |

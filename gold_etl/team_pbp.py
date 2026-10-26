@@ -53,12 +53,13 @@ def _by_scope(games, rows):
     """Rows grouped by (scope, club) using the phase of each played game."""
     phases = {game["game_code"]: game["phase_code"] for game in games
               if game.get("played") is True and game.get("phase_code")}
+    seasons = {game["game_code"]: game.get("season_code") for game in games}
     grouped = defaultdict(list)
     for row in rows:
         phase = phases.get(row["game_code"])
         if phase is None or not row.get("club_code"):
             continue
-        for scope in _scopes(phase):
+        for scope in _scopes(phase, seasons.get(row["game_code"])):
             grouped[(scope, row["club_code"])].append(row)
     return grouped
 

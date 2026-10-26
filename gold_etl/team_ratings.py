@@ -154,7 +154,7 @@ def derive_rows(games, team_stats, advanced, clubs=()):
     """Rows for `team_round_ratings`, sorted by scope, round and club."""
     by_scope = defaultdict(lambda: defaultdict(list))
     for entry in _counted_games(games, team_stats, advanced):
-        for scope in _scopes(entry["phase"]):
+        for scope in _scopes(entry["phase"], entry["season"]):
             by_scope[scope][entry["round"]].append(entry)
     rows = []
     for scope in sorted(by_scope):

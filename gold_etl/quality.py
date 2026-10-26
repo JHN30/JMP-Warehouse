@@ -7,7 +7,7 @@ from gold_etl.schema import (COPIED_TABLES, PLAYER_STATS, columns, count_sql, sc
                              source_columns)
 from gold_etl.game_advanced import PER_FLOOR_SECONDS
 from gold_etl.per_game_rows import OWN_COLUMNS, derive_per_game
-from gold_etl.qualification import scope_min_games, scope_rounds
+from gold_etl.qualification import EUROCUP_GROUP_PHASES, postseason_phases, scope_min_games, scope_rounds
 from gold_etl.postseason import TABLES as PS_TABLES, _dict_rows, read_rows as read_postseason_rows
 from gold_etl.standings import KEY as STANDINGS_KEY, read_rows as read_standings_rows
 from gold_etl.schema import STANDINGS_FEEDS, TEAM_PBP_ADDITIVE
@@ -77,7 +77,7 @@ def player_stats_issues(name, season_code, rows, rounds):
         (accumulated if row["mode"] == "accumulated" else per_game)[
             (phase, row["person_key"])] = row
     for (phase, mode), values in sorted(thresholds.items()):
-        expected = scope_min_games(rounds, phase)
+        expected = scope_min_games(rounds, phase, season_code)
         if values != {expected}:
             issues.append(f"{label} {phase} {mode}: min_games {sorted(values)}, expected {expected}")
     for key in sorted(accumulated):
@@ -259,6 +259,20 @@ def check_identity_scope(cursor, name, competition_code):
     if by_key(actual) != by_key(expected):
         return [f"gold.{physical_name(name)}: identity values differ from Silver"]
     return []
+
+
+def check_postseason_phases(cursor, competition_code, season_code):
+    """EuroCup played games in a phase that is neither a group stage nor postseason,
+    so a new API phase code is seen instead of being left out of PS and series."""
+    if not season_code.startswith("U"):
+        return []
+    known = sorted(EUROCUP_GROUP_PHASES | postseason_phases(season_code))
+    cursor.execute(
+        "SELECT phase_code, count(*) FROM silver.games WHERE competition_code = %s "
+        "AND season_code = %s AND played IS TRUE AND NOT (phase_code = ANY(%s)) "
+        "GROUP BY phase_code ORDER BY phase_code", (competition_code, season_code, known))
+    return [f"silver.games {season_code} {phase}: {count} played game(s) in a phase that is "
+            "neither a EuroCup group stage nor postseason" for phase, count in cursor.fetchall()]
 
 
 def check_series_scope(cursor, competition_code, season_code):

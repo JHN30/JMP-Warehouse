@@ -9,7 +9,7 @@ conventions, applied to cumulative totals rather than averages of game rates.
 from collections import defaultdict
 from decimal import Decimal
 
-from gold_etl.postseason import PHASES as POSTSEASON_PHASES
+from gold_etl.qualification import is_postseason
 from gold_etl.schema import ROUND_MEASURES
 from gold_etl.standings import _dict_rows
 
@@ -55,6 +55,7 @@ def _counted_games(games, team_stats, advanced):
             winner = game.get("match_winner_club_code")
             entries.append({
                 "phase": game["phase_code"], "round": game["round_number"],
+                "season": game.get("season_code"),
                 "club": club, "opponent": game.get(f"{other}_club_code"),
                 "home": side == "local", "game_code": code,
                 "name": game.get(f"{side}_club_name"),
@@ -66,10 +67,10 @@ def _counted_games(games, team_stats, advanced):
     return entries
 
 
-def _scopes(phase):
+def _scopes(phase, season_code=None):
     yield "all"
     yield phase
-    if phase in POSTSEASON_PHASES:
+    if is_postseason(phase, season_code):
         yield "PS"
 
 
@@ -164,7 +165,7 @@ def derive_rows(games, team_stats, advanced, clubs):
     fallback = {}
     for entry in entries:
         fallback.setdefault(entry["club"], entry["name"])
-        for scope in _scopes(entry["phase"]):
+        for scope in _scopes(entry["phase"], entry["season"]):
             by_scope[scope][entry["club"]][entry["round"]].append(entry)
     rows = []
     for scope in sorted(by_scope):

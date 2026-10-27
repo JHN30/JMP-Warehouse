@@ -7,7 +7,8 @@ Documentation: [table catalog](../docs/DATA_CATALOG.md),
 `gold_etl/main.py` builds `gold` from the local PostgreSQL `silver` schema. It copies the 16
 source tables, plus six per-game tables (below). It reads only the registered Silver columns,
 leaving `load_id` and `loaded_at` in Silver. It keeps source values, NULLs,
-types, and primary keys. It also derives traditional and misc player-season
+types, and primary keys, except that `app_registrations` merges a person's re-registrations
+with the same club and role in a season into one row (`registrations.py`). It also derives traditional and misc player-season
 `PS` rows from played postseason box scores (EuroLeague PI/PO/FF, EuroCup knockout phases), builds `gold.app_standings` from
 the seven Silver standings feeds, and derives team-season totals from Silver. It also builds three full-history top-50 record
 tables and season-scoped postseason series. Cross-season player and club identity

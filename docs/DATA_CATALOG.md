@@ -42,7 +42,7 @@ live publication requires owner approval.
 | Frontend need | Read from | Selection / caution |
 | --- | --- | --- |
 | Season list, schedule, results | `app_seasons`, `app_games` | Include competition and season; respect `status`, `played` and neutral venues. |
-| Team profiles, logos, rosters | `app_clubs`, `app_registrations`, `app_people` | Season-specific; registrations can have multiple rows per person. |
+| Team profiles, logos, rosters | `app_clubs`, `app_registrations`, `app_people` | Season-specific; one registration row per person, club and role, so a transfer gives two rows. |
 | Career profile and club history | `app_players`, `app_club_identities` | Competition-wide; bridge player `person_key` to `person_code` through `app_people`. |
 | Official standings, form, streaks | `app_standings` | Use `basic_position`; filter phase and round. |
 | Team advanced standings | `app_standings_stats` | Wide combined team row; select scope and one round. |
@@ -127,7 +127,7 @@ always within competition; include season unless the row says competition-wide.
 | [`app_seasons`](GOLD_TABLE_REFERENCE.md#app_seasons) | Season selector and season metadata. | one competition-season. |
 | [`app_clubs`](GOLD_TABLE_REFERENCE.md#app_clubs) | Season-specific team names, crests and profiles. | one club per season. |
 | [`app_people`](GOLD_TABLE_REFERENCE.md#app_people) | Season-specific person profiles and the bridge between person_key and person_code. | one person per season. |
-| [`app_registrations`](GOLD_TABLE_REFERENCE.md#app_registrations) | Rosters, jersey numbers, positions and registration dates. | one person-club-role registration per season. |
+| [`app_registrations`](GOLD_TABLE_REFERENCE.md#app_registrations) | Rosters, jersey numbers, positions and registration dates. | one row per person, club and role in a season. |
 | [`app_rounds`](GOLD_TABLE_REFERENCE.md#app_rounds) | Round names, phase labels and date ranges. | one round definition per season. |
 | [`app_games`](GOLD_TABLE_REFERENCE.md#app_games) | Schedule, results, game status and venue details. | one fixture per season. |
 | [`app_game_officials`](GOLD_TABLE_REFERENCE.md#app_game_officials) | Referee assignments for game details. | one official slot per game. |

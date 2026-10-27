@@ -20,6 +20,7 @@ from gold_etl.standings import read_rows as read_standings_rows
 from gold_etl.team_season import read_rows as read_team_rows
 from gold_etl.records import read_rows as read_record_rows
 from gold_etl.identity import read_rows as read_identity_rows
+from gold_etl.registrations import read_rows as read_registration_rows
 from gold_etl.series import read_rows as read_series_rows
 
 
@@ -27,7 +28,8 @@ def replace_scope(connection, name, competition_code, season_code):
     """DDL, delete, and copy commit together; a failure restores old Gold rows.
 
     Returns the Silver rows copied. For the season player tables the same transaction
-    then adds the calculated perGame rows and the qualification columns.
+    then adds the calculated perGame rows and the qualification columns. Registrations
+    are written collapsed, one row per person, club and role.
     """
     if name not in COPIED_TABLES:
         raise ValueError(f"Unknown Gold source table: {name}")
@@ -41,6 +43,8 @@ def replace_scope(connection, name, competition_code, season_code):
                 f'DELETE FROM gold."{physical_name(name)}" WHERE {scope_predicate(name)}',
                 (competition_code, season_code),
             )
+            if name == "registrations":
+                return _insert_registrations(cursor, competition_code, season_code)
             source = set(source_columns(name))
             field_list = ", ".join(f'"{column}"' for column in columns(name))
             select_list = ", ".join(f'"{column}"' if column in source else FLAG_DEFAULTS[column]
@@ -55,6 +59,18 @@ def replace_scope(connection, name, competition_code, season_code):
             if name in PLAYER_STATS:
                 finalize_player_stats(cursor, name, competition_code, season_code)
             return copied
+
+
+def _insert_registrations(cursor, competition_code, season_code):
+    from psycopg2.extras import execute_values
+
+    rows = read_registration_rows(cursor, competition_code, season_code)
+    if rows:
+        fields = columns("registrations")
+        names = ", ".join(f'"{field}"' for field in fields)
+        execute_values(cursor, f'INSERT INTO gold."{physical_name("registrations")}" ({names}) VALUES %s',
+                       [tuple(row[field] for field in fields) for row in rows], page_size=1000)
+    return len(rows)
 
 
 def replace_postseason_scope(connection, name, competition_code, season_code):

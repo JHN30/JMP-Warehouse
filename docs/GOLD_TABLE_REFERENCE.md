@@ -148,26 +148,26 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 
 **Purpose:** Rosters, jersey numbers, positions and registration dates.
 
-**Grain:** one person-club-role registration per season. **Columns:** 19.
+**Grain:** one row per person, club and role in a season. **Columns:** 19.
 
 **Primary key:** `competition_code`, `season_code`, `registration_key`.
 
 **Definition / implementation:** [postgres_etl/flat_schema.py](../postgres_etl/flat_schema.py).
 
-**Usage and limitations:** role_code = 'J' selects players. A person may have multiple registrations; joining a box score directly to all registrations can multiply rows.
+**Usage and limitations:** role_code = 'J' selects players. When a club deregisters a person and registers them again in the same season, the periods are merged into one row: active if any period is, earliest start_at, latest end_at, other columns from the latest period. Silver registrations keeps every source period. A person registered with two clubs (a transfer) or in two roles has one row each, so joining a box score to all of a person's registrations can still multiply rows.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
 | `competition_code` | `TEXT` | No | PK | Competition identifier: E for EuroLeague, U for EuroCup (built locally; not published to Neon). |
 | `season_code` | `TEXT` | No | PK | Starting-year season code, for example E2025 for 2025-26. |
-| `registration_key` | `TEXT` | No | PK | Natural identity of the source registration, not a player identity. |
+| `registration_key` | `TEXT` | No | PK | Natural identity of the latest source registration in the merged row, not a player identity. |
 | `person_key` | `TEXT` | No |  | Season person identity used by box scores; bridge to career person_code through app_people. |
 | `club_code` | `TEXT` | Yes |  | Club identifier, text; join season profiles on competition, season and club. |
 | `role_code` | `TEXT` | Yes |  | Registration role code; J means player, other codes represent staff roles. |
 | `role_name` | `TEXT` | Yes |  | Source label of the registration role. |
-| `active` | `BOOLEAN` | Yes |  | Source active flag for a registration or official. |
-| `start_at` | `TIMESTAMP` | Yes |  | Source start timestamp without time zone for the season or registration. |
-| `end_at` | `TIMESTAMP` | Yes |  | Source end timestamp without time zone for the season or registration. |
+| `active` | `BOOLEAN` | Yes |  | True if any merged registration period is active. |
+| `start_at` | `TIMESTAMP` | Yes |  | Earliest source start timestamp, without time zone, of the merged periods. |
+| `end_at` | `TIMESTAMP` | Yes |  | Latest source end timestamp, without time zone, of the merged periods. |
 | `sort_order` | `INTEGER` | Yes |  | Source registration display order. |
 | `jersey_number` | `TEXT` | Yes |  | Source jersey number stored as text; retain leading zeroes and special values. |
 | `jersey_number_raw` | `TEXT` | Yes |  | Original registration jersey value retained alongside jersey_number. |

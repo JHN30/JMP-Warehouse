@@ -15,6 +15,7 @@ from gold_etl.schema import GOLD_TABLES, SEASON_DERIVED_NAMES, WINDOWS, IDENTITY
 from gold_etl.loader import read_aggregate_rows
 from gold_etl.records import read_rows as read_record_rows
 from gold_etl.identity import read_rows as read_identity_rows
+from gold_etl.registrations import read_rows as read_registration_rows
 from gold_etl.series import read_rows as read_series_rows
 from gold_etl.team_rounds import read_rows as read_round_rows
 
@@ -26,6 +27,8 @@ def check_scope(cursor, name, competition_code, season_code):
     cursor.execute("SELECT to_regclass(%s)", (f"gold.{physical_name(name)}",))
     if cursor.fetchone()[0] is None:
         return [f"gold.{physical_name(name)} is missing"]
+    if name == "registrations":
+        return check_registrations(cursor, competition_code, season_code)
     scope = (competition_code, season_code)
     cursor.execute(count_sql(name, "silver"), scope)
     source_count = cursor.fetchone()[0]
@@ -45,6 +48,23 @@ def check_scope(cursor, name, competition_code, season_code):
     if cursor.fetchone()[0]:
         issues.append(f"gold.{physical_name(name)} {season_code}: source-column values differ from silver")
     return issues
+
+
+def check_registrations(cursor, competition_code, season_code):
+    """Gold holds exactly the collapsed Silver registrations, one row per group."""
+    name = "registrations"
+    expected = read_registration_rows(cursor, competition_code, season_code)
+    fields = ", ".join(f'"{field}"' for field in columns(name))
+    cursor.execute(f'SELECT {fields} FROM gold."{physical_name(name)}" '
+                   f'WHERE {scope_predicate(name)}', (competition_code, season_code))
+    actual = _dict_rows(cursor)
+    by_key = lambda rows: {row["registration_key"]: row for row in rows}
+    if len(actual) != len(expected) or by_key(actual).keys() != by_key(expected).keys():
+        return [f"gold.{physical_name(name)} {season_code}: keys differ from collapsed Silver "
+                f"({len(actual)} Gold, {len(expected)} expected)"]
+    if by_key(actual) != by_key(expected):
+        return [f"gold.{physical_name(name)} {season_code}: values differ from collapsed Silver"]
+    return []
 
 
 def check_player_stats_flags(cursor, name, competition_code, season_code):

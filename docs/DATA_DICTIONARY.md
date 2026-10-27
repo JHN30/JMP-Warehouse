@@ -584,7 +584,13 @@ names, source columns, types, and natural primary keys as their Silver sources:
 `season_player_stats_traditional`, `season_player_stats_advanced`,
 `season_player_stats_scoring`, `season_player_stats_misc`, `play_by_play`, and
 `shots`. Gold omits Silver's `load_id` and `loaded_at` metadata. It copies
-source values and NULLs unchanged. The four player-season tables copy only
+source values and NULLs unchanged, except `registrations`, which holds one row per
+`(competition_code, season_code, person_key, club_code, role_code)`: a club can deregister
+a person and register them again in the same season, and Gold merges those periods.
+`active` is true if any period is active, `start_at` is the earliest and `end_at` the latest
+known date, and every other column, including `registration_key`, comes from the latest period
+(greatest `start_at`, then `end_at`, then `external_id`; a missing date sorts first). Silver
+keeps every source registration. The four player-season tables copy only
 non-`PS` API rows and then add the calculated `perGame` rows and qualification
 columns described below; feature 30b owns derived `PS` rows in traditional and misc
 Gold tables, and a source rerun leaves those rows in place. Advanced and scoring

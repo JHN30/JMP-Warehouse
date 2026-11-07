@@ -307,7 +307,7 @@ TABLES = {
         f("team_name", "TEXT", "TEAM"),
         f("dorsal", "TEXT", "DORSAL"),
         f("minute", "INTEGER", "MINUTE"),
-        f("marker_time", "TEXT", "MARKERTIME"),
+        f("marker_time", "TEXT", "@marker_time"),
         f("points_a", "INTEGER", "POINTS_A"),
         f("points_b", "INTEGER", "POINTS_B"),
         f("comment", "TEXT", "COMMENT"),

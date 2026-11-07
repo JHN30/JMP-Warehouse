@@ -85,6 +85,15 @@ class FlatEtlTests(unittest.TestCase):
             field.name for field in TABLES["season_player_stats_advanced"].fields
         })
 
+    def test_unreadable_clock_is_null_and_readable_odd_values_stay(self):
+        clocks = ["05:59", "\x01\x05.\x00", "\x01\x00.`", "ND", "00:-1", "", None]
+        self.write("live/1/play_by_play.json", {"FirstQuarter": [
+            {"NUMBEROFPLAY": number, "PLAYTYPE": "2FGA", "MARKERTIME": clock}
+            for number, clock in enumerate(clocks)]})
+        rows = list(self.season().rows("play_by_play"))
+        self.assertEqual([row["marker_time"] for row in rows],
+                         ["05:59", None, None, "ND", "00:-1", None, None])
+
     def test_standings_form_is_a_child_table(self):
         rows = list(self.season().rows("standings_basic_form"))
         self.assertEqual([row["result"] for row in rows], ["W", "L"])

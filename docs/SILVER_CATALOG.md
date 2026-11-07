@@ -163,7 +163,11 @@ must not be treated as a points/rebounds total.
 Live `period` is text: FirstQuarter, SecondQuarter, ThirdQuarter, ForthQuarter
 (the upstream spelling), ExtraTime. Chronology uses that explicit period rank,
 overtime number derived from minute, then event_ordinal. Alphabetic period order
-and play_number are both unsuitable. `person_code` in events/shots resolves to
+and play_number are both unsuitable. `marker_time` is NULL on period markers
+(`BP`, `EP`, `EG`) and on events whose source clock holds control characters,
+which PostgreSQL cannot store: E2026 game 100 has 19 such events
+(`play_by_play_clock_unreadable` warns). The calculated tables treat those
+events as having no clock. `person_code` in events/shots resolves to
 the box-score `person_key`, not necessarily the career profile's person_code.
 
 ## EuroCup

@@ -163,6 +163,15 @@ def code(value):
     return value or None
 
 
+def readable_text(value):
+    """The value, or None when it holds a control character. E2026 game 100 sends
+    binary junk such as '\\x01\\x05.\\x00' as MARKERTIME, which PostgreSQL cannot
+    store; quality's play_by_play_clock_unreadable keeps those events visible."""
+    if isinstance(value, str) and any(ord(char) < 32 or ord(char) == 127 for char in value):
+        return None
+    return value
+
+
 PBP_PERIODS = ("FirstQuarter", "SecondQuarter", "ThirdQuarter", "ForthQuarter", "ExtraTime")
 STANDINGS_FILE = re.compile(r"(.+?)_(\d+)_(.+)\.json$")
 LIVE_TEAM_MARKER = re.compile(r"(AC|CO)_[AB]")
@@ -630,7 +639,9 @@ class RawSeason:
                                        club_code=code(item.get("CODETEAM")),
                                        player_code=code(item.get("PLAYER_ID")),
                                        person_code=person_code, person_code_method=method,
-                                       play_type=item.get("PLAYTYPE"), payload=item)
+                                       play_type=item.get("PLAYTYPE"),
+                                       marker_time=readable_text(item.get("MARKERTIME")),
+                                       payload=item)
                 elif table == "shots":
                     for ordinal, item in enumerate(response.get("Rows") or []):
                         yield dict(scope, game_code=game, shot_ordinal=ordinal,

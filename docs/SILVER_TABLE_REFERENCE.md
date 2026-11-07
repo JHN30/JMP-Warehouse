@@ -1162,7 +1162,7 @@ established by the warehouse remains marked as such.
 | `team_name` | `TEXT` | Yes |  | `TEAM` | Team label from the live event feed. |
 | `jersey_number` | `TEXT` | Yes |  | `DORSAL` | Source jersey number stored as text; retain leading zeroes and special values. |
 | `minute` | `INTEGER` | Yes |  | `MINUTE` | Source live minute marker; interpret with the period and clock. |
-| `marker_time` | `TEXT` | Yes |  | `MARKERTIME` | Source time remaining in the period, such as 03:24. |
+| `marker_time` | `TEXT` | Yes |  | `@marker_time` | Source `MARKERTIME`, the time remaining in the period, such as 03:24. NULL for period markers and when the source value holds control characters (`play_by_play_clock_unreadable` warns). |
 | `points_a` | `INTEGER` | Yes |  | `POINTS_A` | Live running score of source side A (local). |
 | `points_b` | `INTEGER` | Yes |  | `POINTS_B` | Live running score of source side B (road). |
 | `comment` | `TEXT` | Yes |  | `COMMENT` | Source event comment text. |

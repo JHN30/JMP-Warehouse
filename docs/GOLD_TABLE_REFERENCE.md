@@ -1344,7 +1344,7 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 | `team_name` | `TEXT` | Yes |  | Team label from the live event feed. |
 | `jersey_number` | `TEXT` | Yes |  | Source jersey number stored as text; retain leading zeroes and special values. |
 | `minute` | `INTEGER` | Yes |  | Source live minute marker; interpret with the period and clock. |
-| `marker_time` | `TEXT` | Yes |  | Source time remaining in the period, such as 03:24. |
+| `marker_time` | `TEXT` | Yes |  | Source time remaining in the period, such as 03:24. NULL for period markers and unreadable source clocks. |
 | `points_a` | `INTEGER` | Yes |  | Live running score of source side A (local). |
 | `points_b` | `INTEGER` | Yes |  | Live running score of source side B (road). |
 | `comment` | `TEXT` | Yes |  | Source event comment text. |

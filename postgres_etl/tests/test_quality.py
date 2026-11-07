@@ -194,6 +194,16 @@ class QualityRulesTests(unittest.TestCase):
         self.assertNotIn("play_by_play_without_clock",
                          {check.code for check in checks_for_tables(["games"])})
 
+    def test_unreadable_clock_warning_skips_period_markers(self):
+        checks = {check.code: check for check in checks_for_tables(["play_by_play"])}
+        unreadable = checks["play_by_play_clock_unreadable"]
+        self.assertEqual((unreadable.table, unreadable.severity), ("play_by_play", "WARN"))
+        self.assertEqual(unreadable.query.count("%s"), 2)
+        self.assertIn("row.marker_time IS NULL", unreadable.query)
+        self.assertIn("NOT IN ('BP', 'EP', 'EG')", unreadable.query)
+        self.assertNotIn("play_by_play_clock_unreadable",
+                         {check.code for check in checks_for_tables(["games"])})
+
     def test_bad_played_score_is_an_error(self):
         report = check_season(FakeConnection(bad_scores=1), "euroleague", "E2025",
                               ["games", "clubs"])

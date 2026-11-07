@@ -233,6 +233,10 @@ def anomaly_checks(names):
         # Stat-sheet feeds with no usable clock; the play-by-play tables skip these games.
         checks.append(Check("play_by_play_without_clock", "play_by_play",
                             f"SELECT count(*) FROM ({CLOCKLESS_GAMES_SQL}) AS clockless", "WARN"))
+        # Only period markers have no clock in the source; any other NULL was unreadable.
+        checks.append(Check("play_by_play_clock_unreadable", "play_by_play", scoped_count(
+            "play_by_play", "row.marker_time IS NULL "
+            "AND coalesce(row.play_type, '') NOT IN ('BP', 'EP', 'EG')"), "WARN"))
     for name in ("play_by_play", "shots"):
         if {"games", name} <= names:
             # The live API has data from E2007; earlier seasons have none by design.

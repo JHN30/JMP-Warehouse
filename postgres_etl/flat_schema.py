@@ -13,6 +13,8 @@ class Field:
     name: str
     kind: str
     path: str
+    # Name of the text_clean.py function that gives the stored display form.
+    clean: str | None = None
 
 
 @dataclass(frozen=True)
@@ -48,8 +50,8 @@ COLUMN_NAMES = {
 }
 
 
-def f(name, kind, path=None):
-    return Field(COLUMN_NAMES.get(name, name), kind, path or name)
+def f(name, kind, path=None, clean=None):
+    return Field(COLUMN_NAMES.get(name, name), kind, path or name, clean)
 
 
 def snake(value):
@@ -76,18 +78,19 @@ def table(source, key, *groups, indexes=()):
 
 
 PERSON_DETAILS = (
-    f("alias", "TEXT"), f("alias_raw", "TEXT", "aliasRaw"),
-    f("passport_name", "TEXT", "passportName"),
-    f("passport_surname", "TEXT", "passportSurname"),
+    f("alias", "TEXT", clean="person_name"),
+    f("alias_raw", "TEXT", "aliasRaw", "person_name"),
+    f("passport_name", "TEXT", "passportName", "person_name"),
+    f("passport_surname", "TEXT", "passportSurname", "person_name"),
     f("jersey_name", "TEXT", "jerseyName"),
     f("abbreviated_name", "TEXT", "abbreviatedName"),
-    f("country_code", "TEXT", "country.code"),
-    f("country_name", "TEXT", "country.name"),
+    f("country_code", "TEXT", "country.code", "country_code"),
+    f("country_name", "TEXT", "country.name", "country_name"),
     f("height_cm", "INTEGER", "height"),
     f("weight_kg", "INTEGER", "weight"),
     f("birth_at", "TIMESTAMP", "birthDate"),
-    f("birth_country_code", "TEXT", "birthCountry.code"),
-    f("birth_country_name", "TEXT", "birthCountry.name"),
+    f("birth_country_code", "TEXT", "birthCountry.code", "country_code"),
+    f("birth_country_name", "TEXT", "birthCountry.name", "country_name"),
     f("twitter_account", "TEXT", "twitterAccount"),
     f("instagram_account", "TEXT", "instagramAccount"),
     f("facebook_account", "TEXT", "facebookAccount"),
@@ -108,7 +111,7 @@ STATS_IDENTITY = (
     f("entry_ordinal", "INTEGER NOT NULL", "@entry_ordinal"),
     f("person_key", "TEXT NOT NULL", "@person_key"),
     f("club_code", "TEXT", "@club_code"),
-    f("player_name", "TEXT", "player.name"),
+    f("player_name", "TEXT", "player.name", "person_name"),
     f("player_age", "INTEGER", "player.age"),
     f("player_image_url", "TEXT", "player.imageUrl"),
     f("club_name", "TEXT", "player.team.name"),
@@ -151,34 +154,34 @@ TABLES = {
         f("crest_url", "TEXT", "images.crest"), f("sponsor", "TEXT"),
         f("permanent_name", "TEXT", "clubPermanentName"),
         f("permanent_alias", "TEXT", "clubPermanentAlias"),
-        f("country_code", "TEXT", "country.code"),
-        f("country_name", "TEXT", "country.name"),
+        f("country_code", "TEXT", "country.code", "country_code"),
+        f("country_name", "TEXT", "country.name", "country_name"),
         f("address", "TEXT"), f("website", "TEXT"),
         f("tickets_url", "TEXT", "ticketsUrl"),
         f("twitter_account", "TEXT", "twitterAccount"),
-        f("venue_code", "TEXT", "venueCode"), f("city", "TEXT"),
+        f("venue_code", "TEXT", "venueCode"), f("city", "TEXT", clean="city_name"),
         f("president", "TEXT"), f("phone", "TEXT"),
     )),
     "people": table("people", ("person_key",), (
         f("person_key", "TEXT NOT NULL", "@person_key"),
         f("person_code", "TEXT", "@person_code"),
-        f("name", "TEXT", "@name"),
+        f("name", "TEXT", "@name", "person_name"),
     ), PERSON_DETAILS, indexes=(("person_code",),)),
     "registrations": table("registrations", ("registration_key",), (
         f("registration_key", "TEXT NOT NULL", "@registration_key"),
         f("person_key", "TEXT NOT NULL", "@person_key"),
         f("club_code", "TEXT", "@club_code"),
         f("role_code", "TEXT", "@role_code"),
-        f("role_name", "TEXT", "typeName"),
+        f("role_name", "TEXT", "typeName", "role_name"),
         f("active", "BOOLEAN", "@active"),
         f("start_at", "TIMESTAMP", "startDate"),
         f("end_at", "TIMESTAMP", "endDate"),
         f("sort_order", "INTEGER", "order"),
         f("dorsal", "TEXT"), f("dorsal_raw", "TEXT", "dorsalRaw"),
-        f("position", "INTEGER"), f("position_name", "TEXT", "positionName"),
+        f("position", "INTEGER", clean="position"), f("position_name", "TEXT", "positionName"),
         f("last_team", "TEXT", "lastTeam"),
         f("external_id", "INTEGER", "externalId"),
-        f("person_name", "TEXT", "person.name"),
+        f("person_name", "TEXT", "person.name", "person_name"),
         f("club_name", "TEXT", "club.name"),
     ), indexes=(("person_key",), ("club_code",))),
     "rounds": table("rounds", ("round_key",), (
@@ -199,8 +202,8 @@ TABLES = {
         f("phase_alias", "TEXT", "phaseType.alias"),
         f("phase_is_group", "BOOLEAN", "phaseType.isGroupPhase"),
         f("group_id", "TEXT", "group.id"),
-        f("group_name", "TEXT", "group.name"),
-        f("group_raw_name", "TEXT", "group.rawName"),
+        f("group_name", "TEXT", "group.name", "group_name"),
+        f("group_raw_name", "TEXT", "group.rawName", "group_name"),
         f("group_order", "INTEGER", "group.order"),
         f("round_number", "INTEGER", "@round_number"),
         f("round_name", "TEXT", "roundName"),
@@ -246,9 +249,9 @@ TABLES = {
         f("game_code", "INTEGER NOT NULL", "@game_code"),
         f("official_number", "INTEGER NOT NULL", "@official_number"),
         f("official_code", "TEXT", "@official_code"),
-        f("name", "TEXT", "@name"), f("alias", "TEXT"),
-        f("country_code", "TEXT", "country.code"),
-        f("country_name", "TEXT", "country.name"),
+        f("name", "TEXT", "@name", "person_name"), f("alias", "TEXT", clean="person_name"),
+        f("country_code", "TEXT", "country.code", "country_code"),
+        f("country_name", "TEXT", "country.name", "country_name"),
         f("active", "BOOLEAN"),
         f("image_vertical_small", "TEXT", "images.verticalSmall"),
     ), indexes=(("official_code",),)),
@@ -263,13 +266,13 @@ TABLES = {
         f("side", "TEXT NOT NULL", "@side"),
         f("person_key", "TEXT NOT NULL", "@person_key"),
         f("club_code", "TEXT", "@club_code"),
-        f("person_name", "TEXT", "player.person.name"),
+        f("person_name", "TEXT", "player.person.name", "person_name"),
         f("club_name", "TEXT", "player.club.name"),
         f("player_type_code", "TEXT", "player.type"),
         f("registration_active", "BOOLEAN", "player.active"),
         f("registration_start_at", "TIMESTAMP", "player.startDate"),
         f("registration_end_at", "TIMESTAMP", "player.endDate"),
-        f("position", "INTEGER", "player.position"),
+        f("position", "INTEGER", "player.position", "position"),
         f("position_name", "TEXT", "player.positionName"),
         f("dorsal", "TEXT", "player.dorsal"),
         f("external_id", "INTEGER", "player.externalId"),
@@ -284,7 +287,7 @@ TABLES = {
         f("side", "TEXT NOT NULL", "@side"),
         f("stats_kind", "TEXT NOT NULL", "@stats_kind"),
         f("coach_code", "TEXT", "@coach_code"),
-        f("coach_name", "TEXT", "@coach_name"),
+        f("coach_name", "TEXT", "@coach_name", "person_name"),
         f("points", "NUMERIC"),
     ), tuple(field for field in GAME_STATS if field.name != "points")),
     "game_stat_gaps": table("game_stat_gaps", ("game_code", "stat_name"), (
@@ -303,7 +306,7 @@ TABLES = {
         f("person_code_method", "TEXT", "@person_code_method"),
         f("play_type", "TEXT", "@play_type"),
         f("event_type", "INTEGER", "TYPE"),
-        f("player_name", "TEXT", "PLAYER"),
+        f("player_name", "TEXT", "PLAYER", "person_name"),
         f("team_name", "TEXT", "TEAM"),
         f("dorsal", "TEXT", "DORSAL"),
         f("minute", "INTEGER", "MINUTE"),
@@ -321,7 +324,7 @@ TABLES = {
         f("player_code", "TEXT", "@player_code"),
         f("person_code", "TEXT", "@person_code"),
         f("person_code_method", "TEXT", "@person_code_method"),
-        f("player_name", "TEXT", "PLAYER"),
+        f("player_name", "TEXT", "PLAYER", "person_name"),
         f("action_code", "TEXT", "ID_ACTION"),
         f("action", "TEXT", "ACTION"),
         f("points", "INTEGER", "@points"),

@@ -129,7 +129,26 @@ The source JSON paths are unchanged, but the SQL columns use one name for each s
 
 **Points corrections.** Box-score points are checked against the game score and the shooting makes (warnings `team_points_differ_from_score` and `points_differ_from_makes`). Only a provable error is corrected: when a team's makes equal its game score but its points do not, each player's points are set to their makes and their PIR moves by the same amount. The game gets a `points` gap row, with reason `points_corrected`, naming the players and the source values. This applies to U2004 games 103 and 138 and U2005 game 4. The API season feeds keep the source values, so Gold quality warns about those players and clubs.
 
-**Fixtures and winners.** Future fixtures stay in `games` with `played = false` and `NULL` scores. Quarter and overtime scores are separate child rows. The source's `winner` object is the **season champion**; `match_winner_club_code` is the winner of a played game.
+**Fixtures and winners.** Future fixtures stay in `games` with `played = false` and `NULL` scores. Quarter and overtime scores are separate child rows. The source's `winner` object is the **season champion**; `match_winner_club_code` is the winner of a played game. `game_status` is the raw source field and can contradict the facts: some unplayed E2019 games are still `Confirmed`. Use `status`, which Silver derives.
+
+**Person names and cities.** The source sends person names in capitals. Silver stores them in display form, keeping the `Surname, Given` order. The rules are in [text_clean.py](../postgres_etl/text_clean.py) and apply to every person-name column: `people` (`name`, `alias`, `alias_raw`, `passport_name`, `passport_surname`), the `person_name`, `player_name` and `coach_name` columns, and `game_officials.name` and `alias`.
+
+- Words become title case: `GÖK, ERDAL` becomes `Gök, Erdal`.
+- `II`, `III` and `IV` stay in capitals, and `JR` becomes `Jr.`: `BROWN III, JOHN` becomes `Brown III, John`, and `COWAN JR, ANTHONY` becomes `Cowan Jr., Anthony`.
+- `Mc` names join and keep the inner capital: `MC DUFFIE` becomes `McDuffie`, and `MCKINLEY` becomes `McKinley`.
+- Given names that the source writes in camel case somewhere (`DeJuan`, `DeAndre`, `LaRon` and others) are written that way everywhere.
+- Two-letter initials stay in capitals: `PJ`, `TJ`, `AJ`.
+- Stray spaces around commas are removed.
+- `jersey_name` and `abbreviated_name` keep the source text.
+
+`clubs.city` values sent in capitals become title case, so `ISTANBUL` becomes `Istanbul`. A few wrong values are mapped: `St Petersburg` becomes `Saint Petersburg`, and club names given as the city become the city (`BENFICA` becomes `Lisbon`). Club names and venue names keep the source text, because they change with sponsors. Bronze keeps every exact source value.
+
+**Codes and labels.** The same file defines these rules:
+
+- Each country has one code and one name in `people`, `clubs` and `game_officials`, including the `birth_country_*` columns. `UK` becomes `GBR`, `IVO` (Ivory Coast) becomes `CIV`, and `ZAI` becomes `COD`. `FYR` with the name `----` becomes `MKD`, North Macedonia. `LAD` (Adriatic League) and `NAT` (No country) become `NULL`.
+- `registrations.role_name` uses sentence case without underscores: `Unified_Score_Crew` becomes `Unified score crew`, and the source typo `Assitant coach` becomes `Assistant coach`.
+- `position` in `registrations` and `game_player_stats` is 1 (guard), 2 (forward) or 3 (center). The source's `-1` and `0` become `NULL`.
+- In `games.group_name` and `group_raw_name`, words in capitals become title case: `Group SEMIFINAL A` becomes `Group Semifinal A`. `Semi-Final` is written `Semifinal`.
 
 **Percentages.** v3 percentage strings such as `45.5%` become the number `45.5` (percentage points).
 

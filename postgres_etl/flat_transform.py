@@ -2,6 +2,7 @@
 
 from decimal import Decimal, InvalidOperation
 
+import text_clean
 from flat_schema import TABLES
 from raw_transform import RawSeason, parse_source_timestamp, utc_wall_time
 
@@ -87,7 +88,9 @@ class FlatSeason:
                     value = (candidate.get(field.path[1:]) if field.path.startswith("@")
                              else get_path(candidate.get("payload"), field.path))
                     try:
-                        row[field.name] = cast(value, field.kind)
+                        value = cast(value, field.kind)
+                        row[field.name] = (getattr(text_clean, field.clean)(value)
+                                           if field.clean else value)
                     except (TypeError, ValueError) as error:
                         raise ValueError(
                             f"{name}.{field.name} from {field.path} "

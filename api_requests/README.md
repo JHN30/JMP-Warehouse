@@ -1,203 +1,191 @@
-# API extraction cache
+# API extraction (`api_requests`)
 
-See the [EuroLeague Bronze catalog](../docs/BRONZE_CATALOG.md) for response
-containers, version identity, manifest fields and lineage into Silver, and the
-[Silver catalog](../docs/SILVER_CATALOG.md) for the resulting tables.
+The fetcher downloads EuroLeague and EuroCup API responses and stores the exact bytes in the **Bronze** layer under `data/bronze/` (see [common/bronze.py](../common/bronze.py)). It is the first stage of the pipeline; the [Silver loader](../postgres_etl/README.md) reads what it stores.
 
-This tool stores the exact API responses from the EuroLeague and EuroCup APIs in
-the **bronze** layer (`data/bronze/`, see [common/bronze.py](../common/bronze.py)). It uses v2
-and v3 as the primary sources, then adds the only data the live API has
-that v2/v3 lack: play-by-play and shot coordinates.
+For the structure of each stored response and how it maps to Silver, see the [Bronze catalog](../docs/BRONZE_CATALOG.md). For the resulting tables, see the [Silver catalog](../docs/SILVER_CATALOG.md).
 
-## Source policy
+## Contents
 
-| Data                                                                      | Primary source  | Cache policy                                                         |
-| ------------------------------------------------------------------------- | --------------- | -------------------------------------------------------------------- |
-| Season catalogue, fixtures, clubs, people and rounds                      | v2              | Cache all fixtures, including future games                           |
-| Per-game player/team statistics                                           | v2              | Fetch only after a game is played                                    |
-| Season people                                                             | v2              | Fetch every offset page, including coaches, officials and staff      |
-| Season player and team statistics, round standings                        | v3              | Fetch for played phases; teams in accumulated mode only; standings are limited to group-phase rounds |
-| Play-by-play and shot coordinates                                         | live API        | Fetch only after a game is played and only from season 2007 onward   |
-| Boxscore, Evolution, Comparison, ShootingGraphic                          | live API        | Not requested: covered by v2, play-by-play or shots                  |
+- [Data sources](#data-sources)
+- [Running the fetcher](#running-the-fetcher)
+- [Datasets](#datasets)
+- [Refreshing the current season](#refreshing-the-current-season)
+- [Stale statistics feeds](#stale-statistics-feeds)
+- [Rate limiting, failures and output](#rate-limiting-failures-and-output)
+- [Bronze layout](#bronze-layout)
+- [Endpoints checked and not downloaded](#endpoints-checked-and-not-downloaded)
+- [Change log](#change-log)
 
-v2/v3 cover every season from E2000 (checked on E2000, E2007 and E2015). The live
-API has no data before E2007. Comparing all 402 E2025 games showed that Boxscore
-duplicates v2 game stats (quarters, attendance and referees are in the v2 game
-list), ShootingGraphic can be summed from shots, Evolution from play-by-play, and
-Comparison from v2 box scores and play-by-play. The extractor has no dataset for
-them.
+## Data sources
 
-The v2 game list replaces the live API's Header endpoint for bulk extraction. A
-future scheduled game is retained in v2/games.json, but its per-game stats and
-live detail are intentionally not requested until it is marked played.
+The fetcher uses three APIs. The v2 and v3 APIs are the primary sources. The live API is used only for the two things v2 and v3 lack: play-by-play and shot coordinates.
 
-The v2 season-people endpoint may return only its first 500 rows while
-reporting a larger total. The extractor requests every `offset` page, keeps the
-page response in `v2/season_people_pages/offset_NNNNNN`, and checks that the
-pages together hold `total` rows. Incomplete pages are fetched again. The loader
-combines the pages.
+| API | Host | Seasons | Used for |
+| --- | --- | --- | --- |
+| **v2** | `https://api-live.euroleague.net` | 2000 onward | Seasons, fixtures, clubs, people, rounds, per-game box scores |
+| **v3** | `https://api-live.euroleague.net` | 2000 onward | Player and team season statistics, round standings |
+| **live** | `https://live.euroleague.net/api` | 2007 onward | Play-by-play and shot attempts |
 
-The standings feeds do not cover knockout rounds. The extractor uses the v2
-game-list field phaseType.isGroupPhase and requests standings only for played
-group-phase rounds, avoiding expected playoff and Final Four 404 responses.
+v2 and v3 coverage from 2000 was checked on E2000, E2007 and E2015. The live API has no data before E2007.
 
-## Default datasets
+The live API's `Boxscore`, `Evolution`, `Comparison`, `ShootingGraphic` and `Header` endpoints are not requested. A comparison over all 402 E2025 games showed that each one repeats or can be calculated from data already downloaded:
 
-The default all dataset selection caches:
+- `Boxscore` duplicates the v2 game stats; quarter scores, attendance and referees are in the v2 game list.
+- `ShootingGraphic` can be summed from the shots.
+- `Evolution` can be rebuilt from play-by-play.
+- `Comparison` can be calculated from v2 box scores and play-by-play.
+- `Header` is replaced by the v2 game list.
 
-- seasons
-- game_lists
-- clubs
-- rounds
-- season_people
-- season_stats
-- standings
-- game_stats
-- play_by_play
-- shooting_charts
+## Running the fetcher
 
-The live dataset names map to live API endpoints:
+Run from the repository root. Bronze files always go to the repository's `data/bronze/`, and each run writes a log to `logs/api_requests/`.
 
-- play_by_play uses PlayByPlay, which provides every event by quarter.
-- shooting_charts uses Points, which provides shot attempts and coordinates.
+```powershell
+# Smoke test: one request that caches the 2026-27 fixture list, including future games
+python api_requests/main.py -sc 2026 -ds game_lists
 
-## Endpoint reference
+# Every dataset for the 2026-27 EuroLeague season
+python api_requests/main.py -sc 2026
 
-Every endpoint the extractor downloads. `{c}` is the competition code (`E`
-EuroLeague, `U` EuroCup), `{s}` the season code (`E2025` = 2025-26), `{g}` a
-game code. v2/v3 are served by `https://api-live.euroleague.net`, the live API
-by `https://live.euroleague.net/api`. Bronze paths are relative to
-`data/bronze/<competition>/<season>/` (`_catalog/` for the season list).
-"Hot" is defined under [Refreshing](#refreshing). Loaded tables are the local
-PostgreSQL names (see [docs/DATA_DICTIONARY.md](../docs/DATA_DICTIONARY.md)).
+# One EuroCup season
+python api_requests/main.py -cp eurocup -sc 2025
 
-| `-ds` | Endpoint | Bronze resource | Contents | Seasons | Fetched | Loaded into |
-| --- | --- | --- | --- | --- | --- | --- |
-| seasons | `GET /v2/competitions/{c}/seasons` | `_catalog/v2/seasons` | Every season: name, dates, champion | all | Once; again with `--refresh-current` | `seasons` |
-| game_lists | `GET /v2/competitions/{c}/seasons/{s}/games` | `v2/games` | Every fixture, played or scheduled: phase, round, date, clubs, score, quarter scores, venue (with capacity and address), attendance, referees | E2000+ | Current season every run; completed seasons once | `games`, `game_officials`, `game_period_scores` |
-| clubs | `GET /v2/competitions/{c}/seasons/{s}/clubs` | `v2/clubs` | The season's clubs: names, TV code, crest, country, address, city, website, venue | E2000+ | Current season while hot and at least every 20 h; completed once | `clubs` |
-| season_people | `GET /v2/competitions/{c}/seasons/{s}/people?offset=&limit=1000` | `v2/season_people_pages/offset_NNNNNN` | Every person registered that season (players, coaches, staff, officials): profile (height, weight, birth date and country) and club/role registration | E2000+ | Like clubs; all pages each time | `people`, `registrations` |
-| rounds | `GET /v2/competitions/{c}/seasons/{s}/rounds` | `v2/rounds` | Rounds: phase, number, name, first and last game date | E2000+ | Like clubs | `rounds` |
-| standings | `GET /v3/competitions/{c}/seasons/{s}/rounds/{r}/{feed}`, feed = `basicstandings`, `calendarstandings`, `streaks`, `aheadbehind`, `margins` (per played group-phase round) | `v3/standings/{phase}_{round}_{feed}` | Standings after that round: position, record, points for/against, form, streaks, home/away, ahead/behind at checkpoints, margin bands | E2000+, group phases only | Once per round; hot rounds again; all with `--refresh-current` | 7 `standings_*` silver tables |
-| season_stats | `GET /v3/competitions/{c}/statistics/players/{type}`, type = `traditional`, `advanced`, `scoring`, `misc`; params `SeasonMode=Single`, `SeasonCode`, `StatisticMode` (`accumulated`, `perGame`), `Statistic` (sort), `Limit=1000`, optional `PhaseTypeCode` | `v3/season_stats/players_{type}_{phase}_{mode}` | Player season statistics for `all` phases and each played phase, totals and per game | E2000+ | Once; `all` and hot phases again while a game is hot; all with `--refresh-current` | `season_player_stats_*` |
-| season_stats | `GET /v3/competitions/{c}/statistics/teams/{type}`, type = `traditional`, `advanced`; accumulated mode only; same params without `Statistic` (the team endpoints reject it) | `v3/season_stats/teams_{feed}_{phase}_accumulated` | Team season statistics for `all` and each played phase, totals only | E2000+ | Like the player feeds | `season_team_stats_*` |
-| game_stats | `GET /v2/competitions/{c}/seasons/{s}/games/{g}/stats` (per played game) | `v2/game_stats/{g}` | Box score: every player's line, the team row and totals, coach, starters, plus/minus | E2000+ | Once per played game | `game_player_stats`, `game_team_stats`, `game_stat_gaps` |
-| play_by_play | `GET /api/PlayByPlay?gamecode={g}&seasoncode={s}` (live API) | `live/{g}/play_by_play` | Every event by quarter: type, clock, player, club, running score | E2007+ | Once per played game | `play_by_play` |
-| shooting_charts | `GET /api/Points?gamecode={g}&seasoncode={s}` (live API) | `live/{g}/shooting_charts` | Every shot attempt, made or missed: coordinates, zone, fast-break, second-chance and points-off-turnover flags | E2007+ | Once per played game | `shots` |
+# Selected datasets only
+python api_requests/main.py -sc 2025 -ds game_lists game_stats play_by_play shooting_charts
 
-## Checked, not downloaded
+# Full history (resumable: a rerun skips everything already stored)
+python api_requests/main.py -sc 2000-2026
+python api_requests/main.py -cp eurocup -sc 2000-2026
+```
 
-Surveyed on 2026-09-27. The API's Swagger pages list no paths, so these were
-found by probing. Each one repeats downloaded data or can be calculated from it:
+You can stop a long run with Ctrl+C. Every response and manifest entry is written as soon as it arrives, so rerunning the same command continues where it stopped.
 
-| Endpoint | Why it is not downloaded |
-| --- | --- |
-| v3 `statistics/players/leaders`, `statistics/teams/leaders` | Rankings of the player and team season statistics |
-| v2 and v3 `seasons/{s}/clubs/{club}/stats` | One club's season totals and averages: sums of the v2 game box scores, and in the team statistics feeds |
-| v2 `seasons/{s}/people/{p}/stats` | One player's game log: the same rows as the v2 game box scores |
-| v2 `seasons/{s}/games/{g}/teamsComparison` | Pre-game offense and defense ranks, calculated from box scores up to that game |
-| v3 `seasons/{s}/games/{g}/stats` | The same fields as v2 `games/{g}/stats` |
-| v2 single items: `seasons/{s}`, `games/{g}`, `rounds/{r}`, `clubs/{club}`, `people/{p}` | One row of a downloaded list, same fields |
-| v2 `venues`, `venues/{code}`, `seasons/{s}/venues` | Venue name, capacity, address and image, already inside every v2 game |
-| v2 `clubs`, `clubs/{club}` (catalogue) | The season clubs hold the same details; only fax and some social links are extra |
-| v2 `people/{p}` (catalogue) | Identical to the `person` object in the season people pages |
-| v2 `seasons/{s}/phases` | Phase start and end dates and order, calculated from rounds and games |
-| v2 `competitions`, `competitions/{c}` | Competition names only |
-| live API `Header` | Game header (stadium, coaches, fouls, timeouts, referees): in v2 games, box scores and play-by-play; empty before E2007 |
-| v1 `results`, `schedules`, `standings`, `teams`, `players`, `games` | The same data in the old XML format |
+### Options
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `-cp`, `--competition` | `euroleague` | `euroleague` or `eurocup`. |
+| `-sc`, `--season_code` | current season | Start years or inclusive ranges, for example `2025` or `2000-2026`. Full codes such as `E2025` are not accepted here. The current season is the current year from September to December, otherwise the previous year. |
+| `-ds`, `--dataset` | `all` | One or more [datasets](#datasets). |
+| `--refresh-current` | off | Re-fetch every changing current-season resource, including every standings round. |
+| `--hot-hours` | `48` | How long after a game its season data is re-fetched. See [Refreshing](#refreshing-the-current-season). |
+| `--request-interval` | `2.5` | Minimum seconds between requests. Change it only if you understand the upstream limit. |
+| `-gcs`, `--game_code_start` | `1` | Start game-level work at this game code, for the first requested season only. Future fixtures are still cached. |
+| `-fel`, `--failed_extractions_limit` | `500` | Warning threshold for failed requests. Failures never stop a season. |
+| `--summary-file` | none | Writes the changed resources and failed-request count as JSON. `pipeline.py` uses it to skip loading when nothing changed. |
+
+## Datasets
+
+`all` selects every dataset below. In the endpoint paths, `{c}` is the competition code (`E` EuroLeague, `U` EuroCup), `{s}` the season code (`E2025` is 2025-26), `{g}` a game code and `{r}` a round. Bronze paths are relative to `data/bronze/<competition>/<season>/`.
+
+### Summary
+
+| Dataset | Contents | Seasons | Loaded into Silver |
+| --- | --- | --- | --- |
+| `seasons` | Every season: name, dates, champion | all | `seasons` |
+| `game_lists` | Every fixture, played or scheduled, with phase, round, date, clubs, score, quarter scores, venue, attendance and referees | 2000+ | `games`, `game_officials`, `game_period_scores` |
+| `clubs` | The season's clubs: names, TV code, crest, country, address, website, venue | 2000+ | `clubs` |
+| `season_people` | Every registered player, coach, staff member and official, with profile and club/role registration | 2000+ | `people`, `registrations` |
+| `rounds` | Phase, number, name, first and last game date | 2000+ | `rounds` |
+| `standings` | Standings after each group-phase round: position, record, form, streaks, home/away, margins | 2000+ | the 7 `standings_*` tables |
+| `season_stats` | Player and team season statistics for `all` phases and each played phase | 2000+ | `season_player_stats_*`, `season_team_stats_*` |
+| `game_stats` | Box score per played game: player lines, team rows, coach, starters, plus/minus | 2000+ | `game_player_stats`, `game_team_stats`, `game_stat_gaps` |
+| `play_by_play` | Every event by quarter: type, clock, player, club, running score | 2007+ | `play_by_play` |
+| `shooting_charts` | Every shot attempt with coordinates, zone and fast-break, second-chance and points-off-turnover flags | 2007+ | `shots` |
+
+### Endpoints and Bronze paths
+
+| Dataset | Endpoint | Bronze path |
+| --- | --- | --- |
+| `seasons` | `GET /v2/competitions/{c}/seasons` | `_catalog/v2/seasons` (shared by all seasons) |
+| `game_lists` | `GET /v2/competitions/{c}/seasons/{s}/games` | `v2/games` |
+| `clubs` | `GET /v2/competitions/{c}/seasons/{s}/clubs` | `v2/clubs` |
+| `season_people` | `GET /v2/competitions/{c}/seasons/{s}/people?offset=&limit=1000` | `v2/season_people_pages/offset_NNNNNN` |
+| `rounds` | `GET /v2/competitions/{c}/seasons/{s}/rounds` | `v2/rounds` |
+| `standings` | `GET /v3/competitions/{c}/seasons/{s}/rounds/{r}/{feed}` | `v3/standings/{phase}_{round}_{feed}` |
+| `season_stats` (players) | `GET /v3/competitions/{c}/statistics/players/{type}` | `v3/season_stats/players_{type}_{phase}_{mode}` |
+| `season_stats` (teams) | `GET /v3/competitions/{c}/statistics/teams/{type}` | `v3/season_stats/teams_{type}_{phase}_accumulated` |
+| `game_stats` | `GET /v2/competitions/{c}/seasons/{s}/games/{g}/stats` | `v2/game_stats/{g}` |
+| `play_by_play` | live `GET /api/PlayByPlay?gamecode={g}&seasoncode={s}` | `live/{g}/play_by_play` |
+| `shooting_charts` | live `GET /api/Points?gamecode={g}&seasoncode={s}` | `live/{g}/shooting_charts` |
+
+### Dataset notes
+
+**`season_people`** may return only its first 500 rows while reporting a larger `total`. The fetcher requests every `offset` page, stores each page as received, and checks that the pages together hold `total` rows. Incomplete pages are fetched again. The Silver loader combines the pages.
+
+**`standings`** has five feeds per round: `basicstandings`, `calendarstandings`, `streaks`, `aheadbehind` and `margins`. The feeds do not cover knockout rounds, so the fetcher requests them only for played rounds where the v2 game list's `phaseType.isGroupPhase` is true. This avoids expected 404 responses for playoffs and the Final Four.
+
+**`season_stats`** requests these feeds:
+
+| Feed | Types | Modes | Parameters |
+| --- | --- | --- | --- |
+| Players | `traditional`, `advanced`, `scoring`, `misc` | `accumulated`, `perGame` | `SeasonMode=Single`, `SeasonCode`, `StatisticMode`, `Statistic` (sort), `Limit=1000`, optional `PhaseTypeCode` |
+| Teams | `traditional`, `advanced` | `accumulated` only | The same, without `Statistic` (the team endpoints reject it) |
 
 `teams/scoring` and `teams/misc` do not exist (404).
 
-## Running it
+**Per-game datasets** (`game_stats`, `play_by_play`, `shooting_charts`) are requested only for played games. A scheduled game stays in `v2/games` but gets no detail until it is marked played. Once stored, a played game's detail is never requested again: this protects the shared rate limit and keeps the response originally received.
 
-Run commands from this folder:
+## Refreshing the current season
 
-```powershell
-cd api_requests
-```
+Completed seasons are fetched once. The current season changes, so each run decides what to fetch again:
 
-Start with a safe smoke test. It makes one request and caches the 2026-27
-fixture list, including future games:
+| Resource | When it is re-fetched |
+| --- | --- |
+| Game list | Every run, so new fixtures, postponements and results are noticed. |
+| Standings of a round | While a game in that round is hot. |
+| Season statistics (`all` and each hot phase) | While any game is hot. |
+| Clubs, rounds, season people | While any game is hot, and at least every 20 hours otherwise (signings and pre-season changes happen without games). The last check is recorded in `refresh_state.json`. |
+| Per-game detail | Never: it is immutable once stored. |
+| Season list | Only with `--refresh-current`. |
 
-```powershell
-python main.py -sc 2026 -ds game_lists
-```
+A current-season game is **hot** when it became played since the previous stored game list, or when it started within the last `--hot-hours` (default 48). Standings and statistics can lag behind the final whistle, so this window keeps a round fresh for two days instead of freezing it at its first fetch. Completed seasons are never hot.
 
-Fetch every supported dataset for the current EuroLeague season:
-
-```powershell
-python main.py -sc 2026
-```
-
-Fetch both competitions for a specific season:
+To force a re-fetch of every changing current-season resource, including every standings round:
 
 ```powershell
-python main.py -cp eurocup -sc 2025
+python api_requests/main.py -sc 2026 --refresh-current
 ```
 
-Request only selected data:
+Every run reports how many stored resources were new or changed.
 
-```powershell
-python main.py -sc 2025 -ds game_lists game_stats play_by_play shooting_charts
-```
+## Stale statistics feeds
 
-## Refreshing
+On game days, the v3 statistics and standings endpoints sometimes answer with an older, shorter list, or with nothing. The fetcher detects this and keeps the better stored version.
 
-The game list for the current season is refreshed on every run so new fixtures,
-postponements and game status changes are noticed.
+### Why it happens
 
-Mutable current-season data refreshes itself. A current-season game is **hot**
-when it became played since the previous cached game list, or when it started
-within the last `--hot-hours` (default 48). While any game is hot, a run
-re-fetches:
+The API origin keeps one snapshot per query key, across several upstream instances, and some keys stay frozen for days. For example, the E2026 `RS` player keys stayed at the state after the first 7 games. Cloudflare in front caches answers for at most 60 seconds.
 
-- the five standings feeds of each hot group-phase round,
-- v3 season statistics for `all` and for each hot phase,
-- clubs, rounds and season people.
+Every statistics request carries an unused `_=<timestamp>` parameter. It bypasses Cloudflare but not the origin, and it is not written to the manifest. Other headers or `Limit` values make no difference.
 
-Standings and statistics can lag behind the final whistle, so the window keeps a
-round fresh for two days instead of freezing it at its first fetch. Completed
-seasons are never hot.
+### How an answer is judged
 
-Clubs, rounds and season people also change without games (signings,
-pre-season), so for the current season they are re-checked at least every 20
-hours even when no game is hot. The last check is recorded in
-`refresh_state.json`.
+An answer is **complete** when every club that played in the scope (`all` or one phase) is present with its played games, counted against the v2 game list:
 
-On game days the v3 statistics and standings endpoints answer an older, shorter
-list or nothing for some requests. The origin keeps one snapshot per query key
-(several upstream instances; some keys stayed frozen for days, for example the
-E2026 `RS` player keys at the state after the first 7 games). Cloudflare in
-front caches for 60 seconds at most. These requests carry an unused
-`_=<timestamp>` parameter, which clears Cloudflare but not the origin, and it is
-not written to the manifest. Other headers or `Limit` values change nothing.
+- Team feeds use the club's `gamesPlayed`.
+- Player feeds use the highest `gamesPlayed` among the club's players.
+- Multi-club codes such as `BAS;TEL` (a player who changed clubs) are ignored.
 
-A statistics answer must be **complete** against the v2 game list: every club
-that played in the scope (`all` or a phase) is present with its played games
-(team feeds: the club's `gamesPlayed`; player feeds: the highest `gamesPlayed` of
-its players). Multi-club codes such as `BAS;TEL` (a player who changed clubs) are
-ignored. An answer is also **worse** when a stored `accumulated` feed would lose
-clubs or total games, or a stored `perGame` feed would become empty (per-game
-feeds list only players with more than half of the phase's games, so they may
-shrink). A feed that is worse or incomplete is asked again up to `STALE_RETRIES`
-(4) times (`[stale]` lines) and the first good answer is stored. A stored version
-that is already complete is asked only once: a stale answer cannot improve it,
-and a complete one (a stat correction) is still stored when it arrives.
+An answer is **worse** than the stored version when a stored `accumulated` feed would lose clubs or total games, or a stored `perGame` feed would become empty. Per-game feeds list only players with more than half of the phase's games, so they may legitimately shrink.
 
-If the answer is still incomplete and the stored version is too, the same feed is
-asked once under each fallback key and the first complete answer is stored under
-the usual name, with the parameters actually used in `manifest.jsonl`:
+### What the fetcher does
 
-1. `SeasonMode=Range` with `FromSeasonCode` and `ToSeasonCode` set to the season
-   (the sort parameters stay, because they decide `playerRanking` and row order);
-2. while every played game is in one phase (so far `RS`), the `all` feed is also
-   asked for that phase, because both scopes are then the same data.
+1. If the answer is worse or incomplete, it asks again up to 4 times (`STALE_RETRIES`) and prints `[stale]` lines. The first good answer is stored. If the stored version is already complete, it asks only once: a stale answer cannot improve it, and a stat correction still arrives as a complete answer.
+2. If the answer is still incomplete and so is the stored version, it asks once under each fallback key and stores the first complete answer under the usual name. The parameters actually used are recorded in `manifest.jsonl`. The fallback keys are:
+   - `SeasonMode=Range` with `FromSeasonCode` and `ToSeasonCode` set to the season. The sort parameters stay, because they decide `playerRanking` and the row order.
+   - While every played game is in one phase (so far `RS`), the `all` feed is also asked for that phase, because both scopes are then the same data.
+3. If nothing complete arrives, the answer is stored only if it is not worse and covers at least as many club-games as the stored version. Otherwise the stored version stays in use.
 
-When nothing complete arrives, the answer is stored only if it is not worse and
-covers at least as many club-games as the stored version (progress is kept);
-otherwise the stored version stays in use. If that stored version is complete,
-the run prints `[current]` (the API is stale, nothing to do). Otherwise it
-prints `[kept]` and the feed is listed. The run prints, for example:
+A rejected answer is recorded in `manifest.jsonl` with `stored_as: null` and a `rejected` reason. Every other feed in the run updates normally, and a later refresh stores the complete answer as soon as the API returns it.
+
+### Output
+
+| Marker | Meaning | Listed in the summary file |
+| --- | --- | --- |
+| `[current]` | The stored version is complete; the API is stale. Nothing to do. | No |
+| `[kept]` | The API answer was worse; the stored, incomplete version was kept. | `kept_resources` |
+| `[behind]` | The stored version covers fewer club-games than the v2 games. A warning, not a failure. | `behind_resources` |
 
 ```text
 [current] v3/season_stats/teams_traditional_RS_perGame: stored version is complete against the v2 games; API answered stale (API covers 40 of 60 club-games played)
@@ -205,83 +193,28 @@ prints `[kept]` and the feed is listed. The run prints, for example:
 [behind]  v3/season_stats/teams_traditional_RS_accumulated: stored version covers 48 of 60 club-games of the v2 games, refresh again later
 ```
 
-The summary line counts both ("Stats feeds kept from an earlier fetch", "Stats
-feeds behind the v2 games"), the `--summary-file` lists them under
-`kept_resources` and `behind_resources` (a `[current]` feed is in neither), and
-a rejected answer, `[current]` ones included, is recorded in
-`manifest.jsonl` with `stored_as: null` and a `rejected` reason. `[behind]` is a
-warning, not a failure. Every other feed in the run updates normally. A later
-refresh stores the complete answer as soon as the API returns it.
+The run summary counts them as "Stats feeds kept from an earlier fetch" and "Stats feeds behind the v2 games".
 
-Use --refresh-current to force a re-fetch of all mutable current-season resources,
-including every standings round.
+## Rate limiting, failures and output
 
-```powershell
-python main.py -sc 2026 --refresh-current
-```
+All requests across the three APIs share one client with a minimum interval of 2.5 seconds. HTTP 429 responses honour the server's `Retry-After` value. Transient network errors and 5xx responses are retried twice.
 
-Game-level v2 stats and live API responses are immutable cache entries: once
-saved for a played game, they are not requested again. That protects the shared
-upstream rate limit and preserves the source response originally received.
+Failures are appended to `failures.jsonl` and to the manifest, with the HTTP status when there is one. They never end a season; `-fel` only sets the warning threshold.
 
-Use -gcs to start game-level work from a game code for the first requested
-season. It does not exclude future fixtures from the v2 game list.
+An HTTP 200 response with an empty payload is still stored. In particular, an empty `Points.Rows` response is kept and reported, because a success status does not prove that shot data exists.
 
-```powershell
-python main.py -sc 2025 -gcs 150
-```
+The terminal shows every cache decision:
 
-To download the full history (resumable: rerunning skips everything stored):
+| Marker | Meaning |
+| --- | --- |
+| `[request]` | A request is about to be sent (printed before any rate-limit wait). |
+| `[saved]` | The response differs from the latest stored version and was stored. |
+| `[same]` | The response is identical to the latest stored version; nothing was written. |
+| `[cached]` | A stored response was reused without a request. |
 
-```powershell
-python main.py -sc 2000-2026
-python main.py -cp eurocup -sc 2000-2026
-```
+Before a played game's detail is processed, a progress line shows the season, phase, round, game code and elapsed time, once per game. Progress, warning, failure and summary lines show two timers: `TimeCounter` (the current season) and `TotalTime` (the whole run).
 
-Every run reports how many cached resources were new or changed.
-`--summary-file <path>` also writes that list and the failed-request count
-as JSON. `pipeline.py` uses it to skip loading when nothing
-changed.
-
-## Rate limiting and failures
-
-All requests across v2, v3 and the live host share one client. The default
-interval is 2.5 seconds. HTTP 429
-responses honor the server's Retry-After value; transient network and 5xx
-errors are retried twice.
-
-The terminal reports every cache decision: [request] is printed before any
-rate-limit wait, [saved] when a response differs from the latest stored version,
-[same] when it is identical (nothing new is written), and [cached] when a
-stored response is reused without a request. Every progress, warning, failure and
-per-season summary line shows two timers: `TimeCounter` (the current season,
-reset for each season) and `TotalTime` (the whole run). The run ends with a
-line giving the total time for all seasons.
-
-Before a played game's v2 or live detail is processed, the tool also prints the
-traditional progress line with season, phase, round, game code and elapsed
-time. Each game is announced once, even though it can have several cached
-resources.
-
-Use --request-interval only if you understand the upstream limit:
-
-```powershell
-python main.py -sc 2026 --request-interval 6
-```
-
-Failures are appended to failures.jsonl and to the manifest (with the HTTP status
-when there is one) and do not end a season. The -fel
-argument remains a warning threshold.
-
-An HTTP 200 response with an empty payload is still cached. In particular, an
-empty Points.Rows response is retained and reported, because success status
-does not prove that shot data exists.
-
-You can stop a long run with Ctrl+C. Every completed response and manifest entry
-is written immediately, so rerunning the same command continues from bronze
-instead of starting the game-level work again.
-
-## Output layout
+## Bronze layout
 
 ```text
 data/bronze/
@@ -301,45 +234,56 @@ data/bronze/
         └── live/<game-code>/{play_by_play,shooting_charts}/…
 ```
 
-Each resource folder holds one gzipped file per **distinct** response, containing
-the exact bytes received. A refresh that returns identical bytes writes nothing
-new, and a changed response adds a version instead of overwriting. Readers use
-the newest file. The pre-bronze cache now sits in `old/data/` and is no longer read.
+Each resource folder holds one gzipped file per **distinct** response, containing the exact bytes received. An identical response writes nothing; a changed response adds a new version instead of overwriting. Readers use the newest file. The [Bronze catalog](../docs/BRONZE_CATALOG.md) describes the manifest and version identity in detail.
+
+The pre-Bronze cache in `old/data/` is no longer read.
+
+## Endpoints checked and not downloaded
+
+Surveyed on 2026-09-27. The API's Swagger pages list no paths, so these endpoints were found by probing. Each one repeats downloaded data or can be calculated from it.
+
+| Endpoint | Why it is not downloaded |
+| --- | --- |
+| v3 `statistics/players/leaders`, `statistics/teams/leaders` | Rankings of the season statistics feeds |
+| v2 and v3 `seasons/{s}/clubs/{club}/stats` | One club's season totals: sums of the v2 box scores, and in the team statistics feeds |
+| v2 `seasons/{s}/people/{p}/stats` | One player's game log: the same rows as the v2 box scores |
+| v2 `seasons/{s}/games/{g}/teamsComparison` | Pre-game offense and defense ranks, calculated from earlier box scores |
+| v3 `seasons/{s}/games/{g}/stats` | The same fields as v2 `games/{g}/stats` |
+| v2 `seasons/{s}`, `games/{g}`, `rounds/{r}`, `clubs/{club}`, `people/{p}` | One row of a downloaded list, with the same fields |
+| v2 `venues`, `venues/{code}`, `seasons/{s}/venues` | Venue name, capacity, address and image, already in every v2 game |
+| v2 `clubs`, `clubs/{club}` (catalogue) | The season clubs hold the same details; only fax and some social links are extra |
+| v2 `people/{p}` (catalogue) | Identical to the `person` object in the season people pages |
+| v2 `seasons/{s}/phases` | Phase dates and order, calculated from rounds and games |
+| v2 `competitions`, `competitions/{c}` | Competition names only |
+| live `Header` | Stadium, coaches, fouls, timeouts and referees: in v2 games, box scores and play-by-play; empty before E2007 |
+| v1 `results`, `schedules`, `standings`, `teams`, `players`, `games` | The same data in the old XML format |
 
 ## Change log
 
-### 2026-10-25 - unused downloads dropped
+### 2026-10-25: unused downloads dropped
 
-- The optional live datasets live_boxscores, live_evolution, live_comparison and
-  live_scoring and the `-api` option are removed; none had ever been downloaded.
+- Removed the optional live datasets `live_boxscores`, `live_evolution`, `live_comparison` and `live_scoring`, and the `-api` option. None had ever been downloaded.
 - The team opponents statistics feeds and the team per-game mode are no longer fetched.
-- `rosters` (`v2/rosters/{club}`, one request per club and season) is no longer fetched or
-  loaded. In every season E2000-E2026 each roster entry was already in the season people
-  pages with identical values, and rosters had no extra fields. Existing roster versions stay
-  in the archive.
+- `rosters` (`v2/rosters/{club}`) is no longer fetched or loaded. In every season E2000-E2026, each roster entry was already in the season people pages with identical values. Existing roster versions stay in the archive.
 
-### 2026-09-24 - bronze layer and endpoint trim (M2)
+### 2026-09-24: Bronze layer and endpoint trim (M2)
 
-- Responses are stored as exact bytes, gzipped and versioned in `data/bronze/`, with a JSONL manifest (url, params, status, sha256, bytes).
+- Responses are stored as exact bytes, gzipped and versioned in `data/bronze/`, with a JSONL manifest.
 - Boxscore, Evolution, Comparison and ShootingGraphic are no longer fetched by default (7 → 3 requests per played game).
 - Season-people pages are kept as received; the synthetic combined file is gone.
 - Current-season clubs, rounds, people and rosters are re-checked at least every 20 hours.
 
-### 2026-09-24 - automatic current-season refresh
+### 2026-09-24: automatic current-season refresh
 
-- Standings, v3 statistics, clubs, rounds, people and rosters refresh automatically for hot current-season games (`--hot-hours`).
+- Standings, v3 statistics, clubs, rounds, people and rosters refresh automatically after hot current-season games (`--hot-hours`).
 - Changed resources are tracked per run and optionally written with `--summary-file`.
 
-### 2026-09-13 - primary API cache refactor
+### 2026-09-13: primary API cache refactor
 
 - Replaced Final Four and failure-count season termination with the v2 game list.
-- Added full future-fixture caching through v2 while limiting per-game detail to played games.
-- Added v2 clubs, per-club rosters, season people, rounds and game statistics.
-- Added v3 season statistics and five round-standing feeds.
-- Added legacy-only play-by-play, shots, live boxscore, evolution, comparison and scoring datasets.
-- Removed bulk legacy Header calls because v2 game lists provide the same game metadata.
-- Added a shared rate limiter, retries, Retry-After handling, raw manifests and JSONL failure logs.
-- Added cache/coverage tests for future games, current-season refreshes and pre-2007 live-data exclusion.
-- Added a per-season TimeCounter to cache decisions, progress notices, warnings, failures, rate-limit notices and final reports.
-- Fixed the `PlayByPlay` endpoint-name mismatch that silently skipped play-by-play files; the old CLI spelling remains supported.
-- Added offset pagination and completeness validation for v2 season people, including automatic upgrades of old partial cache files.
+- Cached all future fixtures through v2 while limiting per-game detail to played games.
+- Added v2 clubs, per-club rosters, season people, rounds and game statistics, v3 season statistics and five round-standing feeds.
+- Removed bulk live `Header` calls, because the v2 game lists provide the same metadata.
+- Added a shared rate limiter, retries, `Retry-After` handling, raw manifests and JSONL failure logs.
+- Added offset pagination and completeness checks for v2 season people.
+- Fixed the `PlayByPlay` endpoint-name mismatch that silently skipped play-by-play files.

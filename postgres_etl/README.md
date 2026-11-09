@@ -1,83 +1,57 @@
-# PostgreSQL silver loader
+# Silver loader (`postgres_etl`)
 
-Documentation: [EuroLeague Silver catalog](../docs/SILVER_CATALOG.md),
-[complete Silver column reference](../docs/SILVER_TABLE_REFERENCE.md),
-[Bronze resources](../docs/BRONZE_CATALOG.md), and the shared
-[player/team stats glossary](../docs/STAT_GLOSSARY.md).
+The Silver loader reads the newest version of each Bronze response and loads it into typed tables in the local PostgreSQL `silver` schema. It then calculates per-game tables from the loaded box scores and play-by-play. Silver holds source values only: Gold aggregates and postseason `PS` statistics rows are built later by [gold_etl](../gold_etl/README.md).
 
-`main.py` reads the latest version of each resource in the local bronze store
-and builds 26 source-derived tables in the PostgreSQL `silver` schema. The
-connection uses `search_path = silver`, so SQL and `-tb` use bare table names.
-The loader creates the schema if it is missing. Source responses remain in
-bronze; silver rows contain typed columns and no derived gold aggregates or
-postseason `PS` rows.
+Related documentation:
 
-Run from the repository root:
+- [Silver catalog](../docs/SILVER_CATALOG.md): what each table holds and where it comes from
+- [Silver table reference](../docs/SILVER_TABLE_REFERENCE.md): every column, type and source JSON path
+- [Data dictionary](../docs/DATA_DICTIONARY.md): calculation rules for the per-game tables
+- [Statistics glossary](../docs/STAT_GLOSSARY.md): formulas and meaning of each statistic
+
+## Contents
+
+- [Running the loader](#running-the-loader)
+- [Source tables](#source-tables)
+- [Calculated per-game tables](#calculated-per-game-tables)
+- [Load provenance](#load-provenance)
+- [Quality checks](#quality-checks)
+- [Example queries](#example-queries)
+- [Testing](#testing)
+
+## Running the loader
+
+Run from the repository root. A real load needs `psycopg2` and the connection settings in `postgres_etl/config_connection.json`; a dry run needs neither.
 
 ```powershell
-python postgres_etl/main.py --list-tables
-python postgres_etl/main.py -sc 2025 --dry-run
-python postgres_etl/main.py -sc 2025
-python postgres_etl/main.py -sc all
-python postgres_etl/main.py -sc 2025 --quality-only
-python postgres_etl/advanced.py -sc 2025 --dry-run
-python postgres_etl/possessions.py -sc 2025 --dry-run
-python postgres_etl/score_flow.py -sc 2025 --dry-run
-python postgres_etl/shot_splits.py -sc 2025 --dry-run
-python postgres_etl/on_court.py -sc 2025 --dry-run
-python postgres_etl/lineups.py -sc 2025 --dry-run
+python postgres_etl/main.py --list-tables              # table names, no database
+python postgres_etl/main.py -sc 2025 --dry-run         # parse and validate, no database
+python postgres_etl/main.py -sc 2025                   # load one season
+python postgres_etl/main.py -sc all                    # load every season in Bronze
+python postgres_etl/main.py -sc 2025 --quality-only    # check stored rows only
 ```
 
-`advanced.py` derives two more `silver` tables, `game_team_advanced` and
-`game_player_advanced`, from the loaded box scores of one season (possessions,
-pace, ratings, four factors, Game Score, player rates). Player usage, assist,
-rebound, steal and block % count the events of `play_by_play` while the player was
-on court (`on_court_rates.py`, feature 32), or use the box-score estimate with a
-3-minute floor where a game has no play-by-play; `rate_source` records which.
-`main.py` runs it after any real load that includes a game table or `play_by_play`,
-and it fails the run when its own checks report an error. `--dry-run` derives and counts rows; `--quality-only`
-checks stored rows. Each table and season is replaced in one transaction with
-a `load_log` entry (empty `bronze_versions`, since the source is Silver).
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `-cp`, `--competition` | `euroleague` | `euroleague` or `eurocup`. |
+| `-sc`, `--season-code` | `latest` | Years, full codes, inclusive ranges, `current`, `latest` or `all`, from the seasons present in Bronze. |
+| `-tb`, `--table` | `all` | Tables from `--list-tables`. |
+| `--dry-run` | off | Check parsing, types, required fields and duplicate keys without a database. |
+| `--quality-only` | off | Run the read-only checks on stored rows without loading. |
+| `--skip-quality-check` | off | Skip the checks that normally run after a load. |
+| `--data-root`, `--config` | `data/`, `postgres_etl/config_connection.json` | Alternative Bronze root or connection file. |
 
-`possessions.py` (feature 19a) adds `game_team_possessions`, counted possessions per
-team and game from the play-by-play events, next to the box-score estimate. `main.py`
-runs it after `advanced.py` when a load includes `games` or `play_by_play`; the options
-are the same. Games before E2007 have no play-by-play and no rows.
+The loader creates the `silver` schema if it is missing. The connection uses `search_path = silver`, so SQL and `-tb` use bare table names. A missing Bronze resource skips its table.
 
-`score_flow.py` (feature 19b) adds `game_team_score_flow`: lead changes, ties, time
-leading and trailing, largest lead, scoring runs and clutch results per team and game from
-the running score in `play_by_play`. It shares `possessions.py`'s event ordering, clock and
-storage code and runs right after it.
+### What a load does
 
-`shot_splits.py` (feature 19c) adds `game_team_shot_splits` (fast-break,
-second-chance and off-turnover points, assisted field goals) per team and game from the shots
-and play-by-play feeds. `main.py` runs it after a load that includes `games`,
-`play_by_play` or `shots`. The per-game shot zone table of 19c is no longer built.
+1. **Load source tables.** Each table and season is replaced in one transaction. If the transaction fails, both the rows and the provenance entry roll back.
+2. **Calculate per-game tables.** Each calculation runs only when the load included one of its source tables (see [below](#calculated-per-game-tables)). A failed calculation check ends the run with exit code 1.
+3. **Run quality checks.** If they fail, the run exits with code 1. The loaded rows are **not** rolled back; inspect the reported issues and reload.
 
-`on_court.py` (feature 29a) adds `game_player_on_court`: each player's continuous stretches
-on the floor per game, rebuilt from the box-score starters and the `IN`/`OUT` events, with
-elapsed-second start and end. `main.py` runs it after a load that includes `games`,
-`game_player_stats` or `play_by_play`.
+## Source tables
 
-`lineups.py` (feature 29b) adds `game_team_lineup_stints`: stretches with the same five
-players on court for both teams, with their possessions and points per team, built from
-the same substitution walk as `on_court.py` and run right after it.
-
-The dry run checks parsing, types, required fields, and duplicate keys without
-a database. A real load needs `psycopg2` and the credentials in
-`postgres_etl/config_connection.json`. Each table and season is replaced in
-one transaction. Missing source files skip that table. `-cp eurocup` selects
-EuroCup; `-sc` accepts a year, full code, range, `current`, `latest`, or
-`all`; `-tb` selects names from `--list-tables`.
-
-Every inserted row receives the load's UUID `load_id` and UTC `loaded_at`.
-The loader appends one `silver.load_log` record per table, competition, and
-season replacement in the same transaction, including replacements that insert
-zero rows. It records the inserted `row_count` and a sorted JSON array of
-bronze version paths relative to `data/bronze/`. Reruns keep earlier log
-entries while current rows point to the new load. A failed replacement rolls
-back both the rows and log entry. Quality checks report missing row metadata,
-missing matching log entries, and mismatched current row counts.
+`main.py` loads 26 tables:
 
 | Source | Silver tables |
 | --- | --- |
@@ -88,26 +62,69 @@ missing matching log entries, and mismatched current row counts.
 | v3 standings | `standings_basic`, `standings_calendar`, `standings_streaks`, `standings_ahead_behind`, `standings_margins`, `standings_calendar_streaks`, `standings_basic_form` |
 | Live API | `play_by_play`, `shots` |
 
-Every key starts with `competition_code` and `season_code`. Silver uses one
-name for each stat across v2 and v3, including `assists`, `pir`, `points`,
-`two_pointers_made`, and `fouls_drawn`. The [data dictionary](../docs/DATA_DICTIONARY.md)
-has the complete names and source mapping.
+Every key starts with `competition_code` and `season_code`. Silver uses one name for each statistic across v2 and v3, for example `assists`, `pir`, `points`, `two_pointers_made` and `fouls_drawn`. The [data dictionary](../docs/DATA_DICTIONARY.md#standard-column-names) lists all names and their source fields.
+
+## Calculated per-game tables
+
+Each script derives one or two more Silver tables from the loaded data, one season at a time. `main.py` runs them automatically after a load, in the order below, when the load included one of the trigger tables. Each can also run alone with the same `-cp` and `-sc` options plus `--dry-run` (derive and count without writing) or `--quality-only` (check stored rows).
+
+| Script | Silver table(s) | Contents | Runs after a load of |
+| --- | --- | --- | --- |
+| `advanced.py` | `game_team_advanced`, `game_player_advanced` | Possessions, pace, ratings, four factors, Game Score and player rates | `games`, `game_period_scores`, `game_team_stats`, `game_player_stats`, `game_stat_gaps`, `play_by_play` |
+| `possessions.py` | `game_team_possessions` | Possessions counted from play-by-play events | `games`, `play_by_play` |
+| `score_flow.py` | `game_team_score_flow` | Lead changes, ties, time leading and trailing, largest lead, scoring runs, clutch results | `games`, `play_by_play` |
+| `on_court.py` | `game_player_on_court` | Each player's continuous stretches on the floor | `games`, `game_player_stats`, `play_by_play` |
+| `lineups.py` | `game_team_lineup_stints` | Stretches with the same ten players on court, with possessions and points per team | `games`, `game_player_stats`, `play_by_play` |
+| `shot_splits.py` | `game_team_shot_splits` | Fast-break, second-chance and off-turnover points; assisted field goals | `games`, `play_by_play`, `shots` |
+
+```powershell
+python postgres_etl/advanced.py -sc 2025 --dry-run
+python postgres_etl/possessions.py -sc 2025 --dry-run
+```
+
+Notes on the calculations:
+
+- **Player rates in `advanced.py`.** Usage, assist, rebound, steal and block percentages count the play-by-play events that happened while the player was on court (`on_court_rates.py`). Where a game has no play-by-play, they fall back to the box-score estimate with a 3-minute floor. The `rate_source` column records which method was used.
+- **Play-by-play tables start at E2007.** Earlier games have no play-by-play, so `possessions.py`, `score_flow.py`, `on_court.py`, `lineups.py` and `shot_splits.py` produce no rows for them.
+- **Shared code.** `score_flow.py` reuses the event ordering, clock and storage code of `possessions.py`. `lineups.py` uses the same substitution walk as `on_court.py`, which rebuilds stretches from the box-score starters and the `IN`/`OUT` events.
+- **Retired table.** The official per-game shot zone table is no longer built; the web app derives its zones from `app_shots`.
+
+The calculation rules for each table are in the [data dictionary](../docs/DATA_DICTIONARY.md#derived-per-game-advanced-tables).
+
+## Load provenance
+
+Every row can be traced to the exact Bronze files it came from:
+
+- Every inserted row gets the load's UUID `load_id` and the UTC `loaded_at` timestamp.
+- Each replacement of a table, competition and season appends one row to `silver.load_log` in the same transaction, even when it inserts zero rows. The log records `row_count` and `bronze_versions`, a sorted JSON array of Bronze file paths relative to `data/bronze/`.
+- Reruns keep earlier log entries; current rows point to the newest load.
+- Calculated tables also write a `load_log` entry, with an empty `bronze_versions` because their source is Silver.
+
+The [Silver catalog](../docs/SILVER_CATALOG.md#provenance) has a query that traces rows back to their Bronze files.
+
+## Quality checks
+
+The checks run after every real load (unless `--skip-quality-check`) and with `--quality-only`. They report:
+
+- source gaps, orphan rows and missing statistics feeds
+- invalid fields on played games and other recorded anomalies
+- rows without `load_id` or `loaded_at`, rows without a matching `load_log` entry, and row counts that differ from the log
+
+## Example queries
+
+One season's player box scores:
 
 ```sql
 SELECT game_code, person_key, points, two_pointers_made, assists
 FROM silver.game_player_stats
 WHERE competition_code = 'E' AND season_code = 'E2025'
 LIMIT 20;
-
-SELECT row.game_code, row.load_id, log.loaded_at, log.bronze_versions
-FROM silver.games AS row
-JOIN silver.load_log AS log
-  ON log.competition_code = row.competition_code
- AND log.season_code = row.season_code
- AND log.table_name = 'games' AND log.load_id = row.load_id
-WHERE row.competition_code = 'E' AND row.season_code = 'E2025'
-LIMIT 20;
 ```
 
-The quality report checks source gaps, orphan rows, missing stats feeds,
-invalid played-game fields, and other recorded anomalies.
+More examples are in the [Silver catalog](../docs/SILVER_CATALOG.md#example-queries).
+
+## Testing
+
+```powershell
+python -m unittest discover -s postgres_etl/tests
+```

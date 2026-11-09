@@ -1,239 +1,215 @@
 # Silver data catalog
 
-Silver is the local PostgreSQL layer of typed EuroLeague and EuroCup source data and
-calculated game detail. This catalog covers **26 source tables, seven calculated tables and
-one load-log table**. It describes the code contract checked on 2026-10-20;
-no API fetch, database rebuild or live coverage query was performed.
+Silver is the local PostgreSQL layer of typed EuroLeague and EuroCup source data plus calculated per-game detail. This catalog describes its **26 source tables, 7 calculated tables and the load log**: what each holds, where it comes from, and which Gold tables use it. For every column, follow a table's link to the [Silver table reference](SILVER_TABLE_REFERENCE.md). For loading commands, see [postgres_etl/README.md](../postgres_etl/README.md).
 
-EuroLeague rows use `competition_code = 'E'` and season codes such as `E2025`; the
-examples below use EuroLeague. EuroCup rows (`'U'`, `U2025`) share every table and
-are built locally only; see [EuroCup](#eurocup) for its coverage, formats and
-source quirks.
+This describes the code contract checked on 2026-10-20; no API fetch, rebuild or live coverage query was made for it. The examples use EuroLeague (`competition_code = 'E'`, seasons such as `E2025`). EuroCup rows (`'U'`, `U2025`) share every table; see [EuroCup](#eurocup).
 
-| Document | Purpose |
-| --- | --- |
-| [Bronze catalog](BRONZE_CATALOG.md) | API resources, response containers, storage and upstream lineage. |
-| [Silver catalog](SILVER_CATALOG.md) | Table purposes, grain, sources, downstream use and query examples. |
-| [Silver column reference](SILVER_TABLE_REFERENCE.md) | Every Silver column, type, nullability, key, source path and description. |
-| [Gold catalog](DATA_CATALOG.md) | Choose the app-facing table for each frontend feature. |
-| [Gold column reference](GOLD_TABLE_REFERENCE.md) | Published column contracts. |
-| [Shared stats glossary](STAT_GLOSSARY.md) | Player/team metric formulas, units and interpretation. |
-| [Pipeline dictionary](DATA_DICTIONARY.md) | Operational rules and historical verification notes. |
+## Contents
 
-## What Silver owns
+- [What Silver does](#what-silver-does)
+- [Table catalog](#table-catalog)
+- [Lineage from Bronze to Gold](#lineage-from-bronze-to-gold)
+- [Coverage and interpretation](#coverage-and-interpretation)
+- [EuroCup](#eurocup)
+- [Provenance](#provenance)
+- [Example queries](#example-queries)
 
-Bronze preserves response bytes. Silver extracts individual typed fields, normalizes
-source spellings, resolves live player identities and records known gaps. Calculated
-game tables enrich those rows with box-score and event-derived statistics. Gold
-then creates season/scope/round aggregates, records, identities and page tables.
+## What Silver does
 
-Use `silver.<table>` explicitly in analysis. The ETL connection's search path is
-Silver, but the catalogs use schema-qualified names to avoid confusing similarly
-named Gold tables. Silver itself is local; publication reads Gold, not Silver.
+Bronze keeps the exact response bytes. Silver:
 
-All 36 data tables have a primary key beginning with competition and season and
-two required metadata columns, `load_id UUID` and `loaded_at TIMESTAMPTZ`.
-`silver.load_log` records successful replacements, including zero-row replacements.
-Missing input files cause a source table to be skipped; a missing source is not
-the same as a successful empty replacement.
+- extracts individual typed fields and normalizes source spellings,
+- resolves live player identities to box-score `person_key`s,
+- records known source gaps instead of hiding them, and
+- adds calculated per-game tables from box scores and play-by-play.
+
+Gold then builds season, scope and round aggregates, records, identities and page tables from Silver. Silver itself is never published; Neon is filled from Gold.
+
+Every one of the 33 data tables has a primary key starting with `competition_code` and `season_code`, plus two required metadata columns, `load_id UUID` and `loaded_at TIMESTAMPTZ`. `silver.load_log` records each successful replacement, including zero-row ones. A missing input file skips its table, which is not the same as a successful empty replacement.
+
+Use `silver.<table>` explicitly in analysis. The loader's connection sets `search_path = silver`, but schema-qualified names avoid confusion with the similarly named Gold tables.
 
 ## Table catalog
 
-Source paths below are logical resources beneath
-`data/bronze/euroleague/<season>/`; `_catalog/v2/seasons` is competition-wide.
-Each resource directory contains versioned `.json.gz` files, not one overwritten
-JSON file. Paths and response shapes are explained in the Bronze catalog.
+Upstream paths are Bronze resources under `data/bronze/euroleague/<season>/` (`_catalog/v2/seasons` is shared by all seasons). Each resource directory holds versioned `.json.gz` files; the [Bronze catalog](BRONZE_CATALOG.md) explains them.
 
 ### Season, clubs, people and registration
 
-| Table | Purpose / one row | Upstream | Gold use |
-| --- | --- | --- | --- |
-| [`silver.seasons`](SILVER_TABLE_REFERENCE.md#seasons) | Competition season names, dates and champion. Grain: one season. | `_catalog/v2/seasons` | [`app_seasons`](GOLD_TABLE_REFERENCE.md#app_seasons) |
-| [`silver.clubs`](SILVER_TABLE_REFERENCE.md#clubs) | Season club profiles, names, crests and venue codes. Grain: one club-season. | `v2/clubs` | [`app_clubs`](GOLD_TABLE_REFERENCE.md#app_clubs); app_club_identities; names/crests in page and aggregate tables |
-| [`silver.people`](SILVER_TABLE_REFERENCE.md#people) | Deduplicated season person profiles and identity bridge. Grain: one person-season. | `v2/season_people_pages/offset_*` | [`app_people`](GOLD_TABLE_REFERENCE.md#app_people); app_players (via player registrations) |
-| [`silver.registrations`](SILVER_TABLE_REFERENCE.md#registrations) | Club/role registrations and roster details. Grain: one registration-season. | `v2/season_people_pages/offset_*` | [`app_registrations`](GOLD_TABLE_REFERENCE.md#app_registrations); app_players |
-| [`silver.rounds`](SILVER_TABLE_REFERENCE.md#rounds) | Source round definitions and date ranges. Grain: one round definition-season. | `v2/rounds` | [`app_rounds`](GOLD_TABLE_REFERENCE.md#app_rounds) |
+| Table | Purpose | One row | Upstream | Used by Gold |
+| --- | --- | --- | --- | --- |
+| [`seasons`](SILVER_TABLE_REFERENCE.md#seasons) | Season names, dates and champion | season | `_catalog/v2/seasons` | `app_seasons` |
+| [`clubs`](SILVER_TABLE_REFERENCE.md#clubs) | Club profiles, names, crests, venue codes | club per season | `v2/clubs` | `app_clubs`, `app_club_identities`; names and crests in page tables |
+| [`people`](SILVER_TABLE_REFERENCE.md#people) | Deduplicated person profiles and identity bridge | person per season | `v2/season_people_pages/offset_*` | `app_people`, `app_players` |
+| [`registrations`](SILVER_TABLE_REFERENCE.md#registrations) | Club and role registrations, roster details | registration per season | `v2/season_people_pages/offset_*` | `app_registrations`, `app_players` |
+| [`rounds`](SILVER_TABLE_REFERENCE.md#rounds) | Round definitions and date ranges | round per season | `v2/rounds` | `app_rounds` |
 
 ### Fixtures and official box scores
 
-| Table | Purpose / one row | Upstream | Gold use |
-| --- | --- | --- | --- |
-| [`silver.games`](SILVER_TABLE_REFERENCE.md#games) | Every scheduled or played fixture with result, status and venue. Grain: one game-season. | `v2/games` | [`app_games`](GOLD_TABLE_REFERENCE.md#app_games); team/player round tables, standings_stats, records, postseason_series and event/lineup aggregates |
-| [`silver.game_officials`](SILVER_TABLE_REFERENCE.md#game_officials) | Official assignments extracted from the fixture list. Grain: one official slot-game. | `v2/games` | [`app_game_officials`](GOLD_TABLE_REFERENCE.md#app_game_officials) |
-| [`silver.game_period_scores`](SILVER_TABLE_REFERENCE.md#game_period_scores) | Quarter and overtime points extracted from fixtures. Grain: one side-period-game. | `v2/games` | [`app_game_period_scores`](GOLD_TABLE_REFERENCE.md#app_game_period_scores) |
-| [`silver.game_player_stats`](SILVER_TABLE_REFERENCE.md#game_player_stats) | Official player box-score lines and registration context. Grain: one player-side-game. | `v2/game_stats/{game}` | [`app_game_player_stats`](GOLD_TABLE_REFERENCE.md#app_game_player_stats); player round stats/PER/Win Shares, game PER, PS player rows, app_records_single_games |
-| [`silver.game_team_stats`](SILVER_TABLE_REFERENCE.md#game_team_stats) | Official team-only and complete team box scores. Grain: one stats_kind-side-game. | `v2/game_stats/{game}` | [`app_game_team_stats`](GOLD_TABLE_REFERENCE.md#app_game_team_stats); app_team_season_stats, team/player round calculations, app_records_team_seasons |
-| [`silver.game_stat_gaps`](SILVER_TABLE_REFERENCE.md#game_stat_gaps) | Explicit explanations of missing official box-score measures. Grain: one stat_name-game. | `v2/game_stats/{game}` | [`app_game_stat_gaps`](GOLD_TABLE_REFERENCE.md#app_game_stat_gaps) |
+| Table | Purpose | One row | Upstream | Used by Gold |
+| --- | --- | --- | --- | --- |
+| [`games`](SILVER_TABLE_REFERENCE.md#games) | Every scheduled or played fixture with result, status and venue | game | `v2/games` | `app_games`; context for nearly every calculated table |
+| [`game_officials`](SILVER_TABLE_REFERENCE.md#game_officials) | Referee assignments | official slot per game | `v2/games` | `app_game_officials` |
+| [`game_period_scores`](SILVER_TABLE_REFERENCE.md#game_period_scores) | Quarter and overtime points | side and period per game | `v2/games` | `app_game_period_scores` |
+| [`game_player_stats`](SILVER_TABLE_REFERENCE.md#game_player_stats) | Official player box-score lines | player and side per game | `v2/game_stats/{game}` | `app_game_player_stats`; player round stats, PER, Win Shares, game PER, `PS` rows, single-game records |
+| [`game_team_stats`](SILVER_TABLE_REFERENCE.md#game_team_stats) | Official team-only and complete team box scores | `stats_kind` per side and game | `v2/game_stats/{game}` | `app_game_team_stats`; team-season totals, round calculations, team-season records |
+| [`game_stat_gaps`](SILVER_TABLE_REFERENCE.md#game_stat_gaps) | Why an official box-score measure is missing | `stat_name` per game | `v2/game_stats/{game}` | `app_game_stat_gaps` |
 
 ### API player and team season statistics
 
-| Table | Purpose / one row | Upstream | Gold use |
-| --- | --- | --- | --- |
-| [`silver.season_player_stats_traditional`](SILVER_TABLE_REFERENCE.md#season_player_stats_traditional) | Source player traditional statistics by phase and mode. Grain: one entry ordinal-phase-mode. | `v3/season_stats/players_traditional_{phase}_{mode}` | [`app_season_player_stats_traditional`](GOLD_TABLE_REFERENCE.md#app_season_player_stats_traditional) |
-| [`silver.season_player_stats_advanced`](SILVER_TABLE_REFERENCE.md#season_player_stats_advanced) | Source player advanced statistics by phase and mode. Grain: one entry ordinal-phase-mode. | `v3/season_stats/players_advanced_{phase}_{mode}` | [`app_season_player_stats_advanced`](GOLD_TABLE_REFERENCE.md#app_season_player_stats_advanced) |
-| [`silver.season_player_stats_scoring`](SILVER_TABLE_REFERENCE.md#season_player_stats_scoring) | Source player scoring statistics by phase and mode. Grain: one entry ordinal-phase-mode. | `v3/season_stats/players_scoring_{phase}_{mode}` | [`app_season_player_stats_scoring`](GOLD_TABLE_REFERENCE.md#app_season_player_stats_scoring) |
-| [`silver.season_player_stats_misc`](SILVER_TABLE_REFERENCE.md#season_player_stats_misc) | Source player misc statistics by phase and mode. Grain: one entry ordinal-phase-mode. | `v3/season_stats/players_misc_{phase}_{mode}` | [`app_season_player_stats_misc`](GOLD_TABLE_REFERENCE.md#app_season_player_stats_misc) |
-| [`silver.season_team_stats_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_traditional) | Source team traditional reference statistics. Grain: one club-phase-mode. | `v3/season_stats/teams_traditional_{phase}_{mode}` | No direct projection; API cross-checks for calculated round statistics |
-| [`silver.season_team_stats_advanced`](SILVER_TABLE_REFERENCE.md#season_team_stats_advanced) | Source team advanced reference statistics. Grain: one club-phase-mode. | `v3/season_stats/teams_advanced_{phase}_{mode}` | No direct projection; API cross-checks for calculated round statistics |
+| Table | Purpose | One row | Upstream | Used by Gold |
+| --- | --- | --- | --- | --- |
+| [`season_player_stats_traditional`](SILVER_TABLE_REFERENCE.md#season_player_stats_traditional) | Player traditional statistics | feed entry per phase and mode | `v3/season_stats/players_traditional_{phase}_{mode}` | `app_season_player_stats_traditional` |
+| [`season_player_stats_advanced`](SILVER_TABLE_REFERENCE.md#season_player_stats_advanced) | Player advanced statistics | feed entry per phase and mode | `v3/season_stats/players_advanced_{phase}_{mode}` | `app_season_player_stats_advanced` |
+| [`season_player_stats_scoring`](SILVER_TABLE_REFERENCE.md#season_player_stats_scoring) | Player scoring statistics | feed entry per phase and mode | `v3/season_stats/players_scoring_{phase}_{mode}` | `app_season_player_stats_scoring` |
+| [`season_player_stats_misc`](SILVER_TABLE_REFERENCE.md#season_player_stats_misc) | Player miscellaneous statistics | feed entry per phase and mode | `v3/season_stats/players_misc_{phase}_{mode}` | `app_season_player_stats_misc` |
+| [`season_team_stats_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_traditional) | Team traditional reference statistics | club per phase and mode | `v3/season_stats/teams_traditional_{phase}_{mode}` | No Gold table; cross-check for calculated team totals |
+| [`season_team_stats_advanced`](SILVER_TABLE_REFERENCE.md#season_team_stats_advanced) | Team advanced reference statistics | club per phase and mode | `v3/season_stats/teams_advanced_{phase}_{mode}` | No Gold table; cross-check for calculated team totals |
 
-### Official standings and child rows
+### Official standings
 
-| Table | Purpose / one row | Upstream | Gold use |
+All seven tables are merged into one row per club, phase and round in `app_standings`; the two child tables become ordered JSON arrays there.
+
+| Table | Purpose | One row | Upstream feed |
 | --- | --- | --- | --- |
-| [`silver.standings_basic`](SILVER_TABLE_REFERENCE.md#standings_basic) | Official positions, wins/losses, points and record splits. Grain: one club-phase-round. | `v3/standings/{phase}_{round}_basicstandings` | [`app_standings`](GOLD_TABLE_REFERENCE.md#app_standings), merged/normalized into one page row |
-| [`silver.standings_calendar`](SILVER_TABLE_REFERENCE.md#standings_calendar) | Official calendar standings snapshot. Grain: one club-phase-round. | `v3/standings/{phase}_{round}_calendarstandings` | [`app_standings`](GOLD_TABLE_REFERENCE.md#app_standings), merged/normalized into one page row |
-| [`silver.standings_streaks`](SILVER_TABLE_REFERENCE.md#standings_streaks) | Official streak and recent-form record summaries. Grain: one club-phase-round. | `v3/standings/{phase}_{round}_streaks` | [`app_standings`](GOLD_TABLE_REFERENCE.md#app_standings), merged/normalized into one page row |
-| [`silver.standings_ahead_behind`](SILVER_TABLE_REFERENCE.md#standings_ahead_behind) | Official win-loss records by score checkpoint. Grain: one club-phase-round. | `v3/standings/{phase}_{round}_aheadbehind` | [`app_standings`](GOLD_TABLE_REFERENCE.md#app_standings), merged/normalized into one page row |
-| [`silver.standings_margins`](SILVER_TABLE_REFERENCE.md#standings_margins) | Official result records by margin and statistical comparison. Grain: one club-phase-round. | `v3/standings/{phase}_{round}_margins` | [`app_standings`](GOLD_TABLE_REFERENCE.md#app_standings), merged/normalized into one page row |
-| [`silver.standings_calendar_streaks`](SILVER_TABLE_REFERENCE.md#standings_calendar_streaks) | Normalized child streaks of calendar standings. Grain: one streak ordinal-club-phase-round. | `v3/standings/{phase}_{round}_calendarstandings` | [`app_standings`](GOLD_TABLE_REFERENCE.md#app_standings), merged/normalized into one page row |
-| [`silver.standings_basic_form`](SILVER_TABLE_REFERENCE.md#standings_basic_form) | Normalized recent-result labels from basic standings. Grain: one result ordinal-club-phase-round. | `v3/standings/{phase}_{round}_basicstandings` | [`app_standings`](GOLD_TABLE_REFERENCE.md#app_standings), merged/normalized into one page row |
+| [`standings_basic`](SILVER_TABLE_REFERENCE.md#standings_basic) | Positions, wins and losses, points, record splits | club per phase and round | `basicstandings` |
+| [`standings_calendar`](SILVER_TABLE_REFERENCE.md#standings_calendar) | Calendar standings snapshot | club per phase and round | `calendarstandings` |
+| [`standings_streaks`](SILVER_TABLE_REFERENCE.md#standings_streaks) | Streak and recent-form summaries | club per phase and round | `streaks` |
+| [`standings_ahead_behind`](SILVER_TABLE_REFERENCE.md#standings_ahead_behind) | Win-loss records by score checkpoint | club per phase and round | `aheadbehind` |
+| [`standings_margins`](SILVER_TABLE_REFERENCE.md#standings_margins) | Results by margin and statistical comparison | club per phase and round | `margins` |
+| [`standings_calendar_streaks`](SILVER_TABLE_REFERENCE.md#standings_calendar_streaks) | Child streaks of the calendar standings | streak per club, phase and round | `calendarstandings` |
+| [`standings_basic_form`](SILVER_TABLE_REFERENCE.md#standings_basic_form) | Recent-result labels from basic standings | result per club, phase and round | `basicstandings` |
+
+Each feed is stored at `v3/standings/{phase}_{round}_{feed}`.
 
 ### Live events and shots
 
-| Table | Purpose / one row | Upstream | Gold use |
-| --- | --- | --- | --- |
-| [`silver.play_by_play`](SILVER_TABLE_REFERENCE.md#play_by_play) | Raw typed live event timeline with resolved player identities. Grain: one event ordinal-period-game. | `live/{game}/play_by_play` | [`app_play_by_play`](GOLD_TABLE_REFERENCE.md#app_play_by_play) |
-| [`silver.shots`](SILVER_TABLE_REFERENCE.md#shots) | Typed shot attempts, coordinates, zone and context flags. Grain: one shot ordinal-game. | `live/{game}/shooting_charts` | [`app_shots`](GOLD_TABLE_REFERENCE.md#app_shots) |
+| Table | Purpose | One row | Upstream | Used by Gold |
+| --- | --- | --- | --- | --- |
+| [`play_by_play`](SILVER_TABLE_REFERENCE.md#play_by_play) | Typed event timeline with resolved player identities | event per period and game | `live/{game}/play_by_play` | `app_play_by_play` |
+| [`shots`](SILVER_TABLE_REFERENCE.md#shots) | Shot attempts with coordinates, zone and context flags | shot per game | `live/{game}/shooting_charts` | `app_shots` |
 
 ### Calculated game tables
 
-| Table | Purpose / one row | Upstream | Gold use |
-| --- | --- | --- | --- |
-| [`silver.game_team_advanced`](SILVER_TABLE_REFERENCE.md#game_team_advanced) | Box-score estimated possessions, pace, ratings and four factors. Grain: one side-game. | `games, game_period_scores, game_team_stats, game_stat_gaps` | [`app_game_team_advanced`](GOLD_TABLE_REFERENCE.md#app_game_team_advanced); team/player round calculations, game PER context |
-| [`silver.game_player_advanced`](SILVER_TABLE_REFERENCE.md#game_player_advanced) | Player Game Score, efficiency and on-court/estimated rates. Grain: one player-side-game. | `games, game_period_scores, game_team_stats, game_player_stats, game_stat_gaps, play_by_play` | [`app_game_player_advanced`](GOLD_TABLE_REFERENCE.md#app_game_player_advanced); app_player_round_stats Game Score totals |
-| [`silver.game_team_possessions`](SILVER_TABLE_REFERENCE.md#game_team_possessions) | Counted possessions and their measurable lengths. Grain: one side-game. | `games, game_team_advanced, play_by_play` | [`app_game_team_possessions`](GOLD_TABLE_REFERENCE.md#app_game_team_possessions); app_team_pbp_stats |
-| [`silver.game_team_score_flow`](SILVER_TABLE_REFERENCE.md#game_team_score_flow) | Running-score leads, runs, time ahead/behind and clutch. Grain: one side-game. | `games, play_by_play` | [`app_game_team_score_flow`](GOLD_TABLE_REFERENCE.md#app_game_team_score_flow); app_team_pbp_stats |
-| [`silver.game_team_shot_splits`](SILVER_TABLE_REFERENCE.md#game_team_shot_splits) | Flagged scoring and capped assisted-field-goal counts. Grain: one side-game. | `games, shots, play_by_play` | [`app_game_team_shot_splits`](GOLD_TABLE_REFERENCE.md#app_game_team_shot_splits); app_team_pbp_stats |
-| [`silver.game_player_on_court`](SILVER_TABLE_REFERENCE.md#game_player_on_court) | Reconstructed continuous player on-court stretches. Grain: one interval ordinal-player-side-game. | `games, game_player_stats, play_by_play` | [`app_game_player_on_court`](GOLD_TABLE_REFERENCE.md#app_game_player_on_court) |
-| [`silver.game_team_lineup_stints`](SILVER_TABLE_REFERENCE.md#game_team_lineup_stints) | Complete five-versus-five intervals with scoring and possessions. Grain: one stint ordinal-side-game. | `games, game_player_stats, play_by_play` | [`app_game_team_lineup_stints`](GOLD_TABLE_REFERENCE.md#app_game_team_lineup_stints); app_player_on_off, app_lineup_ratings, app_player_rapm |
+These are built from other Silver tables by the scripts described in [postgres_etl/README.md](../postgres_etl/README.md#calculated-per-game-tables).
+
+| Table | Purpose | One row | Built from | Used by Gold |
+| --- | --- | --- | --- | --- |
+| [`game_team_advanced`](SILVER_TABLE_REFERENCE.md#game_team_advanced) | Box-score estimated possessions, pace, ratings, four factors | side per game | `games`, `game_period_scores`, `game_team_stats`, `game_stat_gaps` | `app_game_team_advanced`; round calculations, game PER |
+| [`game_player_advanced`](SILVER_TABLE_REFERENCE.md#game_player_advanced) | Game Score, efficiency, on-court or estimated rates | player and side per game | the above plus `game_player_stats`, `play_by_play` | `app_game_player_advanced`; Game Score in `app_player_round_stats` |
+| [`game_team_possessions`](SILVER_TABLE_REFERENCE.md#game_team_possessions) | Counted possessions and their lengths | side per game | `games`, `game_team_advanced`, `play_by_play` | `app_game_team_possessions`, `app_team_pbp_stats` |
+| [`game_team_score_flow`](SILVER_TABLE_REFERENCE.md#game_team_score_flow) | Leads, runs, time ahead and behind, clutch | side per game | `games`, `play_by_play` | `app_game_team_score_flow`, `app_team_pbp_stats` |
+| [`game_team_shot_splits`](SILVER_TABLE_REFERENCE.md#game_team_shot_splits) | Flagged scoring and capped assisted field goals | side per game | `games`, `shots`, `play_by_play` | `app_game_team_shot_splits`, `app_team_pbp_stats` |
+| [`game_player_on_court`](SILVER_TABLE_REFERENCE.md#game_player_on_court) | Continuous on-court stretches | interval per player, side and game | `games`, `game_player_stats`, `play_by_play` | `app_game_player_on_court` |
+| [`game_team_lineup_stints`](SILVER_TABLE_REFERENCE.md#game_team_lineup_stints) | Complete five-on-five stretches with points and possessions | stint per side and game | `games`, `game_player_stats`, `play_by_play` | `app_game_team_lineup_stints`, `app_player_on_off`, `app_lineup_ratings`, `app_player_rapm` |
 
 ### Load metadata
 
-| Table | Purpose / one row | Upstream | Gold use |
+| Table | Purpose | One row | Used by Gold |
 | --- | --- | --- | --- |
-| [`silver.load_log`](SILVER_TABLE_REFERENCE.md#load_log) | One successful table/competition/season replacement, including zero-row loads. | Load writers | No published projection. |
+| [`load_log`](SILVER_TABLE_REFERENCE.md#load_log) | Successful table replacements, including zero-row loads | one replacement of a table, competition and season | Not published |
 
-## Lineage and layer differences
+## Lineage from Bronze to Gold
 
-| Need | Bronze -> Silver -> Gold |
+| Need | Bronze → Silver → Gold |
 | --- | --- |
-| Schedule/results | `v2/games` -> `silver.games` -> `gold.app_games`. The same response supplies officials and period scores. |
-| Roster/career identity | People pages -> `silver.people`, `silver.registrations` -> season profiles/registrations and `gold.app_players`. |
-| Official player stats | `v3/season_stats/players_*` -> four `silver.season_player_stats_*` tables -> the four Gold projections plus calculated rows/qualification. |
-| Team efficiency | `v2/game_stats/*` + fixtures -> team box scores and `silver.game_team_advanced` -> team round tables and `gold.app_standings_stats`. |
-| Player Game Score/PER/Win Shares | Box scores -> player/team Silver rows and game advanced -> player round stats/ratings/win shares and Gold game PER. PER/Win Shares are Gold calculations. |
-| Official standings | Five v3 feeds -> seven normalized Silver tables -> one `gold.app_standings` page table. |
-| Score flow and possessions | Live events + fixtures -> per-game Silver possessions/score-flow tables -> Gold copies and `gold.app_team_pbp_stats`. |
-| Shot maps and scoring splits | Shots + events + fixtures -> Silver shot splits -> Gold game copies and team PBP summaries. |
-| Lineups, on/off, RAPM | Starters + events + fixtures -> Silver intervals and complete stints -> Gold copies, lineup ratings, on/off and RAPM. |
+| Schedule and results | `v2/games` → `games` (plus `game_officials`, `game_period_scores`) → `app_games` |
+| Roster and career identity | people pages → `people`, `registrations` → season profiles, registrations and `app_players` |
+| Official player season stats | `v3/season_stats/players_*` → four `season_player_stats_*` → four Gold tables plus calculated rows and qualification |
+| Team efficiency | `v2/game_stats/*` and fixtures → team box scores and `game_team_advanced` → `app_standings_stats` |
+| Player Game Score, PER, Win Shares | box scores → player and team Silver rows and per-game advanced → player round tables and game PER (PER and Win Shares are calculated in Gold) |
+| Official standings | five v3 feeds → seven Silver tables → `app_standings` |
+| Score flow and possessions | live events and fixtures → per-game Silver tables → Gold copies and `app_team_pbp_stats` |
+| Shot maps and scoring splits | shots, events and fixtures → `game_team_shot_splits` → Gold copy and `app_team_pbp_stats` |
+| Lineups, on/off, RAPM | starters, events and fixtures → on-court intervals and stints → Gold copies, lineup ratings, on/off and RAPM |
 
-The raw team API season feeds stay in Silver for comparison with calculated
-Gold results. They do not have direct app tables. Gold `app_standings` merges
-the seven Silver standings tables and turns child rows back into ordered JSON.
+### Where Silver and Gold differ
 
-Gold source projections omit provenance. Gold season player tables add
-`is_calculated`, `min_games`, `qualified`, missing `perGame` rows and, for
-traditional/misc only, postseason `PS` rows. Silver retains only source phases
-and modes. The Gold team-season table stores actual phase totals without
-synthetic all/PS; round tables have their separate all/phase/PS scope model.
+Matching metric values do not mean identical schemas:
 
-Silver `game_player_advanced.rate_source` distinguishes actual on-court rates
-from box-score estimates. Gold omits this indicator and adds game_uper,
-game_aper and game_per. Gold team advanced drops opponent, phase and round
-context columns; join its game row for those values. Do not assume Silver and
-Gold schemas are identical even when their metric values match.
+- Gold source projections omit `load_id` and `loaded_at`.
+- Gold season player tables add `is_calculated`, `min_games`, `qualified` and the missing `perGame` rows; traditional and misc also add postseason `PS` rows. Silver keeps only the source phases and modes.
+- The Gold team-season table stores actual phase totals without synthetic `all` or `PS` rows. Round tables have their own `all`/phase/`PS` scope model.
+- Silver `game_player_advanced.rate_source` says whether a rate came from on-court events or a box-score estimate. Gold drops it and adds `game_uper`, `game_aper` and `game_per`.
+- Gold `app_game_team_advanced` drops the opponent, phase and round columns; join the game row for them.
+- The API team season feeds stay in Silver only, for comparison with calculated Gold results.
 
 ## Coverage and interpretation
 
-EuroLeague box-score and API season sources are supported from E2000, subject
-to the actual response. Live event and shot sources begin at E2007 and still
-have game-level gaps. A successful HTTP request, an empty Silver table and a
-NULL rate describe different conditions. Scheduled games and forfeits without
-complete box scores do not produce normal calculated-game rows.
+### Coverage
 
-`NULL` means unavailable or undefined. The loader converts empty numeric markers
-and undefined percentages to NULL, stores unknown attendance as NULL and
-identifies specified all-zero box-score measures as unrecorded. It does not
-convert every zero into NULL. The original response remains in Bronze.
+- EuroLeague box scores and API season feeds are supported from E2000, subject to each response.
+- Live events and shots begin at E2007 and still have gaps for individual games.
+- Scheduled games and forfeits without complete box scores produce no calculated game rows.
+- A successful HTTP request, an empty Silver table and a `NULL` rate describe different situations.
 
-Source percentages keep their source scale; calculated ratios normally use
-fractions. Use the shared glossary for each measure. Raw standings record text
-must not be treated as a points/rebounds total.
+### Missing values
 
-Live `period` is text: FirstQuarter, SecondQuarter, ThirdQuarter, ForthQuarter
-(the upstream spelling), ExtraTime. Chronology uses that explicit period rank,
-overtime number derived from minute, then event_ordinal. Alphabetic period order
-and play_number are both unsuitable. `marker_time` is NULL on period markers
-(`BP`, `EP`, `EG`) and on events whose source clock holds control characters,
-which PostgreSQL cannot store: E2026 game 100 has 19 such events
-(`play_by_play_clock_unreadable` warns). The calculated tables treat those
-events as having no clock. `person_code` in events/shots resolves to
-the box-score `person_key`, not necessarily the career profile's person_code.
+`NULL` means unavailable or undefined. The loader converts empty numeric markers and undefined percentages to `NULL`, stores unknown attendance as `NULL`, and marks specified all-zero box-score measures as unrecorded. It does not turn every zero into `NULL`. The original response stays in Bronze.
+
+### Units
+
+Source percentages keep their source scale; calculated ratios are normally fractions. Check the [glossary](STAT_GLOSSARY.md) for each measure. Raw standings record text is not a points or rebounds total.
+
+### Play-by-play ordering and clocks
+
+- `period` is text: `FirstQuarter`, `SecondQuarter`, `ThirdQuarter`, `ForthQuarter` (the upstream spelling) and `ExtraTime`.
+- Chronological order is the period rank, then the overtime number derived from `minute`, then `event_ordinal`. Alphabetical period order and `play_number` both give wrong orders.
+- `marker_time` is `NULL` on period markers (`BP`, `EP`, `EG`) and on events whose source clock contains control characters that PostgreSQL cannot store. E2026 game 100 has 19 such events (the `play_by_play_clock_unreadable` check warns). Calculated tables treat these events as having no clock.
+- `person_code` in events and shots resolves to the box-score `person_key`, not necessarily the career profile's `person_code`.
 
 ## EuroCup
 
-Checked on 2026-10-26 with read-only queries on local Silver and against
-[qualification.py](../gold_etl/qualification.py).
+Checked on 2026-10-26 with read-only queries on local Silver and against [qualification.py](../gold_etl/qualification.py).
 
-- **Status:** local only. `python pipeline.py -cp eurocup` refreshes the current
-  season through Bronze, Silver and Gold; nothing is published to Neon until the
-  owner approves it.
-- **Coverage:** 25 seasons, U2002-U2026, with games and box scores
-  (`data/bronze/eurocup/`). U2000 and U2001 are fetched but empty in the API.
-  Play-by-play and shots begin at U2007. U2026 is in progress (64 of 224 games
-  played on the check date).
-- **Phase codes:** the regular season is `RS`; `TS` (U2016-U2020), `L32`
-  (U2013-U2015) and `L16` (U2008-U2012) are later group stages. The knockouts are
-  `8F`, `4F`, `2F` and `Final`, and in U2007 also `L32` and `L16`, which the API
-  marks as groups although they were two-leg knockouts. `Final` can hold a final
-  tournament (semifinals, final and third-place game), not only one final.
-- **Tie formats** (owner-confirmed; the full per-season table is in the
-  [18c archive](../blueprint/history/features/18c-eurocup-postseason.md)):
+**Status.** Local only. `python pipeline.py -cp eurocup` refreshes the current season through Bronze, Silver and Gold. Nothing is published to Neon until the owner approves it.
 
-  | Seasons | Knockout ties |
-  | --- | --- |
-  | U2002-U2015 | Two-leg aggregate in the phases listed in `TWO_LEG_PHASES`; the rest single games |
-  | U2016-U2018, U2020 | `4F`, `2F`, `Final` best-of-three |
-  | U2019 | Cancelled before the playoffs; no postseason and no champion |
-  | U2021-U2022 | Single games |
-  | U2023-U2025 | `8F`, `4F` single games; `2F`, `Final` best-of-three |
-  | U2026 | All knockouts best-of-three (none played yet) |
+**Coverage.** 25 seasons, U2002-U2026, with games and box scores (`data/bronze/eurocup/`). U2000 and U2001 are fetched but empty in the API. Play-by-play and shots begin at U2007. U2026 was in progress on the check date (64 of 224 games played).
 
-- **Source quirks:**
-  - 8 played legs ended level (U2004, U2007, U2010, U2014 and U2015), all inside
-    two-leg ties where the aggregate decides; `draw_without_two_leg_tie` is an
-    error for any other draw.
-  - 18 games have `status = cancelled`: U2019's 12 `4F` games and 6 U2021 `RS`
-    games. Cancelled games are left out of series and postseason totals.
-  - 6 games (U2008 32, U2009 15, U2010 32, U2012 89, U2013 2 and 75) have a
-    stat-sheet feed instead of play-by-play: nearly every event sits at Q1 10:00.
-    Their raw events stay in `play_by_play` (`play_by_play_without_clock` warns),
-    but the order-dependent calculated tables (possessions, score flow, on-court
-    intervals and lineup stints) skip them, and their player rates are box-score
-    estimates. Shot splits are kept, since they do not depend on event order.
-  - Live substitutions can contradict the box score: some feeds log a phantom
-    block of substitutions that repeats later real ones (U2026 games 10 and 18,
-    and a few games in other seasons). On-court time and lineup stints are kept
-    as the feed gives them; `seconds_differ_from_box_score` and
-    `stints_cover_little_of_the_game` flag the affected games.
-  - Two official standings snapshots miss one result for one round (U2011 VEF
-    Riga, `L16` round 7; U2025 Hamburg, `RS` round 17); the next round is right.
-    `standings_played_not_won_plus_lost` flags them. Standings are not rebuilt
-    from games, because official records can include deductions.
-  - Gold quality warns where round totals differ from the API season feeds, and
-    in these seasons that is expected: U2004 and U2005 differ by the points
-    corrections below, which the feeds lack; in U2002, U2003 and U2007 only the
-    API's own rate columns differ (the counting stats match); and the U2026 feed
-    can trail the box scores by a refresh.
-  - Box-score points that contradict the game score are corrected at load in
-    U2004 games 103 and 138 and U2005 game 4 (`points_corrected` in
-    `game_stat_gaps`).
+### Phase codes
 
-## Provenance: row -> replacement -> exact Bronze version
+| Code | Meaning |
+| --- | --- |
+| `RS` | Regular season |
+| `TS` (U2016-U2020), `L32` (U2013-U2015), `L16` (U2008-U2012) | Later group stages |
+| `8F`, `4F`, `2F`, `Final` | Knockout rounds |
+| `L32`, `L16` in U2007 | Two-leg knockouts, although the API marks them as groups |
 
-Each successful source-table replacement writes rows and the log entry in one
-transaction. The log keeps older load IDs after a rerun; current rows reference
-the latest successful replacement. `loaded_at` is load time, not API fetch time.
+`Final` can hold a final tournament (semifinals, final and third-place game), not only one final.
+
+### Tie formats
+
+Owner-confirmed. The full per-season table is in the [18c archive](../blueprint/history/features/18c-eurocup-postseason.md).
+
+| Seasons | Knockout ties |
+| --- | --- |
+| U2002-U2015 | Two-leg aggregate in the phases listed in `TWO_LEG_PHASES`; the rest single games |
+| U2016-U2018, U2020 | `4F`, `2F`, `Final` best-of-three |
+| U2019 | Cancelled before the playoffs; no postseason and no champion |
+| U2021-U2022 | Single games |
+| U2023-U2025 | `8F`, `4F` single games; `2F`, `Final` best-of-three |
+| U2026 | All knockouts best-of-three (none played yet) |
+
+### Source quirks
+
+| Quirk | Affected | Handling |
+| --- | --- | --- |
+| Drawn legs | 8 played legs in U2004, U2007, U2010, U2014 and U2015, all inside two-leg ties | The aggregate decides. Any other draw is an error (`draw_without_two_leg_tie`). |
+| Cancelled games | 18 games: U2019's 12 `4F` games and 6 U2021 `RS` games (`status = cancelled`) | Left out of series and postseason totals. |
+| Stat-sheet feed instead of play-by-play | 6 games: U2008 32, U2009 15, U2010 32, U2012 89, U2013 2 and 75; nearly every event sits at Q1 10:00 | Raw events stay in `play_by_play` (`play_by_play_without_clock` warns). Possessions, score flow, on-court intervals and lineup stints skip these games, and player rates use box-score estimates. Shot splits are kept because they do not depend on event order. |
+| Phantom substitutions | U2026 games 10 and 18, and a few games in other seasons | On-court time and stints are kept as the feed gives them; `seconds_differ_from_box_score` and `stints_cover_little_of_the_game` flag the games. |
+| Standings snapshot missing one result | U2011 VEF Riga (`L16` round 7); U2025 Hamburg (`RS` round 17) | The next round is right. `standings_played_not_won_plus_lost` flags them. Standings are not rebuilt from games, because official records can include deductions. |
+| Round totals differ from the API season feeds | U2004 and U2005 (points corrections the feeds lack); U2002, U2003 and U2007 (only the API's own rate columns differ); U2026 (the feed can trail the box scores) | Expected; Gold quality prints `WARN` lines. |
+| Box-score points contradict the game score | U2004 games 103 and 138, U2005 game 4 | Corrected at load and recorded as `points_corrected` in `game_stat_gaps`. |
+
+## Provenance
+
+Every row can be traced to the exact Bronze files it was loaded from: row → replacement in `load_log` → Bronze versions.
+
+- Each source-table replacement writes its rows and its `load_log` entry in one transaction.
+- The log keeps older load IDs after a rerun; current rows reference the latest replacement.
+- `loaded_at` is the load time, not the API fetch time.
+- `bronze_versions` is a sorted, deduplicated JSON array of paths relative to `data/bronze/`. It includes auxiliary reads, such as the box scores used to resolve a live player.
+- Calculated tables have an empty array because they read Silver. Their log does not record which Silver loads they read.
 
 ```sql
 SELECT g.game_code, g.load_id, g.loaded_at, l.bronze_versions
@@ -246,14 +222,11 @@ WHERE g.competition_code = 'E' AND g.season_code = 'E2025'
 LIMIT 20;
 ```
 
-`bronze_versions` is a sorted deduplicated JSON array of actual paths relative to
-`data/bronze/`. Auxiliary reads, such as game box scores used to resolve a live
-player, are included. Calculated-table loads have an empty array because they
-read Silver; their log does not record the exact upstream Silver load IDs.
+## Example queries
 
-## Read-only inspection examples
+These were checked against the declared columns, not run against a live database.
 
-### One official player game line with optional calculated detail
+### Player game line with optional calculated detail
 
 ```sql
 SELECT b.game_code, b.person_key, b.person_name, b.points, b.assists,
@@ -265,7 +238,7 @@ WHERE b.competition_code = 'E' AND b.season_code = 'E2025'
   AND b.game_code = 31;
 ```
 
-### Team total rows with club identity
+### Team total rows with the club code
 
 ```sql
 SELECT b.game_code, b.side,
@@ -287,7 +260,3 @@ WHERE competition_code = 'E' AND season_code = 'E2025'
 ORDER BY loaded_at DESC, table_name
 LIMIT 30;
 ```
-
-Schema and derivations are documented from code. These examples were checked
-against declared columns; they were not executed against a live database.
-Use [postgres_etl/README.md](../postgres_etl/README.md) for load and quality commands.

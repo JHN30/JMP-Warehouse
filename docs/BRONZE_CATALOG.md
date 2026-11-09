@@ -1,18 +1,22 @@
 # Bronze data catalog
 
-Bronze is the file archive of original API response bodies. It supplies the
-typed [Silver tables](SILVER_CATALOG.md), which feed the app-facing
-[Gold tables](DATA_CATALOG.md). This catalog describes the resources
-implemented by the repository, checked on 2026-10-20 with EuroLeague examples. It
-does not assert that every resource exists for every game or that an API response
-is complete. EuroCup uses the same resources under `data/bronze/eurocup/` with
-competition code `U`; its coverage and quirks are in the
-[Silver catalog](SILVER_CATALOG.md#eurocup).
+Bronze is the file archive of original API response bodies. This catalog describes what is stored: the file layout and version identity, the response container of each resource, the manifest, and which [Silver tables](SILVER_CATALOG.md) each resource feeds. How and when the fetcher requests each resource is described in [api_requests/README.md](../api_requests/README.md).
 
-Use the [Silver column reference](SILVER_TABLE_REFERENCE.md) for extracted
-fields and the shared [player/team stats glossary](STAT_GLOSSARY.md) for metric
-definitions. Bronze responses are JSON documents; they do not have fixed SQL
-column types, primary keys or Silver's NULL normalization.
+Checked against the code on 2026-10-20, with EuroLeague examples. It does not claim that every resource exists for every game or that any response is complete. Bronze responses are JSON documents: they have no SQL types, primary keys or Silver's `NULL` normalization.
+
+## Contents
+
+- [Storage and version identity](#storage-and-version-identity)
+- [Notation](#notation)
+- [v2 catalog, profiles, fixtures and box scores](#v2-catalog-profiles-fixtures-and-box-scores)
+- [v3 player and team season statistics](#v3-player-and-team-season-statistics)
+- [v3 official standings](#v3-official-standings)
+- [Live events and shots](#live-events-and-shots)
+- [Freshness of stored versions](#freshness-of-stored-versions)
+- [Manifest and operational files](#manifest-and-operational-files)
+- [Reading a stored response](#reading-a-stored-response)
+- [Tracing a Silver row to the archive](#tracing-a-silver-row-to-the-archive)
+- [Maintaining this catalog](#maintaining-this-catalog)
 
 ## Storage and version identity
 
@@ -35,227 +39,154 @@ data/bronze/euroleague/
     runs/run_<timestamp>.json
 ```
 
-`E2025` means 2025-26. EuroCup has the same layout under `data/bronze/eurocup/`
-with `U<year>` seasons (U2000-U2026; U2000 and U2001 are empty in the API).
-`_catalog` is the competition-wide scope; all other
-resource paths below are relative to a season directory. `<fetched_at>` is a UTC
-stamp in `YYYYMMDDTHHMMSSffffffZ` format. `<sha16>` is the first 16 hexadecimal
-characters of the SHA-256 of the uncompressed response bytes.
+- `_catalog` holds competition-wide resources. All other resource paths in this document are relative to a season directory such as `E2025/`.
+- EuroCup uses the same layout under `data/bronze/eurocup/` with `U<year>` seasons (U2000-U2026; U2000 and U2001 are empty in the API).
+- `<fetched_at>` is a UTC timestamp in `YYYYMMDDTHHMMSSffffffZ` format.
+- `<sha16>` is the first 16 hexadecimal characters of the SHA-256 of the uncompressed response bytes.
 
-The client passes `response.content` to the store. Decompressing a stored version
-recovers those bytes; the JSON is not reformatted or cleaned first. The hash is
-byte-based: whitespace or source ordering changes can create a new version even
-when the parsed objects are semantically equivalent.
+### How versions are written
 
-A version is written only when its hash prefix differs from the latest version's
-prefix. This is comparison with the latest version, not global deduplication:
-an A -> B -> A response sequence can produce three files. Version files are
-never overwritten. A temporary file is atomically renamed into place; readers
-choose the lexicographically last version filename for each logical resource.
+1. The API client passes the raw `response.content` to the store. The JSON is not reformatted or cleaned, so decompressing a version returns exactly the bytes received.
+2. A new version is written only when its hash prefix differs from the **latest** version's prefix. This is not global deduplication: a response sequence A → B → A produces three files.
+3. The file is written to a temporary name and atomically renamed into place. Versions are never overwritten.
+4. Readers take the lexicographically last filename in a resource directory as the current version.
 
-Parser paths such as `v2/games.json` are logical handles inside `RawSeason`.
-The actual archive uses `v2/games/<version>.json.gz`; do not search for a single
-mutable `games.json` as the stored source of truth.
+Because the hash covers bytes, a change in whitespace or field order creates a new version even when the parsed objects are equivalent.
 
-Implementation: [common/bronze.py](../common/bronze.py),
-[api_client.py](../api_requests/api_client.py),
-[raw_transform.py](../postgres_etl/raw_transform.py).
+Paths such as `v2/games.json` in the parser code (`RawSeason`) are logical handles. The archive itself stores `v2/games/<version>.json.gz`; there is no single mutable `games.json`.
 
-## Resource notation and API hosts
+Implementation: [common/bronze.py](../common/bronze.py), [api_client.py](../api_requests/api_client.py), [raw_transform.py](../postgres_etl/raw_transform.py).
+
+## Notation
 
 | Placeholder | Meaning |
 | --- | --- |
-| `{s}` | Season code, for example E2025 or U2025. |
-| `{g}` | Game code within the season. |
-| `{club}` | Club code from the season's clubs/fixtures. |
-| `{phase}` | `all` or a phase observed in played fixtures, such as RS, TS, PI, PO or FF. No synthetic PS request. |
-| `{mode}` | `accumulated` or `perGame`. |
-| `{r}` | Round number from played group-phase fixtures. |
-| `offset_NNNNNN` | Zero-padded numeric people-page offset, starting at 000000. |
+| `{s}` | Season code, for example `E2025` or `U2025` |
+| `{g}` | Game code within the season |
+| `{club}` | Club code from the season's clubs or fixtures |
+| `{phase}` | `all`, or a phase seen in played fixtures such as `RS`, `TS`, `PI`, `PO` or `FF`. There is no `PS` request; `PS` rows are built in Gold. |
+| `{mode}` | `accumulated` or `perGame` |
+| `{r}` | Round number from played group-phase fixtures |
+| `offset_NNNNNN` | Zero-padded people-page offset, starting at `000000` |
 
-v2 and v3 endpoints use `https://api-live.euroleague.net` with competition
-code `E` (EuroLeague) or `U` (EuroCup); the tables below show `E`. Live endpoints
-use `https://live.euroleague.net/api` with the season code (`E2025` or `U2025`).
-The paths are the extractor's implemented API contract, not independently
-revalidated live endpoints. The [extractor README](../api_requests/README.md)
-contains command and refresh details.
+Endpoints and hosts for each dataset are listed in the [api_requests README](../api_requests/README.md#endpoints-and-bronze-paths). They describe the fetcher's implemented contract, not independently revalidated API documentation.
 
 ## v2 catalog, profiles, fixtures and box scores
 
-| Resource | Dataset / endpoint | Response container and contents | Silver output |
-| --- | --- | --- | --- |
-| `_catalog/v2/seasons` | `seasons`: `GET /v2/competitions/E/seasons` | `data[]`: season code, year, names, dates and winner. One response contains the competition season list; Silver selects a season. | [`seasons`](SILVER_TABLE_REFERENCE.md#seasons) |
-| `v2/games` | `game_lists`: `GET /v2/competitions/E/seasons/{s}/games` | `data[]`: scheduled and played fixtures, local/road clubs and scores, phase/group/round, dates, venue, attendance, referee1-4 and side partial scores. | [`games`](SILVER_TABLE_REFERENCE.md#games), [`game_officials`](SILVER_TABLE_REFERENCE.md#game_officials), [`game_period_scores`](SILVER_TABLE_REFERENCE.md#game_period_scores) |
-| `v2/clubs` | `clubs`: `GET /v2/competitions/E/seasons/{s}/clubs` | `data[]`: club names, codes, crests, country, contact, venue and sponsor details. | [`clubs`](SILVER_TABLE_REFERENCE.md#clubs) |
-| `v2/rounds` | `rounds`: `GET /v2/competitions/E/seasons/{s}/rounds` | `data[]`: phase, round, index, source name and first/last game dates. | [`rounds`](SILVER_TABLE_REFERENCE.md#rounds) |
-| `v2/season_people_pages/offset_NNNNNN` | `season_people`: `GET /v2/competitions/E/seasons/{s}/people?offset={offset}&limit=1000` | `data[]` plus `total`: registration entries containing person profiles and club/role context. Includes coaches, staff and officials, not only players. | [`people`](SILVER_TABLE_REFERENCE.md#people), [`registrations`](SILVER_TABLE_REFERENCE.md#registrations) |
-| `v2/rosters/{club}` (archive only; no longer fetched or loaded) | `rosters`: `GET /v2/competitions/E/seasons/{s}/clubs/{club}/people` | Registration/person entries as `data[]` or a list accepted by the loader. Jersey, position, club, role and registration dates supplement season people. | [`people`](SILVER_TABLE_REFERENCE.md#people), [`registrations`](SILVER_TABLE_REFERENCE.md#registrations) |
-| `v2/game_stats/{g}` | `game_stats`: `GET /v2/competitions/E/seasons/{s}/games/{g}/stats` | `local` and `road` objects with `players[]`, `team`, `total`, `coach`. Player entries contain `player` registration/profile context and `stats`. | [`game_player_stats`](SILVER_TABLE_REFERENCE.md#game_player_stats), [`game_team_stats`](SILVER_TABLE_REFERENCE.md#game_team_stats), [`game_stat_gaps`](SILVER_TABLE_REFERENCE.md#game_stat_gaps) |
+| Resource | Response container and contents | Silver tables |
+| --- | --- | --- |
+| `_catalog/v2/seasons` | `data[]`: season code, year, names, dates and winner. One response lists every season; Silver selects one. | [`seasons`](SILVER_TABLE_REFERENCE.md#seasons) |
+| `v2/games` | `data[]`: scheduled and played fixtures, local and road clubs and scores, phase, group and round, dates, venue, attendance, `referee1`-`referee4`, and partial scores per side. | [`games`](SILVER_TABLE_REFERENCE.md#games), [`game_officials`](SILVER_TABLE_REFERENCE.md#game_officials), [`game_period_scores`](SILVER_TABLE_REFERENCE.md#game_period_scores) |
+| `v2/clubs` | `data[]`: club names, codes, crests, country, contact, venue and sponsor. | [`clubs`](SILVER_TABLE_REFERENCE.md#clubs) |
+| `v2/rounds` | `data[]`: phase, round, index, source name, first and last game dates. | [`rounds`](SILVER_TABLE_REFERENCE.md#rounds) |
+| `v2/season_people_pages/offset_NNNNNN` | `data[]` plus `total`: registration entries with person profile and club and role context. Includes coaches, staff and officials. | [`people`](SILVER_TABLE_REFERENCE.md#people), [`registrations`](SILVER_TABLE_REFERENCE.md#registrations) |
+| `v2/game_stats/{g}` | `local` and `road` objects, each with `players[]`, `team`, `total` and `coach`. Player entries hold `player` (registration and profile) and `stats`. | [`game_player_stats`](SILVER_TABLE_REFERENCE.md#game_player_stats), [`game_team_stats`](SILVER_TABLE_REFERENCE.md#game_team_stats), [`game_stat_gaps`](SILVER_TABLE_REFERENCE.md#game_stat_gaps) |
+| `v2/rosters/{club}` | Archive only: no longer fetched or loaded. In every season E2000-E2026 each roster entry was already in the people pages with identical values. | none |
 
-These sources support E2000 onward subject to actual data. Fixture lists retain
-future games. Per-game statistics are requested only for fixtures marked played.
-A played forfeit can have an empty player box score; the source remains intact
-and Silver records `stat_name = '*'` rather than manufacturing player rows.
+Notes:
 
-People pagination matters: the endpoint can return 500 entries even when asked
-for 1000, so the extractor advances by received entries and checks the reported
-total. Each page has its own exact response version. The loader combines the pages,
-deduplicates people/registrations and ignores page offsets beyond the current
-reported total.
-
-Club rosters (`v2/rosters/{club}`) are no longer fetched or loaded. In every season
-E2000-E2026 each roster entry was already in the people pages with identical values, and
-rosters had no extra fields. Older roster versions remain in the archive.
+- These resources cover E2000 onward, subject to the actual data.
+- The fixture list keeps future games. Per-game statistics exist only for fixtures marked played.
+- A played forfeit can have an empty player box score. The response stays intact, and Silver records `stat_name = '*'` in `game_stat_gaps` instead of inventing player rows.
+- **People pages:** the endpoint can return 500 entries even when asked for 1000, so the fetcher advances by the entries received and checks the reported `total`. Each page is its own versioned resource. The loader combines the pages, deduplicates people and registrations, and ignores offsets beyond the current `total`.
 
 ## v3 player and team season statistics
 
-All six feeds use dataset `season_stats` and resource pattern
-`v3/season_stats/{feed}_{phase}_{mode}`. Responses use `players[]` or `teams[]`;
-each entry combines profile/team context with category measures. The source
-entry order is retained as player `entry_ordinal`; it is not a permanent ID.
-Transferred players can have a semicolon-separated team code such as `BAS;TEL`.
-That retained source value is not a single club identity for a direct profile join.
+All six feeds are stored as `v3/season_stats/{feed}_{phase}_{mode}`. Responses hold `players[]` or `teams[]`; each entry combines profile or team context with the feed's measures.
 
-| Resource feed | Endpoint after `/v3/competitions/E/statistics/` | Main measures | Silver table |
-| --- | --- | --- | --- |
-| `players_traditional` | `players/traditional` | Games, minutes, points, shooting, rebounds, assists, steals, turnovers, blocks, fouls and PIR. | [`season_player_stats_traditional`](SILVER_TABLE_REFERENCE.md#season_player_stats_traditional) |
-| `players_advanced` | `players/advanced` | API eFG/TS/rebound percentages, assist/turnover ratios, attempt ratios, free-throw rate and possessions. | [`season_player_stats_advanced`](SILVER_TABLE_REFERENCE.md#season_player_stats_advanced) |
-| `players_scoring` | `players/scoring` | Shot mix, source shares/rates and points-source percentages. | [`season_player_stats_scoring`](SILVER_TABLE_REFERENCE.md#season_player_stats_scoring) |
-| `players_misc` | `players/misc` | Games, starts, wins/losses, minutes, double/triple doubles. | [`season_player_stats_misc`](SILVER_TABLE_REFERENCE.md#season_player_stats_misc) |
-| `teams_traditional` | `teams/traditional` | Team traditional totals/averages and shooting percentages. | [`season_team_stats_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_traditional) |
-| `teams_advanced` | `teams/advanced` | Team API efficiency, rebound, assist/turnover, shooting mix and scoring-source measures. | [`season_team_stats_advanced`](SILVER_TABLE_REFERENCE.md#season_team_stats_advanced) |
+| Feed | Main measures | Silver table |
+| --- | --- | --- |
+| `players_traditional` | Games, minutes, points, shooting, rebounds, assists, steals, turnovers, blocks, fouls, PIR | [`season_player_stats_traditional`](SILVER_TABLE_REFERENCE.md#season_player_stats_traditional) |
+| `players_advanced` | API eFG%, TS% and rebound percentages, assist and turnover ratios, attempt ratios, free-throw rate, possessions | [`season_player_stats_advanced`](SILVER_TABLE_REFERENCE.md#season_player_stats_advanced) |
+| `players_scoring` | Shot mix, shares and rates, points-source percentages | [`season_player_stats_scoring`](SILVER_TABLE_REFERENCE.md#season_player_stats_scoring) |
+| `players_misc` | Games, starts, wins and losses, minutes, double and triple doubles | [`season_player_stats_misc`](SILVER_TABLE_REFERENCE.md#season_player_stats_misc) |
+| `teams_traditional` | Team totals and averages, shooting percentages | [`season_team_stats_traditional`](SILVER_TABLE_REFERENCE.md#season_team_stats_traditional) |
+| `teams_advanced` | Team efficiency, rebounding, assist and turnover, shooting mix, scoring sources | [`season_team_stats_advanced`](SILVER_TABLE_REFERENCE.md#season_team_stats_advanced) |
 
-Primary query parameters are `SeasonMode=Single`, `SeasonCode={s}`,
-`StatisticMode={mode}`, `Limit=1000`, plus `PhaseTypeCode` for a specific phase.
-The `all` request omits that phase filter. Player queries use `Statistic=timePlayed`
-for traditional/advanced and `gamesPlayed` for scoring/misc, with descending sort
-and `StatisticSortMode={mode}`. Team queries omit those three player sort keys.
+### Request parameters
 
-The extractor requests all phases and each phase present in played fixtures
-after the season has played games: the player feeds in both modes, the team feeds
-in accumulated mode only (their only reader is Gold's accumulated API cross-check).
-The opponents feeds (`teams/opponentsTraditional`, `teams/opponentsAdvanced`) and
-team per-game files fetched before 2026-10-25 remain in the archive and are not
-loaded; `app_team_season_stats` holds opponent totals from the box scores. The extractor can try equivalent Range
-query keys when a source snapshot is stale; the resource identity is unchanged.
-The archive retains the response and the request parameters actually used.
-There is no independent pagination loop for these v3 statistics feeds: `Limit=1000`
-is the configured request. Do not infer upstream completeness from that limit.
+- All feeds: `SeasonMode=Single`, `SeasonCode={s}`, `StatisticMode={mode}`, `Limit=1000`, plus `PhaseTypeCode` for a single phase. The `all` request omits the phase filter.
+- Player feeds also sort: `Statistic=timePlayed` (traditional, advanced) or `gamesPlayed` (scoring, misc), descending, with `StatisticSortMode={mode}`. Team feeds omit these sort keys.
+- Player feeds are stored in both modes; team feeds in `accumulated` only, because their only reader is Gold's accumulated cross-check.
+- When a snapshot is stale, the fetcher may use an equivalent `SeasonMode=Range` key. The resource name stays the same, and the manifest records the parameters actually used.
+- There is no pagination loop: `Limit=1000` is simply the request. Do not infer completeness from the limit.
 
-The API can omit nonqualifiers from player `perGame`. Bronze and Silver preserve
-what it returned. Missing perGame rows, qualification flags and combined postseason
-rows are Gold additions. The API team feeds stay local as reference values rather
-than being copied to Neon. Their ratio definitions can differ from calculated
-Gold measures; see the glossary instead of inferring equivalence from labels.
+### Interpreting the feeds
+
+- Entry order is stored as `entry_ordinal`. It is a feed position, not a permanent ID.
+- Transferred players can have a semicolon-separated team code such as `BAS;TEL`. It is kept as received and does not identify one club.
+- The API can omit players below its minimum games from `perGame`. Bronze and Silver keep what was returned; missing `perGame` rows, qualification flags and combined postseason rows are added in Gold.
+- The team feeds stay local as reference values and are not published. Their ratio definitions can differ from the calculated Gold measures; check the [glossary](STAT_GLOSSARY.md) instead of assuming equal labels mean equal formulas.
+- Opponents feeds (`teams/opponentsTraditional`, `teams/opponentsAdvanced`) and team per-game files fetched before 2026-10-25 remain in the archive and are not loaded. Opponent totals in `app_team_season_stats` come from the box scores.
 
 ## v3 official standings
 
-Dataset `standings` uses
-`GET /v3/competitions/E/seasons/{s}/rounds/{r}/{feed}`. Each response's `teams[]`
-holds club, group, official position and record fields plus feed-specific values.
-The archive resource includes phase even though the URL identifies the round.
+Each standings response holds `teams[]` with club, group, official position and record fields, plus the feed's own values. The resource name `v3/standings/{phase}_{r}_{feed}` includes the phase, although the URL identifies only the round.
 
-| Resource | Additional contents | Silver tables | Gold use |
+| Feed | Additional contents | Silver tables | In `app_standings` |
 | --- | --- | --- | --- |
-| `v3/standings/{phase}_{r}_basicstandings` | Points, home/away/neutral/overtime/last-ten records and `last5Form[]`. | [`standings_basic`](SILVER_TABLE_REFERENCE.md#standings_basic), [`standings_basic_form`](SILVER_TABLE_REFERENCE.md#standings_basic_form) | `app_standings` basic columns and ordered form JSON. |
-| `v3/standings/{phase}_{r}_calendarstandings` | Calendar records and `streaks[]` with dates and win-loss text. | [`standings_calendar`](SILVER_TABLE_REFERENCE.md#standings_calendar), [`standings_calendar_streaks`](SILVER_TABLE_REFERENCE.md#standings_calendar_streaks) | `app_standings` calendar columns and streak_history JSON. |
-| `v3/standings/{phase}_{r}_streaks` | Current/historical longest streaks and home/away/recent records. | [`standings_streaks`](SILVER_TABLE_REFERENCE.md#standings_streaks) | `app_standings` streaks columns. |
-| `v3/standings/{phase}_{r}_aheadbehind` | Result records when ahead/behind/tied after quarter 1, half-time and quarter 3. | [`standings_ahead_behind`](SILVER_TABLE_REFERENCE.md#standings_ahead_behind) | `app_standings` ahead_behind columns. |
-| `v3/standings/{phase}_{r}_margins` | Result records by final margin and statistical comparison. | [`standings_margins`](SILVER_TABLE_REFERENCE.md#standings_margins) | `app_standings` margins columns. |
+| `basicstandings` | Points, home, away, neutral, overtime and last-ten records; `last5Form[]` | [`standings_basic`](SILVER_TABLE_REFERENCE.md#standings_basic), [`standings_basic_form`](SILVER_TABLE_REFERENCE.md#standings_basic_form) | `basic_*` columns and the ordered `form` JSON |
+| `calendarstandings` | Calendar records and `streaks[]` with dates and win-loss text | [`standings_calendar`](SILVER_TABLE_REFERENCE.md#standings_calendar), [`standings_calendar_streaks`](SILVER_TABLE_REFERENCE.md#standings_calendar_streaks) | `calendar_*` columns and the `streak_history` JSON |
+| `streaks` | Current and longest streaks; home, away and recent records | [`standings_streaks`](SILVER_TABLE_REFERENCE.md#standings_streaks) | `streaks_*` columns |
+| `aheadbehind` | Results when ahead, behind or tied after Q1, half-time and Q3 | [`standings_ahead_behind`](SILVER_TABLE_REFERENCE.md#standings_ahead_behind) | `ahead_behind_*` columns |
+| `margins` | Results by final margin and statistical comparison | [`standings_margins`](SILVER_TABLE_REFERENCE.md#standings_margins) | `margins_*` columns |
 
-Only played **group-phase** rounds are requested, based on
-`phaseType.isGroupPhase` in fixtures. Knockout phases do not acquire empty
-standings by design. Source standings snapshots are distinct from calculated
-team-round totals; historical round alignment can differ.
+Only played **group-phase** rounds are requested (`phaseType.isGroupPhase` in the fixtures), so knockout phases have no standings by design. Official standings snapshots are separate from calculated team round totals, and historical rounds may not align exactly.
 
 ## Live events and shots
 
-Live requests use `gamecode={g}&seasoncode={s}` and run only for played games
-from E2007 onward. Endpoint spelling and response field casing are preserved.
+Live requests use `gamecode={g}&seasoncode={s}` and run only for played games from E2007 onward. Endpoint spelling and response field casing are kept as received.
 
-| Resource | Dataset / endpoint after `/api/` | Response structure and purpose | Silver output |
-| --- | --- | --- | --- |
-| `live/{g}/play_by_play` | `play_by_play`: `PlayByPlay` | Arrays `FirstQuarter`, `SecondQuarter`, `ThirdQuarter`, `ForthQuarter`, `ExtraTime`. Entries include `PLAYTYPE`, `PLAYER_ID`, `CODETEAM`, `NUMBEROFPLAY`, `MINUTE`, `MARKERTIME` and running scores. | [`play_by_play`](SILVER_TABLE_REFERENCE.md#play_by_play) |
-| `live/{g}/shooting_charts` | `shooting_charts`: `Points` | `Rows[]`: `ID_ACTION`, `ID_PLAYER`, `TEAM`, `NUM_ANOT`, `POINTS`, coordinates, zone and fast-break/second-chance/turnover flags. | [`shots`](SILVER_TABLE_REFERENCE.md#shots) |
+| Resource | Response structure | Silver table |
+| --- | --- | --- |
+| `live/{g}/play_by_play` | Arrays `FirstQuarter`, `SecondQuarter`, `ThirdQuarter`, `ForthQuarter`, `ExtraTime`. Entries include `PLAYTYPE`, `PLAYER_ID`, `CODETEAM`, `NUMBEROFPLAY`, `MINUTE`, `MARKERTIME` and running scores. | [`play_by_play`](SILVER_TABLE_REFERENCE.md#play_by_play) |
+| `live/{g}/shooting_charts` | `Rows[]`: `ID_ACTION`, `ID_PLAYER`, `TEAM`, `NUM_ANOT`, `POINTS`, coordinates, zone and fast-break, second-chance and off-turnover flags. | [`shots`](SILVER_TABLE_REFERENCE.md#shots) |
 
-All overtime events share the `ExtraTime` array; the minute marker identifies
-the overtime number. Silver preserves the period label as TEXT. Downstream
-event processing maps those labels to chronological ranks, then uses overtime
-number and event ordinal. `play_number` is not a chronological sort key.
+- **Overtime.** All overtime events share the `ExtraTime` array; the `MINUTE` value identifies the overtime number. Silver keeps the period label as text, and calculated tables order events by period rank, overtime number and event ordinal. `play_number` is not a chronological key.
+- **Player identities.** Live player IDs sometimes disagree with the v2 box scores. Bronze keeps the original. Silver stores the raw `player_code`, the resolved `person_code` and the `person_code_method`, using box-score identities, club and jersey, normalized name and lookup fallbacks. The resolved `person_code` joins the box-score `person_key`; no simple prefix-removal rule guarantees a match.
+- **Empty shots.** An HTTP 200 with `Rows: []` is stored as a successful response with no shots.
+- **Gaps.** Missing clocks, unrecorded flags and unmatched players can prevent some calculated measures even when a response exists. The archive does not fill these gaps or standardize the coordinate system.
 
-Raw live player IDs sometimes disagree with v2 box scores. Bronze retains the
-original; Silver stores raw `player_code`, resolved `person_code` and
-`person_code_method`. Resolution uses available box-score identities, club/jersey,
-normalized name and lookup fallbacks. Resolved event person_code joins the
-box-score person_key; no unconditional prefix-removal rule guarantees a match.
+## Freshness of stored versions
 
-An HTTP 200 with `Rows: []` is a stored successful response with no shots.
-Missing clocks, unrecorded flags and unmatched player identities can prevent
-some derived measures even when a response exists. The archive does not fill
-these gaps or standardize a coordinate system.
+The refresh rules are described in [api_requests/README.md](../api_requests/README.md#refreshing-the-current-season). What matters when reading the archive:
 
-### Other live endpoints (not requested)
+- Completed seasons and stored per-game detail are reused; they are not re-fetched.
+- For the current season, mutable resources are re-fetched after hot games and on a schedule.
+- A v3 answer that is worse than the stored version can be rejected, leaving the previous version as latest. With no previous version, a stale answer can still be stored and reported as behind the fixtures.
 
-The live API's `Boxscore`, `Evolution`, `Comparison`, `ShootingGraphic` and `Header`
-endpoints repeat v2 game data, play-by-play or shots (checked on every E2025 game) and
-are not requested; the extractor has no dataset for them.
-
-## Refresh and source-quality behavior
-
-| Resource group | Implemented cache behavior |
-| --- | --- |
-| Season catalog | Cached; refreshed with the extractor's refresh-current option. |
-| Current-season fixtures | Refetched every run to observe schedule and played-status changes. |
-| Clubs, rounds and people | Current-season refresh while a game is hot, at least every 20 hours, or when refresh-current is requested. |
-| Standings and season statistics | Cached snapshots; hot rounds/phases are refreshed, as are current-season mutable resources under refresh-current. |
-| Played game box scores and live detail | Reused once stored; refresh-current does not force those game resources to refetch. |
-| Completed seasons | Existing resources reused; current-season hot rules do not apply. Missing resources can still be fetched. |
-
-A current-season game is hot when newly marked played since the previous game
-list or started within the configured window (default 48 hours). Mutable feeds
-can lag after the final whistle. The extractor compares v3 answers with stored
-values and expected played-game counts, retries stale answers and may try
-equivalent query keys. A worse response can be rejected while retaining the
-previous version. If there is no previous version, the last stale answer can
-still be stored and reported behind the fixtures. Latest stored does not mean
-complete or latest fetched response.
+The latest stored version is therefore neither guaranteed complete nor necessarily the latest response the API returned.
 
 ## Manifest and operational files
 
-Each scope has `manifest.jsonl`, one JSON object per log entry. Records from
-normal stored/unchanged responses have the fields below. Error and rejected
-records have related but different shapes; not every field appears on every line.
-Cache reuse without a network request does not add a normal response entry.
-Not every internal HTTP retry is separately represented in the manifest.
+Each scope has a `manifest.jsonl`, with one JSON object per logged request. Normal stored or unchanged responses have the fields below; error and rejected records have related but different shapes, so not every field appears on every line. Reusing a cached file without a request adds no entry, and individual HTTP retries are not all logged separately.
 
 | Field | Meaning |
 | --- | --- |
-| `resource` | Logical path within the scope, such as `v2/game_stats/31`. |
-| `url` | Request/final URL recorded by that path; normal success uses the response URL. |
-| `params` | Request parameters recorded by the extractor. The cache-busting `_` query key can be present in final URL without appearing in this object. |
-| `status_code` | HTTP status when available; errors without an HTTP response can have NULL. |
-| `fetched_at_utc` | UTC timestamp for the store/log action, not scheduled game time. |
-| `sha256` | Full digest of response bytes for successful or rejected JSON answers. |
-| `bytes` | Uncompressed response byte length. |
-| `stored_as` | New version's filename when saved; NULL for unchanged, rejected or failed answers. Not a full relative path. |
-| `rejected` | Reason a stale/worse answer was rejected; absent on normal successful entries. |
-| `error` | Recorded request/JSON failure detail; successful response fields can be absent. |
+| `resource` | Logical path within the scope, such as `v2/game_stats/31` |
+| `url` | The request or final response URL |
+| `params` | Request parameters. The cache-busting `_` key can appear in `url` without being in this object. |
+| `status_code` | HTTP status; `NULL` when no HTTP response was received |
+| `fetched_at_utc` | UTC time of the store or log action (not the game time) |
+| `sha256` | Full digest of the response bytes, for successful or rejected JSON answers |
+| `bytes` | Uncompressed response length |
+| `stored_as` | Filename of the new version when one was saved; `NULL` for unchanged, rejected or failed answers. Not a full path. |
+| `rejected` | Why a stale or worse answer was rejected; absent on normal entries |
+| `error` | Request or JSON failure details |
 
-`stored_as: null` alone does not mean failure. Inspect status/error/rejected and
-the resource's latest stored file. Rejected response bytes are not separately
-saved as versions; the manifest retains their hash/length and rejection reason.
-Failed/non-JSON responses are logged as failures, not stored as successful JSON.
+`stored_as: null` alone does not mean failure: check `status_code`, `error` and `rejected`, and the resource's latest stored file. Rejected answers are not saved as versions; the manifest keeps their hash, length and reason. Failed or non-JSON responses are logged as failures, not stored.
 
-`failures.jsonl` records failed extractions. `refresh_state.json` holds mutable
-season-resource check timing. `runs/run_<timestamp>.json` records a run summary.
-These are operational files, not original API payloads or Silver source tables.
-Normal requests share a default 2.5-second interval across hosts; network/5xx
-retries and server Retry-After handling are implemented by the API client.
+Other operational files (not API payloads):
 
-## Read an existing response without fetching
+| File | Contents |
+| --- | --- |
+| `failures.jsonl` | Failed requests |
+| `refresh_state.json` | When mutable season resources were last checked |
+| `runs/run_<timestamp>.json` | One run's summary |
 
-Run this from the repository root. It reads only existing local archive files;
-it makes no API call and writes no database rows.
+## Reading a stored response
+
+Run from the repository root. This reads local archive files only: no API call and no database writes.
 
 ```python
 from common.bronze import BronzeStore
@@ -272,27 +203,17 @@ else:
     print(payload.keys() if isinstance(payload, dict) else type(payload).__name__)
 ```
 
-`read_bytes` raises if the resource is absent. `read_json` returns its default
-for absent/unreadable JSON; inspect the path and parse failure when diagnosing
-a problem instead of treating None as an empty response.
+`read_bytes` raises an error if the resource is absent. `read_json` returns its default for an absent or unreadable file, so when diagnosing a problem, check the path and parse errors instead of treating `None` as an empty response.
 
-## Trace a Silver row to the archive
+## Tracing a Silver row to the archive
 
-Join the row's load_id to `silver.load_log` using competition, season and table
-name, then read each path in `bronze_versions` relative to `data/bronze/`.
-Those paths identify the versions used by the load, which may differ from today's
-latest versions. Auxiliary lookup resources can appear alongside the main input.
-See the [Silver provenance query](SILVER_CATALOG.md#provenance-row---replacement---exact-bronze-version).
+1. Join the row's `load_id` to `silver.load_log` on competition, season and table name.
+2. Read each path in `bronze_versions`, relative to `data/bronze/`.
 
-For calculated Silver tables, bronze_versions is empty: follow the producing
-module's Silver inputs. The load log does not record a complete snapshot of
-upstream Silver load IDs. Gold omits these provenance columns entirely.
+Those paths are the versions the load used, which may be older than today's latest versions. Auxiliary lookups, such as box scores used to resolve live players, can appear next to the main input. The [Silver catalog](SILVER_CATALOG.md#provenance) has the query.
 
-## Maintaining the resource inventory
+Calculated Silver tables have an empty `bronze_versions`; follow the producing script's Silver inputs instead. Gold drops these provenance columns.
 
-Resource templates, query construction and refresh decisions are defined in
-[scrapper.py](../api_requests/scrapper.py); dataset selection is defined in
-[utils.py](../api_requests/utils.py). Containers and source-field paths consumed
-by Silver are in RawSeason/FlatSeason and
-[flat_schema.py](../postgres_etl/flat_schema.py). Add or change a resource here
-when those contracts change, and update the Silver lineage alongside it.
+## Maintaining this catalog
+
+Resource templates, query construction and refresh decisions are in [scrapper.py](../api_requests/scrapper.py); dataset selection is in [utils.py](../api_requests/utils.py). The containers and field paths Silver reads are in `RawSeason`/`FlatSeason` and [flat_schema.py](../postgres_etl/flat_schema.py). When those change, update this catalog and the Silver lineage together.

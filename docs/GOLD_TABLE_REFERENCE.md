@@ -1,54 +1,67 @@
 # Gold table reference
 
-Complete column reference for the 40 registered Gold tables, checked against
-[gold_etl/schema.py](../gold_etl/schema.py) and its imported Silver definitions
-on 2026-10-20. Names, types and primary keys come from the code contract.
-No live schema, data refresh or Neon publish was performed for this document.
+Every column of the 40 Gold tables: PostgreSQL type, nullability, key and meaning. Each table section also gives its grain, primary key, defining code and usage notes.
 
-Use the [catalog](DATA_CATALOG.md) to choose a table and the
-[player/team stats glossary](STAT_GLOSSARY.md) for calculation details.
-The [pipeline dictionary](DATA_DICTIONARY.md) retains Silver and operational notes.
-For upstream EuroLeague lineage and columns, see the [Bronze catalog](BRONZE_CATALOG.md),
-[Silver catalog](SILVER_CATALOG.md), and [Silver reference](SILVER_TABLE_REFERENCE.md).
+To choose a table, start with the [Gold data catalog](DATA_CATALOG.md). For what a statistic measures, see the [statistics glossary](STAT_GLOSSARY.md); for how a table is calculated and checked, see the [data dictionary](DATA_DICTIONARY.md).
+
+Checked against [gold_etl/schema.py](../gold_etl/schema.py) and its imported Silver definitions on 2026-10-20. Names, types and keys come from the code; no live schema was inspected.
 
 ## Reading the reference
 
-`gold.<name>` is local and `public.<name>` is the Neon target. SQL names below
-are exact, including legacy spellings. PK marks a primary-key column. Nullable
-is No for every PK column even if the field definition omits explicit NOT NULL,
-because PostgreSQL primary keys enforce it. Nullable Yes permits missing data;
-it does not say how many stored rows are missing.
-
-`TEXT` preserves identifier leading zeroes. `NUMERIC` is PostgreSQL decimal;
-it may represent a count, a fraction, points, seconds or a model score.
-`TIMESTAMP` has no time zone; `TIMESTAMPTZ` represents an instant with time-zone
-handling. Do not silently attach the frontend's local zone to source timestamps.
-`JSONB` values retain camelCase object keys documented at the end.
-
-All joins include competition and, where present, season. Join guidance is
-logical guidance; the publish contract does not add foreign-key constraints.
-Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
+- **Schemas.** `gold.<name>` is the local table and `public.<name>` its Neon copy. SQL names are exact, including legacy spellings.
+- **Key and Nullable.** PK marks a primary-key column. Nullable is No for every PK column, because PostgreSQL enforces it. Nullable Yes means missing data is allowed; it says nothing about how many rows are missing.
+- **Types.** `TEXT` keeps leading zeroes in identifiers. `NUMERIC` is a PostgreSQL decimal and can hold a count, a fraction, points, seconds or a model score. `TIMESTAMP` has no time zone; `TIMESTAMPTZ` is an instant. Do not attach the frontend's local zone to source timestamps.
+- **JSON.** `JSONB` values keep camelCase keys; see [JSON column contracts](#json-column-contracts).
+- **Joins.** Always join on competition and, where present, season. Join guidance is logical: there are no foreign-key constraints.
+- **Provenance.** Gold omits Silver's `load_id`, `loaded_at` and `load_log`.
 
 ## Tables
 
-- **Profiles, roster and schedule:** [seasons](#app_seasons), [clubs](#app_clubs), [people](#app_people), [registrations](#app_registrations), [rounds](#app_rounds), [games](#app_games), [game_officials](#app_game_officials), [players](#app_players), [club_identities](#app_club_identities).
-- **Official box scores and season player feeds:** [game_period_scores](#app_game_period_scores), [game_player_stats](#app_game_player_stats), [game_team_stats](#app_game_team_stats), [season_player_stats_traditional](#app_season_player_stats_traditional), [season_player_stats_advanced](#app_season_player_stats_advanced), [season_player_stats_scoring](#app_season_player_stats_scoring), [season_player_stats_misc](#app_season_player_stats_misc).
-- **Standings, records and postseason:** [standings](#app_standings), [team_season_stats](#app_team_season_stats), [records_player_seasons](#app_records_player_seasons), [records_single_games](#app_records_single_games), [records_team_seasons](#app_records_team_seasons), [postseason_series](#app_postseason_series).
-- **Calculated team statistics:** [standings_stats](#app_standings_stats), [team_pbp_stats](#app_team_pbp_stats).
-- **Calculated player and lineup statistics:** [player_round_stats](#app_player_round_stats), [player_round_ratings](#app_player_round_ratings), [player_round_win_shares](#app_player_round_win_shares), [player_on_off](#app_player_on_off), [lineup_ratings](#app_lineup_ratings), [player_rapm](#app_player_rapm).
-- **Events and calculated game detail:** [play_by_play](#app_play_by_play), [shots](#app_shots), [game_player_advanced](#app_game_player_advanced), [game_team_advanced](#app_game_team_advanced), [game_team_possessions](#app_game_team_possessions), [game_team_score_flow](#app_game_team_score_flow), [game_team_shot_splits](#app_game_team_shot_splits), [game_player_on_court](#app_game_player_on_court), [game_team_lineup_stints](#app_game_team_lineup_stints), [game_stat_gaps](#app_game_stat_gaps).
+**Profiles, roster and schedule**
+
+- [`app_seasons`](#app_seasons), [`app_clubs`](#app_clubs), [`app_people`](#app_people), [`app_registrations`](#app_registrations), [`app_rounds`](#app_rounds)
+- [`app_games`](#app_games), [`app_game_officials`](#app_game_officials)
+- [`app_players`](#app_players), [`app_club_identities`](#app_club_identities)
+
+**Official box scores and season player feeds**
+
+- [`app_game_period_scores`](#app_game_period_scores), [`app_game_player_stats`](#app_game_player_stats), [`app_game_team_stats`](#app_game_team_stats)
+- [`app_season_player_stats_traditional`](#app_season_player_stats_traditional), [`app_season_player_stats_advanced`](#app_season_player_stats_advanced)
+- [`app_season_player_stats_scoring`](#app_season_player_stats_scoring), [`app_season_player_stats_misc`](#app_season_player_stats_misc)
+
+**Standings, records and postseason**
+
+- [`app_standings`](#app_standings), [`app_team_season_stats`](#app_team_season_stats)
+- [`app_records_player_seasons`](#app_records_player_seasons), [`app_records_single_games`](#app_records_single_games), [`app_records_team_seasons`](#app_records_team_seasons)
+- [`app_postseason_series`](#app_postseason_series)
+
+**Calculated team statistics**
+
+- [`app_standings_stats`](#app_standings_stats), [`app_team_pbp_stats`](#app_team_pbp_stats)
+
+**Calculated player and lineup statistics**
+
+- [`app_player_round_stats`](#app_player_round_stats), [`app_player_round_ratings`](#app_player_round_ratings), [`app_player_round_win_shares`](#app_player_round_win_shares)
+- [`app_player_on_off`](#app_player_on_off), [`app_lineup_ratings`](#app_lineup_ratings), [`app_player_rapm`](#app_player_rapm)
+
+**Events and calculated game detail**
+
+- [`app_play_by_play`](#app_play_by_play), [`app_shots`](#app_shots)
+- [`app_game_player_advanced`](#app_game_player_advanced), [`app_game_team_advanced`](#app_game_team_advanced)
+- [`app_game_team_possessions`](#app_game_team_possessions), [`app_game_team_score_flow`](#app_game_team_score_flow), [`app_game_team_shot_splits`](#app_game_team_shot_splits)
+- [`app_game_player_on_court`](#app_game_player_on_court), [`app_game_team_lineup_stints`](#app_game_team_lineup_stints), [`app_game_stat_gaps`](#app_game_stat_gaps)
+
+**Shared contracts:** [JSON column contracts](#json-column-contracts), [record metric values](#record-metric-values).
 
 ## app_seasons
 
-**Purpose:** Season selector and season metadata.
+Season selector and season metadata.
 
-**Grain:** one competition-season. **Columns:** 11.
+- **Grain:** one competition-season (11 columns)
+- **Primary key:** `competition_code`, `season_code`
+- **Defined in:** [postgres_etl/flat_schema.py](../postgres_etl/flat_schema.py)
 
-**Primary key:** `competition_code`, `season_code`.
-
-**Definition / implementation:** [postgres_etl/flat_schema.py](../postgres_etl/flat_schema.py).
-
-**Usage and limitations:** The year is the starting year: E2025 means 2025-26. Champion fields describe the season champion.
+**Usage:** The year is the starting year: E2025 means 2025-26. Champion fields describe the season champion.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
@@ -64,19 +77,17 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 | `champion_club_code` | `TEXT` | Yes |  | Season champion's club code; not this game's winner. |
 | `champion_club_name` | `TEXT` | Yes |  | Season champion's display name. |
 
-[Back to catalog](DATA_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## app_clubs
 
-**Purpose:** Season-specific team names, crests and profiles.
+Season-specific team names, crests and profiles.
 
-**Grain:** one club per season. **Columns:** 22.
+- **Grain:** one club per season (22 columns)
+- **Primary key:** `competition_code`, `season_code`, `club_code`
+- **Defined in:** [postgres_etl/flat_schema.py](../postgres_etl/flat_schema.py)
 
-**Primary key:** `competition_code`, `season_code`, `club_code`.
-
-**Definition / implementation:** [postgres_etl/flat_schema.py](../postgres_etl/flat_schema.py).
-
-**Usage and limitations:** Join by competition_code, season_code and club_code. Use app_club_identities for one cross-season club profile.
+**Usage:** Join by competition_code, season_code and club_code. Use app_club_identities for one cross-season club profile.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
@@ -103,19 +114,17 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 | `president` | `TEXT` | Yes |  | Source club president name, season-specific metadata. |
 | `phone` | `TEXT` | Yes |  | Source club telephone value. |
 
-[Back to catalog](DATA_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## app_people
 
-**Purpose:** Season-specific person profiles and the bridge between person_key and person_code.
+Season-specific person profiles and the bridge between person_key and person_code.
 
-**Grain:** one person per season. **Columns:** 22.
+- **Grain:** one person per season (22 columns)
+- **Primary key:** `competition_code`, `season_code`, `person_key`
+- **Defined in:** [postgres_etl/flat_schema.py](../postgres_etl/flat_schema.py)
 
-**Primary key:** `competition_code`, `season_code`, `person_key`.
-
-**Definition / implementation:** [postgres_etl/flat_schema.py](../postgres_etl/flat_schema.py).
-
-**Usage and limitations:** Includes people other than players. Join box scores by person_key; join career identity by person_code. Preserve leading zeroes.
+**Usage:** Includes people other than players. Join box scores by person_key; join career identity by person_code. Preserve leading zeroes.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
@@ -142,19 +151,17 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 | `facebook_account` | `TEXT` | Yes |  | Source Facebook account value. |
 | `is_referee` | `BOOLEAN` | Yes |  | Source flag indicating a referee profile. |
 
-[Back to catalog](DATA_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## app_registrations
 
-**Purpose:** Rosters, jersey numbers, positions and registration dates.
+Rosters, jersey numbers, positions and registration dates.
 
-**Grain:** one row per person, club and role in a season. **Columns:** 19.
+- **Grain:** one row per person, club and role in a season (19 columns)
+- **Primary key:** `competition_code`, `season_code`, `registration_key`
+- **Defined in:** [postgres_etl/flat_schema.py](../postgres_etl/flat_schema.py)
 
-**Primary key:** `competition_code`, `season_code`, `registration_key`.
-
-**Definition / implementation:** [postgres_etl/flat_schema.py](../postgres_etl/flat_schema.py).
-
-**Usage and limitations:** role_code = 'J' selects players. When a club deregisters a person and registers them again in the same season, the periods are merged into one row: active if any period is, earliest start_at, latest end_at, other columns from the latest period. Silver registrations keeps every source period. A person registered with two clubs (a transfer) or in two roles has one row each, so joining a box score to all of a person's registrations can still multiply rows.
+**Usage:** role_code = 'J' selects players. When a club deregisters a person and registers them again in the same season, the periods are merged into one row: active if any period is, earliest start_at, latest end_at, other columns from the latest period. Silver registrations keeps every source period. A person registered with two clubs (a transfer) or in two roles has one row each, so joining a box score to all of a person's registrations can still multiply rows.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
@@ -178,19 +185,17 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 | `person_name` | `TEXT` | Yes |  | Person display name attached to this registration or box score. |
 | `club_name` | `TEXT` | Yes |  | Club display name for this season or row. |
 
-[Back to catalog](DATA_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## app_rounds
 
-**Purpose:** Round names, phase labels and date ranges.
+Round names, phase labels and date ranges.
 
-**Grain:** one round definition per season. **Columns:** 10.
+- **Grain:** one round definition per season (10 columns)
+- **Primary key:** `competition_code`, `season_code`, `round_key`
+- **Defined in:** [postgres_etl/flat_schema.py](../postgres_etl/flat_schema.py)
 
-**Primary key:** `competition_code`, `season_code`, `round_key`.
-
-**Definition / implementation:** [postgres_etl/flat_schema.py](../postgres_etl/flat_schema.py).
-
-**Usage and limitations:** round_key is the source identity. round_number alone is not the primary key.
+**Usage:** round_key is the source identity. round_number alone is not the primary key.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
@@ -205,19 +210,17 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 | `last_game_at` | `TIMESTAMP` | Yes |  | Source last-game timestamp for the round, without time zone. |
 | `formatted_dates` | `TEXT` | Yes |  | Source preformatted round date label. |
 
-[Back to catalog](DATA_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## app_games
 
-**Purpose:** Schedule, results, game status and venue details.
+Schedule, results, game status and venue details.
 
-**Grain:** one fixture per season. **Columns:** 53.
+- **Grain:** one fixture per season (53 columns)
+- **Primary key:** `competition_code`, `season_code`, `game_code`
+- **Defined in:** [postgres_etl/flat_schema.py](../postgres_etl/flat_schema.py)
 
-**Primary key:** `competition_code`, `season_code`, `game_code`.
-
-**Definition / implementation:** [postgres_etl/flat_schema.py](../postgres_etl/flat_schema.py).
-
-**Usage and limitations:** Use status and played to distinguish future fixtures from completed games. local/road is the source designation even at neutral venues. Do not use champion_club_code as the game winner.
+**Usage:** Use status and played to distinguish future fixtures from completed games. local/road is the source designation even at neutral venues. Do not use champion_club_code as the game winner.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
@@ -275,19 +278,17 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 | `social_feed` | `TEXT` | Yes |  | Source game social-feed metadata. |
 | `operations_code` | `TEXT` | Yes |  | Source game operations code. |
 
-[Back to catalog](DATA_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## app_game_officials
 
-**Purpose:** Referee assignments for game details.
+Referee assignments for game details.
 
-**Grain:** one official slot per game. **Columns:** 11.
+- **Grain:** one official slot per game (11 columns)
+- **Primary key:** `competition_code`, `season_code`, `game_code`, `official_number`
+- **Defined in:** [postgres_etl/flat_schema.py](../postgres_etl/flat_schema.py)
 
-**Primary key:** `competition_code`, `season_code`, `game_code`, `official_number`.
-
-**Definition / implementation:** [postgres_etl/flat_schema.py](../postgres_etl/flat_schema.py).
-
-**Usage and limitations:** Join to app_games using competition_code, season_code and game_code.
+**Usage:** Join to app_games using competition_code, season_code and game_code.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
@@ -303,19 +304,17 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 | `active` | `BOOLEAN` | Yes |  | Source active flag for a registration or official. |
 | `image_vertical_small` | `TEXT` | Yes |  | Source small portrait URL for the official. |
 
-[Back to catalog](DATA_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## app_players
 
-**Purpose:** One player identity across seasons, with career span and club history.
+One player identity across seasons, with career span and club history.
 
-**Grain:** one player per competition and person_code. **Columns:** 16.
+- **Grain:** one player per competition and person_code (16 columns)
+- **Primary key:** `competition_code`, `person_code`
+- **Defined in:** [gold_etl/identity.py](../gold_etl/identity.py)
 
-**Primary key:** `competition_code`, `person_code`.
-
-**Definition / implementation:** [gold_etl/identity.py](../gold_etl/identity.py).
-
-**Usage and limitations:** Includes role_code = 'J' registrations only. Profile values come from the latest season row; NULLs remain NULL. Career span is based on registrations, not counted appearances. Join via app_people to bridge person_key.
+**Usage:** Includes role_code = 'J' registrations only. Profile values come from the latest season row; NULLs remain NULL. Career span is based on registrations, not counted appearances. Join via app_people to bridge person_key.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
@@ -336,19 +335,17 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 | `seasons_played` | `INTEGER` | No |  | Count of distinct loaded seasons for this identity, registration-based for players. |
 | `clubs` | `JSONB` | No |  | JSON array of player registration history: seasonCode, clubCode, clubName. |
 
-[Back to catalog](DATA_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## app_club_identities
 
-**Purpose:** One club identity across seasons.
+One club identity across seasons.
 
-**Grain:** one club per competition. **Columns:** 9.
+- **Grain:** one club per competition (9 columns)
+- **Primary key:** `competition_code`, `club_code`
+- **Defined in:** [gold_etl/identity.py](../gold_etl/identity.py)
 
-**Primary key:** `competition_code`, `club_code`.
-
-**Definition / implementation:** [gold_etl/identity.py](../gold_etl/identity.py).
-
-**Usage and limitations:** Profile comes from the latest loaded season; first/last season and seasons_played describe loaded club seasons. Season-specific names stay in app_clubs.
+**Usage:** Profile comes from the latest loaded season; first/last season and seasons_played describe loaded club seasons. Season-specific names stay in app_clubs.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
@@ -362,19 +359,17 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 | `last_season_code` | `TEXT` | No |  | Latest loaded season for this identity; player span uses player registrations. |
 | `seasons_played` | `INTEGER` | No |  | Count of distinct loaded seasons for this identity, registration-based for players. |
 
-[Back to catalog](DATA_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## app_game_period_scores
 
-**Purpose:** Quarter and overtime scoring.
+Quarter and overtime scoring.
 
-**Grain:** one side-period per game. **Columns:** 6.
+- **Grain:** one side-period per game (6 columns)
+- **Primary key:** `competition_code`, `season_code`, `game_code`, `side`, `period_number`
+- **Defined in:** [postgres_etl/flat_schema.py](../postgres_etl/flat_schema.py)
 
-**Primary key:** `competition_code`, `season_code`, `game_code`, `side`, `period_number`.
-
-**Definition / implementation:** [postgres_etl/flat_schema.py](../postgres_etl/flat_schema.py).
-
-**Usage and limitations:** score is the points in that period. Periods 1-4 are regulation; 5+ are overtime. Include side when joining team-game rows.
+**Usage:** score is the points in that period. Periods 1-4 are regulation; 5+ are overtime. Include side when joining team-game rows.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
@@ -385,19 +380,17 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 | `period_number` | `INTEGER` | No | PK | Period number: 1-4 for quarters, 5 and above for overtime. |
 | `score` | `INTEGER` | Yes |  | Points scored by this side in this period, not the cumulative score. |
 
-[Back to catalog](DATA_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## app_game_player_stats
 
-**Purpose:** Official player box scores, including DNP lines.
+Official player box scores, including DNP lines.
 
-**Grain:** one player-side per game. **Columns:** 43.
+- **Grain:** one player-side per game (43 columns)
+- **Primary key:** `competition_code`, `season_code`, `game_code`, `side`, `person_key`
+- **Defined in:** [postgres_etl/flat_schema.py](../postgres_etl/flat_schema.py)
 
-**Primary key:** `competition_code`, `season_code`, `game_code`, `side`, `person_key`.
-
-**Definition / implementation:** [postgres_etl/flat_schema.py](../postgres_etl/flat_schema.py).
-
-**Usage and limitations:** Join advanced rows on competition_code, season_code, game_code, side and person_key. seconds_played is seconds, not minutes. DNP box-score rows are not appearances in the cumulative player tables.
+**Usage:** Join advanced rows on competition_code, season_code, game_code, side and person_key. seconds_played is seconds, not minutes. DNP box-score rows are not appearances in the cumulative player tables.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
@@ -445,19 +438,17 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 | `started` | `BOOLEAN` | Yes |  | Primary source starter flag used in on-court reconstruction and appearance counts. |
 | `started_alt` | `BOOLEAN` | Yes |  | Alternate source starter flag retained separately. |
 
-[Back to catalog](DATA_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## app_game_team_stats
 
-**Purpose:** Official team box scores and team-only contributions.
+Official team box scores and team-only contributions.
 
-**Grain:** one stats_kind per side-game. **Columns:** 31.
+- **Grain:** one stats_kind per side-game (31 columns)
+- **Primary key:** `competition_code`, `season_code`, `game_code`, `side`, `stats_kind`
+- **Defined in:** [postgres_etl/flat_schema.py](../postgres_etl/flat_schema.py)
 
-**Primary key:** `competition_code`, `season_code`, `game_code`, `side`, `stats_kind`.
-
-**Definition / implementation:** [postgres_etl/flat_schema.py](../postgres_etl/flat_schema.py).
-
-**Usage and limitations:** Filter stats_kind = 'total' for the complete team box score. The 'team' row is team-only contributions; adding it to the total double counts those contributions. Resolve club_code through app_games and side.
+**Usage:** Filter stats_kind = 'total' for the complete team box score. The 'team' row is team-only contributions; adding it to the total double counts those contributions. Resolve club_code through app_games and side.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
@@ -493,19 +484,17 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 | `fouls_drawn` | `NUMERIC` | Yes |  | Opponent fouls drawn by the player or team. |
 | `plus_minus` | `NUMERIC` | Yes |  | Source point margin while the player was on court; raw points, not per 100 possessions. |
 
-[Back to catalog](DATA_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## app_season_player_stats_traditional
 
-**Purpose:** Player season totals and per-game box-score leaderboards.
+Player season totals and per-game box-score leaderboards.
 
-**Grain:** one feed entry per phase and mode. **Columns:** 41.
+- **Grain:** one feed entry per phase and mode (41 columns)
+- **Primary key:** `competition_code`, `season_code`, `phase_code`, `mode`, `entry_ordinal`
+- **Defined in:** [gold_etl/per_game_rows.py](../gold_etl/per_game_rows.py)
 
-**Primary key:** `competition_code`, `season_code`, `phase_code`, `mode`, `entry_ordinal`.
-
-**Definition / implementation:** [gold_etl/per_game_rows.py](../gold_etl/per_game_rows.py).
-
-**Usage and limitations:** Select phase_code and mode explicitly. Percentages are on a 0-100 scale. Gold derives missing perGame rows and PS rows; qualified controls leaderboard eligibility.
+**Usage:** Select phase_code and mode explicitly. Percentages are on a 0-100 scale. Gold derives missing perGame rows and PS rows; qualified controls leaderboard eligibility.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
@@ -551,19 +540,17 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 | `min_games` | `INTEGER` | No |  | Games threshold: floor(distinct played rounds in scope / 2) + 1; FF uses 1. |
 | `qualified` | `BOOLEAN` | No |  | Player season row has games_played >= min_games; this is not qualification for the playoffs. |
 
-[Back to catalog](DATA_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## app_season_player_stats_advanced
 
-**Purpose:** API player shooting efficiency, rebound rates and other reference ratios.
+API player shooting efficiency, rebound rates and other reference ratios.
 
-**Grain:** one feed entry per phase and mode. **Columns:** 31.
+- **Grain:** one feed entry per phase and mode (31 columns)
+- **Primary key:** `competition_code`, `season_code`, `phase_code`, `mode`, `entry_ordinal`
+- **Defined in:** [gold_etl/per_game_rows.py](../gold_etl/per_game_rows.py)
 
-**Primary key:** `competition_code`, `season_code`, `phase_code`, `mode`, `entry_ordinal`.
-
-**Definition / implementation:** [gold_etl/per_game_rows.py](../gold_etl/per_game_rows.py).
-
-**Usage and limitations:** API definitions are retained. They are not aliases for the calculated round rates. Advanced PS rows are not derived. See the glossary for differences and unverified source definitions.
+**Usage:** API definitions are retained. They are not aliases for the calculated round rates. Advanced PS rows are not derived. See the glossary for differences and unverified source definitions.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
@@ -599,19 +586,17 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 | `min_games` | `INTEGER` | No |  | Games threshold: floor(distinct played rounds in scope / 2) + 1; FF uses 1. |
 | `qualified` | `BOOLEAN` | No |  | Player season row has games_played >= min_games; this is not qualification for the playoffs. |
 
-[Back to catalog](DATA_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## app_season_player_stats_scoring
 
-**Purpose:** API player shot mix and scoring distribution.
+API player shot mix and scoring distribution.
 
-**Grain:** one feed entry per phase and mode. **Columns:** 30.
+- **Grain:** one feed entry per phase and mode (30 columns)
+- **Primary key:** `competition_code`, `season_code`, `phase_code`, `mode`, `entry_ordinal`
+- **Defined in:** [gold_etl/per_game_rows.py](../gold_etl/per_game_rows.py)
 
-**Primary key:** `competition_code`, `season_code`, `phase_code`, `mode`, `entry_ordinal`.
-
-**Definition / implementation:** [gold_etl/per_game_rows.py](../gold_etl/per_game_rows.py).
-
-**Usage and limitations:** API definitions and scales are retained. Scoring PS rows are not derived. Fields ending in share or rate need source-specific interpretation; do not infer their denominator from the name.
+**Usage:** API definitions and scales are retained. Scoring PS rows are not derived. Fields ending in share or rate need source-specific interpretation; do not infer their denominator from the name.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
@@ -646,19 +631,17 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 | `min_games` | `INTEGER` | No |  | Games threshold: floor(distinct played rounds in scope / 2) + 1; FF uses 1. |
 | `qualified` | `BOOLEAN` | No |  | Player season row has games_played >= min_games; this is not qualification for the playoffs. |
 
-[Back to catalog](DATA_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## app_season_player_stats_misc
 
-**Purpose:** Player starts, wins/losses and double/triple doubles.
+Player starts, wins/losses and double/triple doubles.
 
-**Grain:** one feed entry per phase and mode. **Columns:** 24.
+- **Grain:** one feed entry per phase and mode (24 columns)
+- **Primary key:** `competition_code`, `season_code`, `phase_code`, `mode`, `entry_ordinal`
+- **Defined in:** [gold_etl/per_game_rows.py](../gold_etl/per_game_rows.py)
 
-**Primary key:** `competition_code`, `season_code`, `phase_code`, `mode`, `entry_ordinal`.
-
-**Definition / implementation:** [gold_etl/per_game_rows.py](../gold_etl/per_game_rows.py).
-
-**Usage and limitations:** Gold derives PS and missing perGame rows. Do not divide every numeric field by games: generated misc perGame rows retain accumulated measures.
+**Usage:** Gold derives PS and missing perGame rows. Do not divide every numeric field by games: generated misc perGame rows retain accumulated measures.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
@@ -687,19 +670,17 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 | `min_games` | `INTEGER` | No |  | Games threshold: floor(distinct played rounds in scope / 2) + 1; FF uses 1. |
 | `qualified` | `BOOLEAN` | No |  | Player season row has games_played >= min_games; this is not qualification for the playoffs. |
 
-[Back to catalog](DATA_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## app_standings
 
-**Purpose:** Official standings page, form, streaks and standings splits.
+Official standings page, form, streaks and standings splits.
 
-**Grain:** one club-phase-round snapshot. **Columns:** 79.
+- **Grain:** one club-phase-round snapshot (79 columns)
+- **Primary key:** `competition_code`, `season_code`, `phase_code`, `round_number`, `club_code`
+- **Defined in:** [gold_etl/standings.py](../gold_etl/standings.py)
 
-**Primary key:** `competition_code`, `season_code`, `phase_code`, `round_number`, `club_code`.
-
-**Definition / implementation:** [gold_etl/standings.py](../gold_etl/standings.py).
-
-**Usage and limitations:** basic_*, calendar_*, streaks_*, ahead_behind_* and margins_* preserve separate feeds. Use basic_position for official position. These snapshots can differ from game-derived round totals, particularly historical round alignment.
+**Usage:** basic_*, calendar_*, streaks_*, ahead_behind_* and margins_* preserve separate feeds. Use basic_position for official position. These snapshots can differ from game-derived round totals, particularly historical round alignment.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
@@ -783,19 +764,17 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 | `form` | `JSONB` | No |  | Ordered JSON array of recent official standings results; see the JSON contract below. |
 | `streak_history` | `JSONB` | No |  | Ordered JSON array of official calendar streaks; see the JSON contract below. |
 
-[Back to catalog](DATA_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## app_team_season_stats
 
-**Purpose:** Team and opponent season box-score totals.
+Team and opponent season box-score totals.
 
-**Grain:** one club-phase per season, for phases actually present in games. **Columns:** 46.
+- **Grain:** one club-phase per season, for phases actually present in games (46 columns)
+- **Primary key:** `competition_code`, `season_code`, `phase_code`, `club_code`
+- **Defined in:** [gold_etl/team_season.py](../gold_etl/team_season.py)
 
-**Primary key:** `competition_code`, `season_code`, `phase_code`, `club_code`.
-
-**Definition / implementation:** [gold_etl/team_season.py](../gold_etl/team_season.py).
-
-**Usage and limitations:** No synthetic all or PS rows. Legacy own_/opp_ spellings are intentional, for example own_assistances and own_valuation. Counted games exclude forfeits without box scores. Use app_standings_stats for calculated efficiency and ratings.
+**Usage:** No synthetic all or PS rows. Legacy own_/opp_ spellings are intentional, for example own_assistances and own_valuation. Counted games exclude forfeits without box scores. Use app_standings_stats for calculated efficiency and ratings.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
@@ -846,19 +825,17 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 | `opp_fouls_received` | `NUMERIC` | Yes |  | Opponent total: Opponent fouls drawn by the player or team. |
 | `opp_valuation` | `NUMERIC` | Yes |  | Opponent total: Official Performance Index Rating; source valuation, distinct from PER and Game Score. See player glossary. |
 
-[Back to catalog](DATA_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## app_records_player_seasons
 
-**Purpose:** Historical top player-season leaderboards.
+Historical top player-season leaderboards.
 
-**Grain:** one rank slot per metric and competition. **Columns:** 9.
+- **Grain:** one rank slot per metric and competition (9 columns)
+- **Primary key:** `competition_code`, `metric`, `rank_ordinal`
+- **Defined in:** [gold_etl/records.py](../gold_etl/records.py)
 
-**Primary key:** `competition_code`, `metric`, `rank_ordinal`.
-
-**Definition / implementation:** [gold_etl/records.py](../gold_etl/records.py).
-
-**Usage and limitations:** Built from all loaded seasons of the selected competition regardless of the selected build season. Filter metric before ordering by rank_ordinal. See metric values below.
+**Usage:** Built from all loaded seasons of the selected competition regardless of the selected build season. Filter metric before ordering by rank_ordinal. See metric values below.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
@@ -872,19 +849,17 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 | `club_name` | `TEXT` | Yes |  | Club display name for this season or row. |
 | `value` | `NUMERIC` | No |  | Value of the selected leaderboard metric, with the metric's own units. |
 
-[Back to catalog](DATA_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## app_records_single_games
 
-**Purpose:** Historical top individual game performances.
+Historical top individual game performances.
 
-**Grain:** one rank slot per metric and competition. **Columns:** 11.
+- **Grain:** one rank slot per metric and competition (11 columns)
+- **Primary key:** `competition_code`, `metric`, `rank_ordinal`
+- **Defined in:** [gold_etl/records.py](../gold_etl/records.py)
 
-**Primary key:** `competition_code`, `metric`, `rank_ordinal`.
-
-**Definition / implementation:** [gold_etl/records.py](../gold_etl/records.py).
-
-**Usage and limitations:** Competition-wide top-50 entries per metric; forfeits without a box score are excluded. season_code is a payload field as well as part of the game join, not part of this leaderboard key.
+**Usage:** Competition-wide top-50 entries per metric; forfeits without a box score are excluded. season_code is a payload field as well as part of the game join, not part of this leaderboard key.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
@@ -900,19 +875,17 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 | `club_name` | `TEXT` | Yes |  | Club display name for this season or row. |
 | `value` | `NUMERIC` | No |  | Value of the selected leaderboard metric, with the metric's own units. |
 
-[Back to catalog](DATA_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## app_records_team_seasons
 
-**Purpose:** Historical top team-season leaderboards.
+Historical top team-season leaderboards.
 
-**Grain:** one rank slot per metric and competition. **Columns:** 7.
+- **Grain:** one rank slot per metric and competition (7 columns)
+- **Primary key:** `competition_code`, `metric`, `rank_ordinal`
+- **Defined in:** [gold_etl/records.py](../gold_etl/records.py)
 
-**Primary key:** `competition_code`, `metric`, `rank_ordinal`.
-
-**Definition / implementation:** [gold_etl/records.py](../gold_etl/records.py).
-
-**Usage and limitations:** Competition-wide top-50 entries per metric. Do not sum value across different metrics or rank slots.
+**Usage:** Competition-wide top-50 entries per metric. Do not sum value across different metrics or rank slots.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
@@ -924,19 +897,17 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 | `club_name` | `TEXT` | Yes |  | Club display name for this season or row. |
 | `value` | `NUMERIC` | No |  | Value of the selected leaderboard metric, with the metric's own units. |
 
-[Back to catalog](DATA_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## app_postseason_series
 
-**Purpose:** Postseason pairings with game lists: EuroLeague play-in, playoff and Final Four; EuroCup knockout phases.
+Postseason pairings with game lists: EuroLeague play-in, playoff and Final Four; EuroCup knockout phases.
 
-**Grain:** one sorted club pair per postseason phase and season. **Columns:** 12.
+- **Grain:** one sorted club pair per postseason phase and season (12 columns)
+- **Primary key:** `competition_code`, `season_code`, `phase_code`, `club_a_code`, `club_b_code`
+- **Defined in:** [gold_etl/series.py](../gold_etl/series.py)
 
-**Primary key:** `competition_code`, `season_code`, `phase_code`, `club_a_code`, `club_b_code`.
-
-**Definition / implementation:** [gold_etl/series.py](../gold_etl/series.py).
-
-**Usage and limitations:** club_a/club_b are sorted codes, not home/away. games_played currently counts all listed fixtures, including scheduled ones. Wins count played fixtures only. winner_club_code is the current wins leader and can exist before a series is decided. EuroCup's postseason is its knockout phases (`8F`, `4F`, `2F`, `Final`, plus `L32` and `L16` in U2007); two-leg ties (U2002-U2015, listed in `gold_etl/qualification.py`) are won on aggregate points, every other tie on game wins, and cancelled games (U2019) are left out. For a two-leg tie, club_a_wins and club_b_wins can be level while winner_club_code is set. A Final phase can hold a final tournament or third-place game as separate pairings; the championship pairing is the one won by the season champion.
+**Usage:** club_a/club_b are sorted codes, not home/away. games_played currently counts all listed fixtures, including scheduled ones. Wins count played fixtures only. winner_club_code is the current wins leader and can exist before a series is decided. EuroCup's postseason is its knockout phases (`8F`, `4F`, `2F`, `Final`, plus `L32` and `L16` in U2007); two-leg ties (U2002-U2015, listed in `gold_etl/qualification.py`) are won on aggregate points, every other tie on game wins, and cancelled games (U2019) are left out. For a two-leg tie, club_a_wins and club_b_wins can be level while winner_club_code is set. A Final phase can hold a final tournament or third-place game as separate pairings; the championship pairing is the one won by the season champion.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
@@ -953,19 +924,17 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 | `winner_club_code` | `TEXT` | Yes |  | Club currently ahead in pairing wins, NULL when tied; not a series-completion flag. |
 | `games` | `JSONB` | No |  | JSON array of scheduled and played fixtures in round/game order; see JSON contract below. |
 
-[Back to catalog](DATA_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## app_standings_stats
 
-**Purpose:** One frontend-ready team advanced-stat row: cumulative totals and ratings, league-relative and opponent-adjusted strength, home/away and last-5/last-10 form. It merges three team-round derivations (`team_rounds.py`, `team_ratings.py`, `team_splits.py`) that run in memory and are not stored.
+One frontend-ready team advanced-stat row: cumulative totals and ratings, league-relative and opponent-adjusted strength, home/away and last-5/last-10 form. It merges three team-round derivations (`team_rounds.py`, `team_ratings.py`, `team_splits.py`) that run in memory and are not stored.
 
-**Grain:** one club-scope-round snapshot. **Columns:** 69.
+- **Grain:** one club-scope-round snapshot (69 columns)
+- **Primary key:** `competition_code`, `season_code`, `scope`, `round_number`, `club_code`
+- **Defined in:** [gold_etl/standings_stats.py](../gold_etl/standings_stats.py)
 
-**Primary key:** `competition_code`, `season_code`, `scope`, `round_number`, `club_code`.
-
-**Definition / implementation:** [gold_etl/standings_stats.py](../gold_etl/standings_stats.py).
-
-**Usage and limitations:** Preferred source for a wide team advanced table. Values are projected without recalculation. Join official standings with scope = phase_code plus competition, season, round and club; use a left join because historical rounds can disagree.
+**Usage:** Preferred source for a wide team advanced table. Values are projected without recalculation. Join official standings with scope = phase_code plus competition, season, round and club; use a left join because historical rounds can disagree.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
@@ -1039,19 +1008,17 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 | `last10_net_rating` | `NUMERIC` | Yes |  | Last up to ten counted games in this scope: Offensive rating minus defensive rating; points per 100 possessions. Lineup rows use counted possessions separately on each side. |
 | `last10_pace` | `NUMERIC` | Yes |  | Last up to ten counted games in this scope: 40 * estimated possessions / game_minutes, possessions per regulation-length team game. |
 
-[Back to catalog](DATA_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## app_team_pbp_stats
 
-**Purpose:** Season-scope possessions, score flow, clutch and shot-split summaries.
+Season-scope possessions, score flow, clutch and shot-split summaries.
 
-**Grain:** one club-scope per season. **Columns:** 29.
+- **Grain:** one club-scope per season (29 columns)
+- **Primary key:** `competition_code`, `season_code`, `scope`, `club_code`
+- **Defined in:** [gold_etl/team_pbp.py](../gold_etl/team_pbp.py)
 
-**Primary key:** `competition_code`, `season_code`, `scope`, `club_code`.
-
-**Definition / implementation:** [gold_etl/team_pbp.py](../gold_etl/team_pbp.py).
-
-**Usage and limitations:** E2007+ subject to event coverage. games, timed_games, flagged_games and clutch_games have different meanings. Missing sources can leave some measures NULL. Do not divide every total by games.
+**Usage:** E2007+ subject to event coverage. games, timed_games, flagged_games and clutch_games have different meanings. Missing sources can leave some measures NULL. Do not divide every total by games.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
@@ -1085,19 +1052,17 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 | `longest_run` | `NUMERIC` | Yes |  | Most unanswered points scored in a game; maximum across games in season-scope aggregates. |
 | `assisted_fg_pct` | `NUMERIC` | Yes |  | assisted_field_goals / field_goals_made, a fraction. |
 
-[Back to catalog](DATA_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## app_player_round_stats
 
-**Purpose:** Calculated cumulative player totals, rates, per-100 stats, Game Score and PIE.
+Calculated cumulative player totals, rates, per-100 stats, Game Score and PIE.
 
-**Grain:** one player-scope-round snapshot. **Columns:** 46.
+- **Grain:** one player-scope-round snapshot (46 columns)
+- **Primary key:** `competition_code`, `season_code`, `scope`, `round_number`, `person_key`
+- **Defined in:** [gold_etl/player_rounds.py](../gold_etl/player_rounds.py)
 
-**Primary key:** `competition_code`, `season_code`, `scope`, `round_number`, `person_key`.
-
-**Definition / implementation:** [gold_etl/player_rounds.py](../gold_etl/player_rounds.py).
-
-**Usage and limitations:** Includes appearances with seconds_played > 0; carries forward idle rounds. Transfers keep one blended row with the latest club_code. Rates remain box-score estimates even when the per-game rate uses on-court events.
+**Usage:** Includes appearances with seconds_played > 0; carries forward idle rounds. Transfers keep one blended row with the latest club_code. Rates remain box-score estimates even when the per-game rate uses on-court events.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
@@ -1148,19 +1113,17 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 | `game_score_average` | `NUMERIC` | Yes |  | game_score_total / games_played, mean Game Score per appearance. |
 | `pie` | `NUMERIC` | Yes |  | Player Impact Estimate: sum(player PIE numerator) / sum(both teams' PIE numerators in those games), a fraction. |
 
-[Back to catalog](DATA_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## app_player_round_ratings
 
-**Purpose:** Cumulative Hollinger PER for player comparisons.
+Cumulative Hollinger PER for player comparisons.
 
-**Grain:** one player-scope-round snapshot. **Columns:** 12.
+- **Grain:** one player-scope-round snapshot (12 columns)
+- **Primary key:** `competition_code`, `season_code`, `scope`, `round_number`, `person_key`
+- **Defined in:** [gold_etl/player_ratings.py](../gold_etl/player_ratings.py)
 
-**Primary key:** `competition_code`, `season_code`, `scope`, `round_number`, `person_key`.
-
-**Definition / implementation:** [gold_etl/player_ratings.py](../gold_etl/player_ratings.py).
-
-**Usage and limitations:** Same player-round key as app_player_round_stats. Seconds-weighted league mean PER is 15. No minimum-minutes cutoff; small samples can be extreme. Season PER is recomputed from cumulative context, not averaged game PER.
+**Usage:** Same player-round key as app_player_round_stats. Seconds-weighted league mean PER is 15. No minimum-minutes cutoff; small samples can be extreme. Season PER is recomputed from cumulative context, not averaged game PER.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
@@ -1177,19 +1140,17 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 | `aper` | `NUMERIC` | Yes |  | Pace-adjusted uPER: uper * league pace / player's team-context pace. |
 | `per` | `NUMERIC` | Yes |  | Cumulative aper normalized so the seconds-weighted league mean in this scope-round is 15. |
 
-[Back to catalog](DATA_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## app_player_round_win_shares
 
-**Purpose:** Offensive, defensive and total estimated win contributions.
+Offensive, defensive and total estimated win contributions.
 
-**Grain:** one player-scope-round snapshot. **Columns:** 13.
+- **Grain:** one player-scope-round snapshot (13 columns)
+- **Primary key:** `competition_code`, `season_code`, `scope`, `round_number`, `person_key`
+- **Defined in:** [gold_etl/player_win_shares.py](../gold_etl/player_win_shares.py)
 
-**Primary key:** `competition_code`, `season_code`, `scope`, `round_number`, `person_key`.
-
-**Definition / implementation:** [gold_etl/player_win_shares.py](../gold_etl/player_win_shares.py).
-
-**Usage and limitations:** Same player-round key as app_player_round_stats. Per-40 rate uses 40-minute EuroLeague regulation time. Values can be negative; this is a model estimate, not a literal allocation of team wins.
+**Usage:** Same player-round key as app_player_round_stats. Per-40 rate uses 40-minute EuroLeague regulation time. Values can be negative; this is a model estimate, not a literal allocation of team wins.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
@@ -1207,19 +1168,17 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 | `win_shares` | `NUMERIC` | Yes |  | off_win_shares + def_win_shares; estimated wins, can be negative. |
 | `win_shares_per_40` | `NUMERIC` | Yes |  | win_shares * 40 / (seconds_played / 60), estimated wins per 40 player-minutes. |
 
-[Back to catalog](DATA_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## app_player_on_off
 
-**Purpose:** Team performance while a player is on or off court.
+Team performance while a player is on or off court.
 
-**Grain:** one player-club-scope per season. **Columns:** 26.
+- **Grain:** one player-club-scope per season (26 columns)
+- **Primary key:** `competition_code`, `season_code`, `scope`, `club_code`, `person_key`
+- **Defined in:** [gold_etl/player_on_off.py](../gold_etl/player_on_off.py)
 
-**Primary key:** `competition_code`, `season_code`, `scope`, `club_code`, `person_key`.
-
-**Definition / implementation:** [gold_etl/player_on_off.py](../gold_etl/player_on_off.py).
-
-**Usage and limitations:** E2007+ from complete five-on-five stints. Transfers have separate club rows. Off includes team games the player missed. Positive drtg_diff means more points allowed and worse defense. Not adjusted for teammates or opponents.
+**Usage:** E2007+ from complete five-on-five stints. Transfers have separate club rows. Off includes team games the player missed. Positive drtg_diff means more points allowed and worse defense. Not adjusted for teammates or opponents.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
@@ -1250,19 +1209,17 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 | `drtg_diff` | `NUMERIC` | Yes |  | on_drtg - off_drtg; positive means the team's defense allowed more with the player on court. |
 | `net_rating_diff` | `NUMERIC` | Yes |  | on_net_rating - off_net_rating, unadjusted team on/off difference per 100 possessions. |
 
-[Back to catalog](DATA_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## app_lineup_ratings
 
-**Purpose:** Ratings for pairs, triples and five-man units.
+Ratings for pairs, triples and five-man units.
 
-**Grain:** one lineup-size-lineup-club-scope per season. **Columns:** 16.
+- **Grain:** one lineup-size-lineup-club-scope per season (16 columns)
+- **Primary key:** `competition_code`, `season_code`, `scope`, `club_code`, `lineup_size`, `lineup`
+- **Defined in:** [gold_etl/lineup_ratings.py](../gold_etl/lineup_ratings.py)
 
-**Primary key:** `competition_code`, `season_code`, `scope`, `club_code`, `lineup_size`, `lineup`.
-
-**Definition / implementation:** [gold_etl/lineup_ratings.py](../gold_etl/lineup_ratings.py).
-
-**Usage and limitations:** E2007+; lineup sizes are 2, 3 and 5 only. Sorted comma-separated person_key values identify a unit. Pair/triple rows overlap: summing them double counts stints. Retain sample seconds and possessions when ranking.
+**Usage:** E2007+; lineup sizes are 2, 3 and 5 only. Sorted comma-separated person_key values identify a unit. Pair/triple rows overlap: summing them double counts stints. Retain sample seconds and possessions when ranking.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
@@ -1283,19 +1240,17 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 | `drtg` | `NUMERIC` | Yes |  | 100 * points_against / possessions_against from counted stints, defensive points allowed per 100. |
 | `net_rating` | `NUMERIC` | Yes |  | Offensive rating minus defensive rating; points per 100 possessions. Lineup rows use counted possessions separately on each side. |
 
-[Back to catalog](DATA_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## app_player_rapm
 
-**Purpose:** Regularized adjusted plus-minus from lineup stints.
+Regularized adjusted plus-minus from lineup stints.
 
-**Grain:** one player per season with scope = all. **Columns:** 12.
+- **Grain:** one player per season with scope = all (12 columns)
+- **Primary key:** `competition_code`, `season_code`, `scope`, `person_key`
+- **Defined in:** [gold_etl/rapm.py](../gold_etl/rapm.py)
 
-**Primary key:** `competition_code`, `season_code`, `scope`, `person_key`.
-
-**Definition / implementation:** [gold_etl/rapm.py](../gold_etl/rapm.py).
-
-**Usage and limitations:** E2007+; one blended row across clubs. Positive offense and positive defense both mean better performance. No phase or round snapshots. Penalty is fitted per season; compare with sample possessions and seconds.
+**Usage:** E2007+; one blended row across clubs. Positive offense and positive defense both mean better performance. No phase or round snapshots. Penalty is fitted per season; compare with sample possessions and seconds.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
@@ -1312,19 +1267,17 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 | `defense` | `NUMERIC` | Yes |  | Defensive RAPM coefficient in points prevented per 100 possessions; positive is better. |
 | `rapm` | `NUMERIC` | Yes |  | offense + defense, regularized adjusted plus-minus in points per 100 possessions. |
 
-[Back to catalog](DATA_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## app_play_by_play
 
-**Purpose:** Event timeline for game charts and event-level analysis.
+Event timeline for game charts and event-level analysis.
 
-**Grain:** one event ordinal within a game period. **Columns:** 21.
+- **Grain:** one event ordinal within a game period (21 columns)
+- **Primary key:** `competition_code`, `season_code`, `game_code`, `period`, `event_ordinal`
+- **Defined in:** [postgres_etl/flat_schema.py](../postgres_etl/flat_schema.py)
 
-**Primary key:** `competition_code`, `season_code`, `game_code`, `period`, `event_ordinal`.
-
-**Definition / implementation:** [postgres_etl/flat_schema.py](../postgres_etl/flat_schema.py).
-
-**Usage and limitations:** Order by explicit period rank, overtime number from minute, then event_ordinal. Alphabetical period order and play_number are unsuitable. person_code is the resolved box-score person_key; player_code is the raw live identity. Available from E2007 where the feed exists.
+**Usage:** Order by explicit period rank, overtime number from minute, then event_ordinal. Alphabetical period order and play_number are unsuitable. person_code is the resolved box-score person_key; player_code is the raw live identity. Available from E2007 where the feed exists.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
@@ -1350,19 +1303,17 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 | `comment` | `TEXT` | Yes |  | Source event comment text. |
 | `play_info` | `TEXT` | Yes |  | Source event description text. |
 
-[Back to catalog](DATA_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## app_shots
 
-**Purpose:** Individual shot events, coordinates and shot flags.
+Individual shot events, coordinates and shot flags.
 
-**Grain:** one shot ordinal per game. **Columns:** 24.
+- **Grain:** one shot ordinal per game (24 columns)
+- **Primary key:** `competition_code`, `season_code`, `game_code`, `shot_ordinal`
+- **Defined in:** [postgres_etl/flat_schema.py](../postgres_etl/flat_schema.py)
 
-**Primary key:** `competition_code`, `season_code`, `game_code`, `shot_ordinal`.
-
-**Definition / implementation:** [postgres_etl/flat_schema.py](../postgres_etl/flat_schema.py).
-
-**Usage and limitations:** Use resolved person_code to reach app_people.person_key within the season. Coordinates and zone codes retain feed conventions; this warehouse does not define a court projection. Feed availability starts in E2007.
+**Usage:** Use resolved person_code to reach app_people.person_key within the season. Coordinates and zone codes retain feed conventions; this warehouse does not define a court projection. Feed availability starts in E2007.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
@@ -1391,19 +1342,17 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 | `points_b` | `INTEGER` | Yes |  | Live running score of source side B (road). |
 | `shot_at` | `TIMESTAMPTZ` | Yes |  | Source shot time with time zone. |
 
-[Back to catalog](DATA_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## app_game_player_advanced
 
-**Purpose:** Game-level player efficiency, on-court rates, Game Score and game PER.
+Game-level player efficiency, on-court rates, Game Score and game PER.
 
-**Grain:** one player-side per game with a counted box score. **Columns:** 21.
+- **Grain:** one player-side per game with a counted box score (21 columns)
+- **Primary key:** `competition_code`, `season_code`, `game_code`, `side`, `person_key`
+- **Defined in:** [gold_etl/game_advanced.py](../gold_etl/game_advanced.py)
 
-**Primary key:** `competition_code`, `season_code`, `game_code`, `side`, `person_key`.
-
-**Definition / implementation:** [gold_etl/game_advanced.py](../gold_etl/game_advanced.py).
-
-**Usage and limitations:** The seven time-dependent rates use on-court events when available, otherwise estimates. Gold does not expose Silver rate_source. game_per is NULL below 180 seconds; game_uper and game_aper are retained. Use cumulative PER for a season.
+**Usage:** The seven time-dependent rates use on-court events when available, otherwise estimates. Gold does not expose Silver rate_source. game_per is NULL below 180 seconds; game_uper and game_aper are retained. Use cumulative PER for a season.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
@@ -1429,19 +1378,17 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 | `game_aper` | `NUMERIC` | Yes |  | game_uper * phase-through-round league pace / this game's team pace. |
 | `game_per` | `NUMERIC` | Yes |  | game_aper normalized to a seconds-weighted mean of 15 within its phase-round; NULL below 180 seconds. |
 
-[Back to catalog](DATA_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## app_game_team_advanced
 
-**Purpose:** Game-level team estimated possessions, pace, ratings and four factors.
+Game-level team estimated possessions, pace, ratings and four factors.
 
-**Grain:** one side per game with a counted box score. **Columns:** 22.
+- **Grain:** one side per game with a counted box score (22 columns)
+- **Primary key:** `competition_code`, `season_code`, `game_code`, `side`
+- **Defined in:** [gold_etl/game_advanced.py](../gold_etl/game_advanced.py)
 
-**Primary key:** `competition_code`, `season_code`, `game_code`, `side`.
-
-**Definition / implementation:** [gold_etl/game_advanced.py](../gold_etl/game_advanced.py).
-
-**Usage and limitations:** Possessions are the shared box-score estimate. Counted event possessions live in app_game_team_possessions. Join on competition, season, game and side; club_code is available for display joins.
+**Usage:** Possessions are the shared box-score estimate. Counted event possessions live in app_game_team_possessions. Join on competition, season, game and side; club_code is available for display joins.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
@@ -1468,19 +1415,17 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 | `true_shooting_pct` | `NUMERIC` | Yes |  | PTS / (2 * (FGA + 0.44 * FTA)), a fraction that can exceed 1. |
 | `assist_ratio` | `NUMERIC` | Yes |  | AST / FGM in calculated team tables; not the API assists_ratio. |
 
-[Back to catalog](DATA_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## app_game_team_possessions
 
-**Purpose:** Counted possessions and possession duration beside the box-score estimate.
+Counted possessions and possession duration beside the box-score estimate.
 
-**Grain:** one side per game with usable events and an advanced row. **Columns:** 10.
+- **Grain:** one side per game with usable events and an advanced row (10 columns)
+- **Primary key:** `competition_code`, `season_code`, `game_code`, `side`
+- **Defined in:** [postgres_etl/possessions.py](../postgres_etl/possessions.py)
 
-**Primary key:** `competition_code`, `season_code`, `game_code`, `side`.
-
-**Definition / implementation:** [postgres_etl/possessions.py](../postgres_etl/possessions.py).
-
-**Usage and limitations:** E2007+ subject to feed coverage. Counts belong to the team that used the possession. Do not substitute them silently for the estimates used by box-score ratings.
+**Usage:** E2007+ subject to feed coverage. Counts belong to the team that used the possession. Do not substitute them silently for the estimates used by box-score ratings.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
@@ -1495,19 +1440,17 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 | `avg_possession_seconds` | `NUMERIC` | Yes |  | Game: timed seconds / timed possession count. Team aggregate: game averages weighted by counted possessions. |
 | `estimated_possessions` | `NUMERIC` | Yes |  | Shared box-score possessions estimate copied for comparison; summed in season-scope aggregates. |
 
-[Back to catalog](DATA_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## app_game_team_score_flow
 
-**Purpose:** Lead changes, runs, time ahead/behind and clutch scoring.
+Lead changes, runs, time ahead/behind and clutch scoring.
 
-**Grain:** one side per game with a running score. **Columns:** 19.
+- **Grain:** one side per game with a running score (19 columns)
+- **Primary key:** `competition_code`, `season_code`, `game_code`, `side`
+- **Defined in:** [postgres_etl/score_flow.py](../postgres_etl/score_flow.py)
 
-**Primary key:** `competition_code`, `season_code`, `game_code`, `side`.
-
-**Definition / implementation:** [postgres_etl/score_flow.py](../postgres_etl/score_flow.py).
-
-**Usage and limitations:** E2007+ subject to feed coverage. lead_changes and ties are game-wide and repeated on both rows. Clutch means the final five minutes of regulation or overtime with margin at most five points.
+**Usage:** E2007+ subject to feed coverage. lead_changes and ties are game-wide and repeated on both rows. Clutch means the final five minutes of regulation or overtime with margin at most five points.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
@@ -1531,19 +1474,17 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 | `clutch_points_for` | `INTEGER` | Yes |  | Team points scored from second 2100 onward when the pre-scoring margin is at most five points. |
 | `clutch_points_against` | `INTEGER` | Yes |  | Opponent points scored from second 2100 onward when the pre-scoring margin is at most five points. |
 
-[Back to catalog](DATA_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## app_game_team_shot_splits
 
-**Purpose:** Fast-break, second-chance, turnover and assisted scoring.
+Fast-break, second-chance, turnover and assisted scoring.
 
-**Grain:** one side per game with usable events. **Columns:** 12.
+- **Grain:** one side per game with usable events (12 columns)
+- **Primary key:** `competition_code`, `season_code`, `game_code`, `side`
+- **Defined in:** [postgres_etl/shot_splits.py](../postgres_etl/shot_splits.py)
 
-**Primary key:** `competition_code`, `season_code`, `game_code`, `side`.
-
-**Definition / implementation:** [postgres_etl/shot_splits.py](../postgres_etl/shot_splits.py).
-
-**Usage and limitations:** E2007+ subject to coverage. Shot flags can be unrecorded in older feeds, so NULL does not mean zero. Assisted field goals are matched to event assists; categories of flagged points can overlap.
+**Usage:** E2007+ subject to coverage. Shot flags can be unrecorded in older feeds, so NULL does not mean zero. Assisted field goals are matched to event assists; categories of flagged points can overlap.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
@@ -1560,19 +1501,17 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 | `assisted_field_goals` | `INTEGER` | Yes |  | min(team AS event count, team made-field-goal event count); summed in aggregates, not shot-by-shot matching. |
 | `assisted_fg_pct` | `NUMERIC` | Yes |  | assisted_field_goals / field_goals_made, a fraction. |
 
-[Back to catalog](DATA_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## app_game_player_on_court
 
-**Purpose:** Continuous player on-court intervals.
+Continuous player on-court intervals.
 
-**Grain:** one interval ordinal per player-side-game. **Columns:** 9.
+- **Grain:** one interval ordinal per player-side-game (9 columns)
+- **Primary key:** `competition_code`, `season_code`, `game_code`, `side`, `person_key`, `interval_ordinal`
+- **Defined in:** [postgres_etl/on_court.py](../postgres_etl/on_court.py)
 
-**Primary key:** `competition_code`, `season_code`, `game_code`, `side`, `person_key`, `interval_ordinal`.
-
-**Definition / implementation:** [postgres_etl/on_court.py](../postgres_etl/on_court.py).
-
-**Usage and limitations:** Elapsed game seconds, reconstructed from starters and substitutions. Duration is end_seconds - start_seconds. Event gaps and older minute-rounded box scores can produce discrepancies.
+**Usage:** Elapsed game seconds, reconstructed from starters and substitutions. Duration is end_seconds - start_seconds. Event gaps and older minute-rounded box scores can produce discrepancies.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
@@ -1586,19 +1525,17 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 | `start_seconds` | `INTEGER` | Yes |  | Interval or stint start in elapsed game seconds from tipoff. |
 | `end_seconds` | `INTEGER` | Yes |  | Interval or stint end in elapsed game seconds; duration is end minus start. |
 
-[Back to catalog](DATA_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## app_game_team_lineup_stints
 
-**Purpose:** Five-on-five stints with scoring and counted possessions.
+Five-on-five stints with scoring and counted possessions.
 
-**Grain:** one side-stint per game. **Columns:** 15.
+- **Grain:** one side-stint per game (15 columns)
+- **Primary key:** `competition_code`, `season_code`, `game_code`, `side`, `stint_ordinal`
+- **Defined in:** [postgres_etl/lineups.py](../postgres_etl/lineups.py)
 
-**Primary key:** `competition_code`, `season_code`, `game_code`, `side`, `stint_ordinal`.
-
-**Definition / implementation:** [postgres_etl/lineups.py](../postgres_etl/lineups.py).
-
-**Usage and limitations:** Only complete five-versus-five lineups are stored. Attribution follows event order, so substitutions at one clock time can split free throws. Incomplete portions can make totals differ from the final score.
+**Usage:** Only complete five-versus-five lineups are stored. Attribution follows event order, so substitutions at one clock time can split free throws. Incomplete portions can make totals differ from the final score.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
@@ -1618,19 +1555,17 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 | `points_for` | `INTEGER` | Yes |  | Points scored by this club or lineup in the row's game, stint or cumulative scope. |
 | `points_against` | `INTEGER` | Yes |  | Points conceded by this club or lineup in the same sample. |
 
-[Back to catalog](DATA_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## app_game_stat_gaps
 
-**Purpose:** Reasons an official box-score measure is unavailable.
+Reasons an official box-score measure is unavailable.
 
-**Grain:** one stat_name per game. **Columns:** 5.
+- **Grain:** one stat_name per game (5 columns)
+- **Primary key:** `competition_code`, `season_code`, `game_code`, `stat_name`
+- **Defined in:** [postgres_etl/flat_schema.py](../postgres_etl/flat_schema.py)
 
-**Primary key:** `competition_code`, `season_code`, `game_code`, `stat_name`.
-
-**Definition / implementation:** [postgres_etl/flat_schema.py](../postgres_etl/flat_schema.py).
-
-**Usage and limitations:** stat_name = * means a game lacks a box score, including forfeits. An empty gap table does not guarantee every derived or event-based metric exists.
+**Usage:** stat_name = * means a game lacks a box score, including forfeits. An empty gap table does not guarantee every derived or event-based metric exists.
 
 | Column | PostgreSQL type | Nullable | Key | Description |
 | --- | --- | --- | --- | --- |
@@ -1640,7 +1575,7 @@ Gold omits Silver `load_id`, `loaded_at` and `load_log` provenance.
 | `stat_name` | `TEXT` | No | PK | Missing measure's SQL column name; * means no box score for the game. |
 | `reason` | `TEXT` | Yes |  | Explanation of the source gap, retained rather than filling it with zero. |
 
-[Back to catalog](DATA_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## JSON column contracts
 
@@ -1669,8 +1604,8 @@ competition; all other Gold tables are replaced by selected season scopes.
 
 ## Maintaining this reference
 
-When a schema changes, compare the full table/column/key inventory with
-`gold_etl.schema.PHYSICAL_TABLES` and `neon_publish.contract.APP_TABLES`, update
-the affected purpose and definitions, and add new statistics to the glossary.
-For changed calculations, verify the producing module as well as the schema.
-This document is checked in as Markdown; it is not refreshed automatically.
+This file is maintained by hand; nothing regenerates it. When a Gold schema changes:
+
+1. Compare the full table, column and key inventory with `gold_etl.schema.PHYSICAL_TABLES` and `neon_publish.contract.APP_TABLES`.
+2. Update the affected purposes and descriptions. For a changed calculation, check the producing module as well as the schema.
+3. Add new statistics to the [glossary](STAT_GLOSSARY.md).

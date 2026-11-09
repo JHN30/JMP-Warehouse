@@ -1,5 +1,8 @@
 # Gold and Neon name alignment verification
 
+> [!NOTE]
+> This is a historical verification record from 2026-10-10. Table counts and names describe that date: seven of the 47 tables listed here have since been retired, leaving 40. For the current tables, see the [Gold data catalog](DATA_CATALOG.md) and [neon_publish/README.md](../neon_publish/README.md).
+
 Date: 2026-10-10. Branch: `fix/align-gold-table-names-with-neon`.
 
 All requested database and runtime checks passed. The 36 legacy local Gold tables were renamed in one transaction; all 47 now use the same names as Neon public. No Neon DDL was executed. The separate web app repository was not edited.

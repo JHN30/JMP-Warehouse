@@ -1,67 +1,65 @@
 # Silver table reference
 
-Every column of the 36 registered Silver data tables, plus the load-log metadata
-table. Checked against [flat_schema.py](../postgres_etl/flat_schema.py),
-[raw_transform.py](../postgres_etl/raw_transform.py),
-[flat_transform.py](../postgres_etl/flat_transform.py) and the calculated-table
-modules on 2026-10-20. This is the declared code contract, not a live-schema audit.
-Examples use EuroLeague; EuroCup rows share every table (coverage in the
-[Silver catalog](SILVER_CATALOG.md#eurocup)).
+Every column of the 33 Silver data tables and the `load_log` metadata table: PostgreSQL type, nullability, key, the source JSON path or derivation, and meaning. Each table section also gives its grain, key, upstream Bronze resource and the Gold tables that use it.
 
-Choose tables in the [Silver catalog](SILVER_CATALOG.md), trace resources in the
-[Bronze catalog](BRONZE_CATALOG.md), and read metric definitions in the shared
-[player/team stats glossary](STAT_GLOSSARY.md). App-facing contracts are in the
-[Gold column reference](GOLD_TABLE_REFERENCE.md).
+To find a table, start with the [Silver catalog](SILVER_CATALOG.md). For the Bronze resources behind the source paths, see the [Bronze catalog](BRONZE_CATALOG.md); for what a statistic measures, the [statistics glossary](STAT_GLOSSARY.md); for the app-facing columns, the [Gold table reference](GOLD_TABLE_REFERENCE.md).
+
+Checked against [flat_schema.py](../postgres_etl/flat_schema.py), [raw_transform.py](../postgres_etl/raw_transform.py), [flat_transform.py](../postgres_etl/flat_transform.py) and the calculated-table scripts on 2026-10-20. This is the declared code contract, not a live-schema audit. Examples use EuroLeague; EuroCup rows share every table (see [EuroCup coverage](SILVER_CATALOG.md#eurocup)).
 
 ## Reading columns and source paths
 
-All SQL names are in schema `silver`. PK means primary-key column. Nullable is
-No for key columns and explicitly required fields. The two provenance columns
-are required on all 36 data tables, even though they are appended by the writer
-rather than listed in each table's field tuple. `load_log` has its own schema.
-
-`TEXT` identifiers retain leading zeroes. `NUMERIC` can mean counts, points,
-seconds, percentages or ratios; it does not imply common units. `TIMESTAMPTZ`
-represents an instant; `TIMESTAMP` stores no zone. For source timestamps carrying
-an offset, the transformer converts to UTC wall time before removing the zone
-for a TIMESTAMP column. Zone-less values retain their wall time; do not attach
-an arbitrary frontend zone. Undefined/missing numeric values become NULL.
-
-For source tables, a **Source / derivation** path is relative to the selected row
-object, not necessarily the root response. Child official/period/standings rows
-change that object. `@name` means a value prepared by the raw transformer, such
-as an identity, normalized status, phase from a resource name, or resolved player
-code. See the linked resource for its container. Calculated fields say Derived;
-their schema path is not a Bronze JSON path. Writer fields identify provenance.
-
-Source statistics are copied without Gold qualification/fallback/PS enrichment.
-Calculated game rows use the shared glossary's formulas, with no season PER,
-Win Shares or RAPM columns in Silver. Source-field interpretation that is not
-established by the warehouse remains marked as such.
+- **Schema and keys.** All names are in schema `silver`. PK marks a primary-key column. Nullable is No for key columns and explicitly required fields.
+- **Provenance columns.** `load_id` and `loaded_at` are required on all 33 data tables. The writer appends them, so they are not repeated in each table below. `load_log` has its own columns.
+- **Types.** `TEXT` keeps leading zeroes in identifiers. `NUMERIC` can hold counts, points, seconds, percentages or ratios; it does not imply common units. `TIMESTAMPTZ` is an instant; `TIMESTAMP` has no zone. Source timestamps with an offset are converted to UTC wall time before the zone is removed for a `TIMESTAMP` column; zone-less values keep their wall time. Do not attach a frontend time zone. Undefined or missing numbers become `NULL`.
+- **Source / derivation.** For source tables, the path is relative to the selected row object, not necessarily the response root; child rows (officials, periods, standings children) change that object. `@name` is a value prepared by the raw transformer, such as an identity, a normalized status, a phase taken from a resource name, or a resolved player code. Calculated fields say *Derived* (not a Bronze JSON path), and writer fields identify provenance.
+- **Scope.** Source statistics are stored without Gold's qualification, calculated `perGame` rows or `PS` rows. Calculated game rows use the [glossary](STAT_GLOSSARY.md) formulas; Silver has no season PER, Win Shares or RAPM. Source fields whose meaning the warehouse has not established are marked as such.
 
 ## Tables
 
-- **Season, clubs, people and registration:** [seasons](#seasons), [clubs](#clubs), [people](#people), [registrations](#registrations), [rounds](#rounds).
-- **Fixtures and official box scores:** [games](#games), [game_officials](#game_officials), [game_period_scores](#game_period_scores), [game_player_stats](#game_player_stats), [game_team_stats](#game_team_stats), [game_stat_gaps](#game_stat_gaps).
-- **API player and team season statistics:** [season_player_stats_traditional](#season_player_stats_traditional), [season_player_stats_advanced](#season_player_stats_advanced), [season_player_stats_scoring](#season_player_stats_scoring), [season_player_stats_misc](#season_player_stats_misc), [season_team_stats_traditional](#season_team_stats_traditional), [season_team_stats_advanced](#season_team_stats_advanced).
-- **Official standings and child rows:** [standings_basic](#standings_basic), [standings_calendar](#standings_calendar), [standings_streaks](#standings_streaks), [standings_ahead_behind](#standings_ahead_behind), [standings_margins](#standings_margins), [standings_calendar_streaks](#standings_calendar_streaks), [standings_basic_form](#standings_basic_form).
-- **Live events and shots:** [play_by_play](#play_by_play), [shots](#shots).
-- **Calculated game tables:** [game_team_advanced](#game_team_advanced), [game_player_advanced](#game_player_advanced), [game_team_possessions](#game_team_possessions), [game_team_score_flow](#game_team_score_flow), [game_team_shot_splits](#game_team_shot_splits), [game_player_on_court](#game_player_on_court), [game_team_lineup_stints](#game_team_lineup_stints).
-- **Load metadata:** [load_log](#load_log).
+**Season, clubs, people and registration**
+
+- [`seasons`](#seasons), [`clubs`](#clubs), [`people`](#people), [`registrations`](#registrations), [`rounds`](#rounds)
+
+**Fixtures and official box scores**
+
+- [`games`](#games), [`game_officials`](#game_officials), [`game_period_scores`](#game_period_scores)
+- [`game_player_stats`](#game_player_stats), [`game_team_stats`](#game_team_stats), [`game_stat_gaps`](#game_stat_gaps)
+
+**API player and team season statistics**
+
+- [`season_player_stats_traditional`](#season_player_stats_traditional), [`season_player_stats_advanced`](#season_player_stats_advanced)
+- [`season_player_stats_scoring`](#season_player_stats_scoring), [`season_player_stats_misc`](#season_player_stats_misc)
+- [`season_team_stats_traditional`](#season_team_stats_traditional), [`season_team_stats_advanced`](#season_team_stats_advanced)
+
+**Official standings and child rows**
+
+- [`standings_basic`](#standings_basic), [`standings_calendar`](#standings_calendar), [`standings_streaks`](#standings_streaks)
+- [`standings_ahead_behind`](#standings_ahead_behind), [`standings_margins`](#standings_margins)
+- [`standings_calendar_streaks`](#standings_calendar_streaks), [`standings_basic_form`](#standings_basic_form)
+
+**Live events and shots**
+
+- [`play_by_play`](#play_by_play), [`shots`](#shots)
+
+**Calculated game tables**
+
+- [`game_team_advanced`](#game_team_advanced), [`game_player_advanced`](#game_player_advanced)
+- [`game_team_possessions`](#game_team_possessions), [`game_team_score_flow`](#game_team_score_flow), [`game_team_shot_splits`](#game_team_shot_splits)
+- [`game_player_on_court`](#game_player_on_court), [`game_team_lineup_stints`](#game_team_lineup_stints)
+
+**Load metadata**
+
+- [`load_log`](#load_log)
 
 ## seasons
 
-**Purpose:** Competition season names, dates and champion.
+Competition season names, dates and champion.
 
-**Grain:** one season.
-
-**Primary key:** `competition_code`, `season_code`.
-
-**Upstream:** `_catalog/v2/seasons`.
-
-**Producer:** [postgres_etl/raw_transform.py](../postgres_etl/raw_transform.py).
-
-**Gold use:** [`app_seasons`](GOLD_TABLE_REFERENCE.md#app_seasons).
+- **Grain:** one season
+- **Primary key:** `competition_code`, `season_code`
+- **Upstream:** `_catalog/v2/seasons`
+- **Built by:** [postgres_etl/raw_transform.py](../postgres_etl/raw_transform.py)
+- **Used by Gold:** [`app_seasons`](GOLD_TABLE_REFERENCE.md#app_seasons)
 
 **Notes:** Selects this season from the competition-wide catalog response.
 
@@ -81,21 +79,17 @@ established by the warehouse remains marked as such.
 | `load_id` | `UUID` | No |  | Load writer | UUID of the successful table/competition/season replacement; joins load_log with the table name and scope. |
 | `loaded_at` | `TIMESTAMPTZ` | No |  | Load writer | UTC load timestamp shared by rows written by this replacement; not the source fetch time. |
 
-[Silver catalog](SILVER_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## clubs
 
-**Purpose:** Season club profiles, names, crests and venue codes.
+Season club profiles, names, crests and venue codes.
 
-**Grain:** one club-season.
-
-**Primary key:** `competition_code`, `season_code`, `club_code`.
-
-**Upstream:** `v2/clubs`.
-
-**Producer:** [postgres_etl/raw_transform.py](../postgres_etl/raw_transform.py).
-
-**Gold use:** [`app_clubs`](GOLD_TABLE_REFERENCE.md#app_clubs); app_club_identities; names/crests in page and aggregate tables.
+- **Grain:** one club-season
+- **Primary key:** `competition_code`, `season_code`, `club_code`
+- **Upstream:** `v2/clubs`
+- **Built by:** [postgres_etl/raw_transform.py](../postgres_etl/raw_transform.py)
+- **Used by Gold:** [`app_clubs`](GOLD_TABLE_REFERENCE.md#app_clubs); app_club_identities; names/crests in page and aggregate tables
 
 **Notes:** Season-specific profiles; the cross-season identity is built in Gold.
 
@@ -126,21 +120,17 @@ established by the warehouse remains marked as such.
 | `load_id` | `UUID` | No |  | Load writer | UUID of the successful table/competition/season replacement; joins load_log with the table name and scope. |
 | `loaded_at` | `TIMESTAMPTZ` | No |  | Load writer | UTC load timestamp shared by rows written by this replacement; not the source fetch time. |
 
-[Silver catalog](SILVER_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## people
 
-**Purpose:** Deduplicated season person profiles and identity bridge.
+Deduplicated season person profiles and identity bridge.
 
-**Grain:** one person-season.
-
-**Primary key:** `competition_code`, `season_code`, `person_key`.
-
-**Upstream:** `v2/season_people_pages/offset_*`.
-
-**Producer:** [postgres_etl/raw_transform.py](../postgres_etl/raw_transform.py).
-
-**Gold use:** [`app_people`](GOLD_TABLE_REFERENCE.md#app_people); app_players (via player registrations).
+- **Grain:** one person-season
+- **Primary key:** `competition_code`, `season_code`, `person_key`
+- **Upstream:** `v2/season_people_pages/offset_*`
+- **Built by:** [postgres_etl/raw_transform.py](../postgres_etl/raw_transform.py)
+- **Used by Gold:** [`app_people`](GOLD_TABLE_REFERENCE.md#app_people); app_players (via player registrations)
 
 **Notes:** Includes players, coaches, officials and staff. First-seen person profile wins during deduplication; preserve NULLs and leading zeroes.
 
@@ -171,21 +161,17 @@ established by the warehouse remains marked as such.
 | `load_id` | `UUID` | No |  | Load writer | UUID of the successful table/competition/season replacement; joins load_log with the table name and scope. |
 | `loaded_at` | `TIMESTAMPTZ` | No |  | Load writer | UTC load timestamp shared by rows written by this replacement; not the source fetch time. |
 
-[Silver catalog](SILVER_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## registrations
 
-**Purpose:** Club/role registrations and roster details.
+Club/role registrations and roster details.
 
-**Grain:** one registration-season.
-
-**Primary key:** `competition_code`, `season_code`, `registration_key`.
-
-**Upstream:** `v2/season_people_pages/offset_*`.
-
-**Producer:** [postgres_etl/raw_transform.py](../postgres_etl/raw_transform.py).
-
-**Gold use:** [`app_registrations`](GOLD_TABLE_REFERENCE.md#app_registrations); app_players.
+- **Grain:** one registration-season
+- **Primary key:** `competition_code`, `season_code`, `registration_key`
+- **Upstream:** `v2/season_people_pages/offset_*`
+- **Built by:** [postgres_etl/raw_transform.py](../postgres_etl/raw_transform.py)
+- **Used by Gold:** [`app_registrations`](GOLD_TABLE_REFERENCE.md#app_registrations); app_players
 
 **Notes:** registration_key hashes person, club, role, start date and external ID. role_code = J selects players; one person can have multiple registrations.
 
@@ -213,21 +199,17 @@ established by the warehouse remains marked as such.
 | `load_id` | `UUID` | No |  | Load writer | UUID of the successful table/competition/season replacement; joins load_log with the table name and scope. |
 | `loaded_at` | `TIMESTAMPTZ` | No |  | Load writer | UTC load timestamp shared by rows written by this replacement; not the source fetch time. |
 
-[Silver catalog](SILVER_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## rounds
 
-**Purpose:** Source round definitions and date ranges.
+Source round definitions and date ranges.
 
-**Grain:** one round definition-season.
-
-**Primary key:** `competition_code`, `season_code`, `round_key`.
-
-**Upstream:** `v2/rounds`.
-
-**Producer:** [postgres_etl/raw_transform.py](../postgres_etl/raw_transform.py).
-
-**Gold use:** [`app_rounds`](GOLD_TABLE_REFERENCE.md#app_rounds).
+- **Grain:** one round definition-season
+- **Primary key:** `competition_code`, `season_code`, `round_key`
+- **Upstream:** `v2/rounds`
+- **Built by:** [postgres_etl/raw_transform.py](../postgres_etl/raw_transform.py)
+- **Used by Gold:** [`app_rounds`](GOLD_TABLE_REFERENCE.md#app_rounds)
 
 **Notes:** round_key is a deterministic hash of phase, number, source index and name. Do not join on round_number alone.
 
@@ -246,21 +228,17 @@ established by the warehouse remains marked as such.
 | `load_id` | `UUID` | No |  | Load writer | UUID of the successful table/competition/season replacement; joins load_log with the table name and scope. |
 | `loaded_at` | `TIMESTAMPTZ` | No |  | Load writer | UTC load timestamp shared by rows written by this replacement; not the source fetch time. |
 
-[Silver catalog](SILVER_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## games
 
-**Purpose:** Every scheduled or played fixture with result, status and venue.
+Every scheduled or played fixture with result, status and venue.
 
-**Grain:** one game-season.
-
-**Primary key:** `competition_code`, `season_code`, `game_code`.
-
-**Upstream:** `v2/games`.
-
-**Producer:** [postgres_etl/raw_transform.py](../postgres_etl/raw_transform.py).
-
-**Gold use:** [`app_games`](GOLD_TABLE_REFERENCE.md#app_games); team/player round tables, standings_stats, records, postseason_series and event/lineup aggregates.
+- **Grain:** one game-season
+- **Primary key:** `competition_code`, `season_code`, `game_code`
+- **Upstream:** `v2/games`
+- **Built by:** [postgres_etl/raw_transform.py](../postgres_etl/raw_transform.py)
+- **Used by Gold:** [`app_games`](GOLD_TABLE_REFERENCE.md#app_games); team/player round tables, standings_stats, records, postseason_series and event/lineup aggregates
 
 **Notes:** Unknown attendance zero becomes NULL with a note. Future scores stay NULL. Source local/road does not imply a non-neutral venue.
 
@@ -322,21 +300,17 @@ established by the warehouse remains marked as such.
 | `load_id` | `UUID` | No |  | Load writer | UUID of the successful table/competition/season replacement; joins load_log with the table name and scope. |
 | `loaded_at` | `TIMESTAMPTZ` | No |  | Load writer | UTC load timestamp shared by rows written by this replacement; not the source fetch time. |
 
-[Silver catalog](SILVER_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## game_officials
 
-**Purpose:** Official assignments extracted from the fixture list.
+Official assignments extracted from the fixture list.
 
-**Grain:** one official slot-game.
-
-**Primary key:** `competition_code`, `season_code`, `game_code`, `official_number`.
-
-**Upstream:** `v2/games`.
-
-**Producer:** [postgres_etl/raw_transform.py](../postgres_etl/raw_transform.py).
-
-**Gold use:** [`app_game_officials`](GOLD_TABLE_REFERENCE.md#app_game_officials).
+- **Grain:** one official slot-game
+- **Primary key:** `competition_code`, `season_code`, `game_code`, `official_number`
+- **Upstream:** `v2/games`
+- **Built by:** [postgres_etl/raw_transform.py](../postgres_etl/raw_transform.py)
+- **Used by Gold:** [`app_game_officials`](GOLD_TABLE_REFERENCE.md#app_game_officials)
 
 **Notes:** referee1 through referee4 become separate rows; a missing official slot produces no row.
 
@@ -356,21 +330,17 @@ established by the warehouse remains marked as such.
 | `load_id` | `UUID` | No |  | Load writer | UUID of the successful table/competition/season replacement; joins load_log with the table name and scope. |
 | `loaded_at` | `TIMESTAMPTZ` | No |  | Load writer | UTC load timestamp shared by rows written by this replacement; not the source fetch time. |
 
-[Silver catalog](SILVER_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## game_period_scores
 
-**Purpose:** Quarter and overtime points extracted from fixtures.
+Quarter and overtime points extracted from fixtures.
 
-**Grain:** one side-period-game.
-
-**Primary key:** `competition_code`, `season_code`, `game_code`, `side`, `period_number`.
-
-**Upstream:** `v2/games`.
-
-**Producer:** [postgres_etl/raw_transform.py](../postgres_etl/raw_transform.py).
-
-**Gold use:** [`app_game_period_scores`](GOLD_TABLE_REFERENCE.md#app_game_period_scores).
+- **Grain:** one side-period-game
+- **Primary key:** `competition_code`, `season_code`, `game_code`, `side`, `period_number`
+- **Upstream:** `v2/games`
+- **Built by:** [postgres_etl/raw_transform.py](../postgres_etl/raw_transform.py)
+- **Used by Gold:** [`app_game_period_scores`](GOLD_TABLE_REFERENCE.md#app_game_period_scores)
 
 **Notes:** Regulation periods are 1-4; extraPeriods become 5+. score is period points.
 
@@ -385,21 +355,17 @@ established by the warehouse remains marked as such.
 | `load_id` | `UUID` | No |  | Load writer | UUID of the successful table/competition/season replacement; joins load_log with the table name and scope. |
 | `loaded_at` | `TIMESTAMPTZ` | No |  | Load writer | UTC load timestamp shared by rows written by this replacement; not the source fetch time. |
 
-[Silver catalog](SILVER_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## game_player_stats
 
-**Purpose:** Official player box-score lines and registration context.
+Official player box-score lines and registration context.
 
-**Grain:** one player-side-game.
-
-**Primary key:** `competition_code`, `season_code`, `game_code`, `side`, `person_key`.
-
-**Upstream:** `v2/game_stats/{game}`.
-
-**Producer:** [postgres_etl/raw_transform.py](../postgres_etl/raw_transform.py).
-
-**Gold use:** [`app_game_player_stats`](GOLD_TABLE_REFERENCE.md#app_game_player_stats); player round stats/PER/Win Shares, game PER, PS player rows, app_records_single_games.
+- **Grain:** one player-side-game
+- **Primary key:** `competition_code`, `season_code`, `game_code`, `side`, `person_key`
+- **Upstream:** `v2/game_stats/{game}`
+- **Built by:** [postgres_etl/raw_transform.py](../postgres_etl/raw_transform.py)
+- **Used by Gold:** [`app_game_player_stats`](GOLD_TABLE_REFERENCE.md#app_game_player_stats); player round stats/PER/Win Shares, game PER, PS player rows, app_records_single_games
 
 **Notes:** Includes DNP lines. Unrecorded all-zero measures are NULLed and explained in game_stat_gaps. Gold appearance aggregates require positive seconds.
 
@@ -451,21 +417,17 @@ established by the warehouse remains marked as such.
 | `load_id` | `UUID` | No |  | Load writer | UUID of the successful table/competition/season replacement; joins load_log with the table name and scope. |
 | `loaded_at` | `TIMESTAMPTZ` | No |  | Load writer | UTC load timestamp shared by rows written by this replacement; not the source fetch time. |
 
-[Silver catalog](SILVER_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## game_team_stats
 
-**Purpose:** Official team-only and complete team box scores.
+Official team-only and complete team box scores.
 
-**Grain:** one stats_kind-side-game.
-
-**Primary key:** `competition_code`, `season_code`, `game_code`, `side`, `stats_kind`.
-
-**Upstream:** `v2/game_stats/{game}`.
-
-**Producer:** [postgres_etl/raw_transform.py](../postgres_etl/raw_transform.py).
-
-**Gold use:** [`app_game_team_stats`](GOLD_TABLE_REFERENCE.md#app_game_team_stats); app_team_season_stats, team/player round calculations, app_records_team_seasons.
+- **Grain:** one stats_kind-side-game
+- **Primary key:** `competition_code`, `season_code`, `game_code`, `side`, `stats_kind`
+- **Upstream:** `v2/game_stats/{game}`
+- **Built by:** [postgres_etl/raw_transform.py](../postgres_etl/raw_transform.py)
+- **Used by Gold:** [`app_game_team_stats`](GOLD_TABLE_REFERENCE.md#app_game_team_stats); app_team_season_stats, team/player round calculations, app_records_team_seasons
 
 **Notes:** Use stats_kind = total for a full box score. team is the separate team-only contribution row. club_code is obtained from games and side.
 
@@ -505,21 +467,17 @@ established by the warehouse remains marked as such.
 | `load_id` | `UUID` | No |  | Load writer | UUID of the successful table/competition/season replacement; joins load_log with the table name and scope. |
 | `loaded_at` | `TIMESTAMPTZ` | No |  | Load writer | UTC load timestamp shared by rows written by this replacement; not the source fetch time. |
 
-[Silver catalog](SILVER_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## game_stat_gaps
 
-**Purpose:** Explicit explanations of missing official box-score measures.
+Explicit explanations of missing official box-score measures.
 
-**Grain:** one stat_name-game.
-
-**Primary key:** `competition_code`, `season_code`, `game_code`, `stat_name`.
-
-**Upstream:** `v2/game_stats/{game}`.
-
-**Producer:** [postgres_etl/raw_transform.py](../postgres_etl/raw_transform.py).
-
-**Gold use:** [`app_game_stat_gaps`](GOLD_TABLE_REFERENCE.md#app_game_stat_gaps).
+- **Grain:** one stat_name-game
+- **Primary key:** `competition_code`, `season_code`, `game_code`, `stat_name`
+- **Upstream:** `v2/game_stats/{game}`
+- **Built by:** [postgres_etl/raw_transform.py](../postgres_etl/raw_transform.py)
+- **Used by Gold:** [`app_game_stat_gaps`](GOLD_TABLE_REFERENCE.md#app_game_stat_gaps)
 
 **Notes:** stat_name = * denotes no player box score. The normalization rules inspect a fixed list of measures, not every possible missing event or derived rate.
 
@@ -533,21 +491,17 @@ established by the warehouse remains marked as such.
 | `load_id` | `UUID` | No |  | Load writer | UUID of the successful table/competition/season replacement; joins load_log with the table name and scope. |
 | `loaded_at` | `TIMESTAMPTZ` | No |  | Load writer | UTC load timestamp shared by rows written by this replacement; not the source fetch time. |
 
-[Silver catalog](SILVER_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## season_player_stats_traditional
 
-**Purpose:** Source player traditional statistics by phase and mode.
+Source player traditional statistics by phase and mode.
 
-**Grain:** one entry ordinal-phase-mode.
-
-**Primary key:** `competition_code`, `season_code`, `phase_code`, `mode`, `entry_ordinal`.
-
-**Upstream:** `v3/season_stats/players_traditional_{phase}_{mode}`.
-
-**Producer:** [postgres_etl/raw_transform.py](../postgres_etl/raw_transform.py).
-
-**Gold use:** [`app_season_player_stats_traditional`](GOLD_TABLE_REFERENCE.md#app_season_player_stats_traditional).
+- **Grain:** one entry ordinal-phase-mode
+- **Primary key:** `competition_code`, `season_code`, `phase_code`, `mode`, `entry_ordinal`
+- **Upstream:** `v3/season_stats/players_traditional_{phase}_{mode}`
+- **Built by:** [postgres_etl/raw_transform.py](../postgres_etl/raw_transform.py)
+- **Used by Gold:** [`app_season_player_stats_traditional`](GOLD_TABLE_REFERENCE.md#app_season_player_stats_traditional)
 
 **Notes:** API rows only, including nonqualified players only where the feed lists them. No Gold qualification flags, missing perGame fallback, or synthetic PS. Transferred players can have a semicolon-separated multi-club code rather than one club identity. Percentages retain source scale; see the shared glossary.
 
@@ -594,21 +548,17 @@ established by the warehouse remains marked as such.
 | `load_id` | `UUID` | No |  | Load writer | UUID of the successful table/competition/season replacement; joins load_log with the table name and scope. |
 | `loaded_at` | `TIMESTAMPTZ` | No |  | Load writer | UTC load timestamp shared by rows written by this replacement; not the source fetch time. |
 
-[Silver catalog](SILVER_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## season_player_stats_advanced
 
-**Purpose:** Source player advanced statistics by phase and mode.
+Source player advanced statistics by phase and mode.
 
-**Grain:** one entry ordinal-phase-mode.
-
-**Primary key:** `competition_code`, `season_code`, `phase_code`, `mode`, `entry_ordinal`.
-
-**Upstream:** `v3/season_stats/players_advanced_{phase}_{mode}`.
-
-**Producer:** [postgres_etl/raw_transform.py](../postgres_etl/raw_transform.py).
-
-**Gold use:** [`app_season_player_stats_advanced`](GOLD_TABLE_REFERENCE.md#app_season_player_stats_advanced).
+- **Grain:** one entry ordinal-phase-mode
+- **Primary key:** `competition_code`, `season_code`, `phase_code`, `mode`, `entry_ordinal`
+- **Upstream:** `v3/season_stats/players_advanced_{phase}_{mode}`
+- **Built by:** [postgres_etl/raw_transform.py](../postgres_etl/raw_transform.py)
+- **Used by Gold:** [`app_season_player_stats_advanced`](GOLD_TABLE_REFERENCE.md#app_season_player_stats_advanced)
 
 **Notes:** API rows only, including nonqualified players only where the feed lists them. No Gold qualification flags, missing perGame fallback, or synthetic PS. Transferred players can have a semicolon-separated multi-club code rather than one club identity. Percentages retain source scale; see the shared glossary.
 
@@ -645,21 +595,17 @@ established by the warehouse remains marked as such.
 | `load_id` | `UUID` | No |  | Load writer | UUID of the successful table/competition/season replacement; joins load_log with the table name and scope. |
 | `loaded_at` | `TIMESTAMPTZ` | No |  | Load writer | UTC load timestamp shared by rows written by this replacement; not the source fetch time. |
 
-[Silver catalog](SILVER_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## season_player_stats_scoring
 
-**Purpose:** Source player scoring statistics by phase and mode.
+Source player scoring statistics by phase and mode.
 
-**Grain:** one entry ordinal-phase-mode.
-
-**Primary key:** `competition_code`, `season_code`, `phase_code`, `mode`, `entry_ordinal`.
-
-**Upstream:** `v3/season_stats/players_scoring_{phase}_{mode}`.
-
-**Producer:** [postgres_etl/raw_transform.py](../postgres_etl/raw_transform.py).
-
-**Gold use:** [`app_season_player_stats_scoring`](GOLD_TABLE_REFERENCE.md#app_season_player_stats_scoring).
+- **Grain:** one entry ordinal-phase-mode
+- **Primary key:** `competition_code`, `season_code`, `phase_code`, `mode`, `entry_ordinal`
+- **Upstream:** `v3/season_stats/players_scoring_{phase}_{mode}`
+- **Built by:** [postgres_etl/raw_transform.py](../postgres_etl/raw_transform.py)
+- **Used by Gold:** [`app_season_player_stats_scoring`](GOLD_TABLE_REFERENCE.md#app_season_player_stats_scoring)
 
 **Notes:** API rows only, including nonqualified players only where the feed lists them. No Gold qualification flags, missing perGame fallback, or synthetic PS. Transferred players can have a semicolon-separated multi-club code rather than one club identity. Percentages retain source scale; see the shared glossary.
 
@@ -695,21 +641,17 @@ established by the warehouse remains marked as such.
 | `load_id` | `UUID` | No |  | Load writer | UUID of the successful table/competition/season replacement; joins load_log with the table name and scope. |
 | `loaded_at` | `TIMESTAMPTZ` | No |  | Load writer | UTC load timestamp shared by rows written by this replacement; not the source fetch time. |
 
-[Silver catalog](SILVER_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## season_player_stats_misc
 
-**Purpose:** Source player misc statistics by phase and mode.
+Source player misc statistics by phase and mode.
 
-**Grain:** one entry ordinal-phase-mode.
-
-**Primary key:** `competition_code`, `season_code`, `phase_code`, `mode`, `entry_ordinal`.
-
-**Upstream:** `v3/season_stats/players_misc_{phase}_{mode}`.
-
-**Producer:** [postgres_etl/raw_transform.py](../postgres_etl/raw_transform.py).
-
-**Gold use:** [`app_season_player_stats_misc`](GOLD_TABLE_REFERENCE.md#app_season_player_stats_misc).
+- **Grain:** one entry ordinal-phase-mode
+- **Primary key:** `competition_code`, `season_code`, `phase_code`, `mode`, `entry_ordinal`
+- **Upstream:** `v3/season_stats/players_misc_{phase}_{mode}`
+- **Built by:** [postgres_etl/raw_transform.py](../postgres_etl/raw_transform.py)
+- **Used by Gold:** [`app_season_player_stats_misc`](GOLD_TABLE_REFERENCE.md#app_season_player_stats_misc)
 
 **Notes:** API rows only, including nonqualified players only where the feed lists them. No Gold qualification flags, missing perGame fallback, or synthetic PS. Transferred players can have a semicolon-separated multi-club code rather than one club identity. Percentages retain source scale; see the shared glossary.
 
@@ -739,21 +681,17 @@ established by the warehouse remains marked as such.
 | `load_id` | `UUID` | No |  | Load writer | UUID of the successful table/competition/season replacement; joins load_log with the table name and scope. |
 | `loaded_at` | `TIMESTAMPTZ` | No |  | Load writer | UTC load timestamp shared by rows written by this replacement; not the source fetch time. |
 
-[Silver catalog](SILVER_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## season_team_stats_traditional
 
-**Purpose:** Source team traditional reference statistics.
+Source team traditional reference statistics.
 
-**Grain:** one club-phase-mode.
-
-**Primary key:** `competition_code`, `season_code`, `phase_code`, `mode`, `club_code`.
-
-**Upstream:** `v3/season_stats/teams_traditional_{phase}_accumulated` (the per-game mode is not loaded).
-
-**Producer:** [postgres_etl/raw_transform.py](../postgres_etl/raw_transform.py).
-
-**Gold use:** No direct projection; API cross-checks for calculated round statistics.
+- **Grain:** one club-phase-mode
+- **Primary key:** `competition_code`, `season_code`, `phase_code`, `mode`, `club_code`
+- **Upstream:** `v3/season_stats/teams_traditional_{phase}_accumulated` (the per-game mode is not loaded)
+- **Built by:** [postgres_etl/raw_transform.py](../postgres_etl/raw_transform.py)
+- **Used by Gold:** No direct projection; API cross-checks for calculated round statistics
 
 **Notes:** Local-only API reference feed, no direct Gold/Neon table. Gold's API cross-check reads it; only the accumulated mode is loaded. Do not substitute source ratio definitions for calculated Gold ratios.
 
@@ -794,21 +732,17 @@ established by the warehouse remains marked as such.
 | `load_id` | `UUID` | No |  | Load writer | UUID of the successful table/competition/season replacement; joins load_log with the table name and scope. |
 | `loaded_at` | `TIMESTAMPTZ` | No |  | Load writer | UTC load timestamp shared by rows written by this replacement; not the source fetch time. |
 
-[Silver catalog](SILVER_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## season_team_stats_advanced
 
-**Purpose:** Source team advanced reference statistics.
+Source team advanced reference statistics.
 
-**Grain:** one club-phase-mode.
-
-**Primary key:** `competition_code`, `season_code`, `phase_code`, `mode`, `club_code`.
-
-**Upstream:** `v3/season_stats/teams_advanced_{phase}_accumulated` (the per-game mode is not loaded).
-
-**Producer:** [postgres_etl/raw_transform.py](../postgres_etl/raw_transform.py).
-
-**Gold use:** No direct projection; API cross-checks for calculated round statistics.
+- **Grain:** one club-phase-mode
+- **Primary key:** `competition_code`, `season_code`, `phase_code`, `mode`, `club_code`
+- **Upstream:** `v3/season_stats/teams_advanced_{phase}_accumulated` (the per-game mode is not loaded)
+- **Built by:** [postgres_etl/raw_transform.py](../postgres_etl/raw_transform.py)
+- **Used by Gold:** No direct projection; API cross-checks for calculated round statistics
 
 **Notes:** Local-only API reference feed, no direct Gold/Neon table. Gold's API cross-check reads it; only the accumulated mode is loaded. Do not substitute source ratio definitions for calculated Gold ratios.
 
@@ -841,21 +775,17 @@ established by the warehouse remains marked as such.
 | `load_id` | `UUID` | No |  | Load writer | UUID of the successful table/competition/season replacement; joins load_log with the table name and scope. |
 | `loaded_at` | `TIMESTAMPTZ` | No |  | Load writer | UTC load timestamp shared by rows written by this replacement; not the source fetch time. |
 
-[Silver catalog](SILVER_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## standings_basic
 
-**Purpose:** Official positions, wins/losses, points and record splits.
+Official positions, wins/losses, points and record splits.
 
-**Grain:** one club-phase-round.
-
-**Primary key:** `competition_code`, `season_code`, `phase_code`, `round_number`, `club_code`.
-
-**Upstream:** `v3/standings/{phase}_{round}_basicstandings`.
-
-**Producer:** [postgres_etl/raw_transform.py](../postgres_etl/raw_transform.py).
-
-**Gold use:** [`app_standings`](GOLD_TABLE_REFERENCE.md#app_standings), merged/normalized into one page row.
+- **Grain:** one club-phase-round
+- **Primary key:** `competition_code`, `season_code`, `phase_code`, `round_number`, `club_code`
+- **Upstream:** `v3/standings/{phase}_{round}_basicstandings`
+- **Built by:** [postgres_etl/raw_transform.py](../postgres_etl/raw_transform.py)
+- **Used by Gold:** [`app_standings`](GOLD_TABLE_REFERENCE.md#app_standings), merged/normalized into one page row
 
 **Notes:** All measures are source snapshots; they can differ from Gold game-derived cumulative totals.
 
@@ -887,21 +817,17 @@ established by the warehouse remains marked as such.
 | `load_id` | `UUID` | No |  | Load writer | UUID of the successful table/competition/season replacement; joins load_log with the table name and scope. |
 | `loaded_at` | `TIMESTAMPTZ` | No |  | Load writer | UTC load timestamp shared by rows written by this replacement; not the source fetch time. |
 
-[Silver catalog](SILVER_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## standings_calendar
 
-**Purpose:** Official calendar standings snapshot.
+Official calendar standings snapshot.
 
-**Grain:** one club-phase-round.
-
-**Primary key:** `competition_code`, `season_code`, `phase_code`, `round_number`, `club_code`.
-
-**Upstream:** `v3/standings/{phase}_{round}_calendarstandings`.
-
-**Producer:** [postgres_etl/raw_transform.py](../postgres_etl/raw_transform.py).
-
-**Gold use:** [`app_standings`](GOLD_TABLE_REFERENCE.md#app_standings), merged/normalized into one page row.
+- **Grain:** one club-phase-round
+- **Primary key:** `competition_code`, `season_code`, `phase_code`, `round_number`, `club_code`
+- **Upstream:** `v3/standings/{phase}_{round}_calendarstandings`
+- **Built by:** [postgres_etl/raw_transform.py](../postgres_etl/raw_transform.py)
+- **Used by Gold:** [`app_standings`](GOLD_TABLE_REFERENCE.md#app_standings), merged/normalized into one page row
 
 **Notes:** Calendar streak arrays are normalized to standings_calendar_streaks.
 
@@ -924,21 +850,17 @@ established by the warehouse remains marked as such.
 | `load_id` | `UUID` | No |  | Load writer | UUID of the successful table/competition/season replacement; joins load_log with the table name and scope. |
 | `loaded_at` | `TIMESTAMPTZ` | No |  | Load writer | UTC load timestamp shared by rows written by this replacement; not the source fetch time. |
 
-[Silver catalog](SILVER_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## standings_streaks
 
-**Purpose:** Official streak and recent-form record summaries.
+Official streak and recent-form record summaries.
 
-**Grain:** one club-phase-round.
-
-**Primary key:** `competition_code`, `season_code`, `phase_code`, `round_number`, `club_code`.
-
-**Upstream:** `v3/standings/{phase}_{round}_streaks`.
-
-**Producer:** [postgres_etl/raw_transform.py](../postgres_etl/raw_transform.py).
-
-**Gold use:** [`app_standings`](GOLD_TABLE_REFERENCE.md#app_standings), merged/normalized into one page row.
+- **Grain:** one club-phase-round
+- **Primary key:** `competition_code`, `season_code`, `phase_code`, `round_number`, `club_code`
+- **Upstream:** `v3/standings/{phase}_{round}_streaks`
+- **Built by:** [postgres_etl/raw_transform.py](../postgres_etl/raw_transform.py)
+- **Used by Gold:** [`app_standings`](GOLD_TABLE_REFERENCE.md#app_standings), merged/normalized into one page row
 
 **Notes:** Record text is not a count. longest_loss column spelling is normalized here.
 
@@ -970,21 +892,17 @@ established by the warehouse remains marked as such.
 | `load_id` | `UUID` | No |  | Load writer | UUID of the successful table/competition/season replacement; joins load_log with the table name and scope. |
 | `loaded_at` | `TIMESTAMPTZ` | No |  | Load writer | UTC load timestamp shared by rows written by this replacement; not the source fetch time. |
 
-[Silver catalog](SILVER_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## standings_ahead_behind
 
-**Purpose:** Official win-loss records by score checkpoint.
+Official win-loss records by score checkpoint.
 
-**Grain:** one club-phase-round.
-
-**Primary key:** `competition_code`, `season_code`, `phase_code`, `round_number`, `club_code`.
-
-**Upstream:** `v3/standings/{phase}_{round}_aheadbehind`.
-
-**Producer:** [postgres_etl/raw_transform.py](../postgres_etl/raw_transform.py).
-
-**Gold use:** [`app_standings`](GOLD_TABLE_REFERENCE.md#app_standings), merged/normalized into one page row.
+- **Grain:** one club-phase-round
+- **Primary key:** `competition_code`, `season_code`, `phase_code`, `round_number`, `club_code`
+- **Upstream:** `v3/standings/{phase}_{round}_aheadbehind`
+- **Built by:** [postgres_etl/raw_transform.py](../postgres_etl/raw_transform.py)
+- **Used by Gold:** [`app_standings`](GOLD_TABLE_REFERENCE.md#app_standings), merged/normalized into one page row
 
 **Notes:** Quarter-1, half-time and quarter-3 ahead/behind/tied values remain source record text.
 
@@ -1017,21 +935,17 @@ established by the warehouse remains marked as such.
 | `load_id` | `UUID` | No |  | Load writer | UUID of the successful table/competition/season replacement; joins load_log with the table name and scope. |
 | `loaded_at` | `TIMESTAMPTZ` | No |  | Load writer | UTC load timestamp shared by rows written by this replacement; not the source fetch time. |
 
-[Silver catalog](SILVER_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## standings_margins
 
-**Purpose:** Official result records by margin and statistical comparison.
+Official result records by margin and statistical comparison.
 
-**Grain:** one club-phase-round.
-
-**Primary key:** `competition_code`, `season_code`, `phase_code`, `round_number`, `club_code`.
-
-**Upstream:** `v3/standings/{phase}_{round}_margins`.
-
-**Producer:** [postgres_etl/raw_transform.py](../postgres_etl/raw_transform.py).
-
-**Gold use:** [`app_standings`](GOLD_TABLE_REFERENCE.md#app_standings), merged/normalized into one page row.
+- **Grain:** one club-phase-round
+- **Primary key:** `competition_code`, `season_code`, `phase_code`, `round_number`, `club_code`
+- **Upstream:** `v3/standings/{phase}_{round}_margins`
+- **Built by:** [postgres_etl/raw_transform.py](../postgres_etl/raw_transform.py)
+- **Used by Gold:** [`app_standings`](GOLD_TABLE_REFERENCE.md#app_standings), merged/normalized into one page row
 
 **Notes:** rebounds, assists and shooting columns here are source comparison record text, not box-score totals.
 
@@ -1064,21 +978,17 @@ established by the warehouse remains marked as such.
 | `load_id` | `UUID` | No |  | Load writer | UUID of the successful table/competition/season replacement; joins load_log with the table name and scope. |
 | `loaded_at` | `TIMESTAMPTZ` | No |  | Load writer | UTC load timestamp shared by rows written by this replacement; not the source fetch time. |
 
-[Silver catalog](SILVER_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## standings_calendar_streaks
 
-**Purpose:** Normalized child streaks of calendar standings.
+Normalized child streaks of calendar standings.
 
-**Grain:** one streak ordinal-club-phase-round.
-
-**Primary key:** `competition_code`, `season_code`, `phase_code`, `round_number`, `club_code`, `streak_ordinal`.
-
-**Upstream:** `v3/standings/{phase}_{round}_calendarstandings`.
-
-**Producer:** [postgres_etl/raw_transform.py](../postgres_etl/raw_transform.py).
-
-**Gold use:** [`app_standings`](GOLD_TABLE_REFERENCE.md#app_standings), merged/normalized into one page row.
+- **Grain:** one streak ordinal-club-phase-round
+- **Primary key:** `competition_code`, `season_code`, `phase_code`, `round_number`, `club_code`, `streak_ordinal`
+- **Upstream:** `v3/standings/{phase}_{round}_calendarstandings`
+- **Built by:** [postgres_etl/raw_transform.py](../postgres_etl/raw_transform.py)
+- **Used by Gold:** [`app_standings`](GOLD_TABLE_REFERENCE.md#app_standings), merged/normalized into one page row
 
 **Notes:** One row per streaks array element; ordinal starts at zero and is not a stable identity across refreshes.
 
@@ -1096,21 +1006,17 @@ established by the warehouse remains marked as such.
 | `load_id` | `UUID` | No |  | Load writer | UUID of the successful table/competition/season replacement; joins load_log with the table name and scope. |
 | `loaded_at` | `TIMESTAMPTZ` | No |  | Load writer | UTC load timestamp shared by rows written by this replacement; not the source fetch time. |
 
-[Silver catalog](SILVER_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## standings_basic_form
 
-**Purpose:** Normalized recent-result labels from basic standings.
+Normalized recent-result labels from basic standings.
 
-**Grain:** one result ordinal-club-phase-round.
-
-**Primary key:** `competition_code`, `season_code`, `phase_code`, `round_number`, `club_code`, `result_ordinal`.
-
-**Upstream:** `v3/standings/{phase}_{round}_basicstandings`.
-
-**Producer:** [postgres_etl/raw_transform.py](../postgres_etl/raw_transform.py).
-
-**Gold use:** [`app_standings`](GOLD_TABLE_REFERENCE.md#app_standings), merged/normalized into one page row.
+- **Grain:** one result ordinal-club-phase-round
+- **Primary key:** `competition_code`, `season_code`, `phase_code`, `round_number`, `club_code`, `result_ordinal`
+- **Upstream:** `v3/standings/{phase}_{round}_basicstandings`
+- **Built by:** [postgres_etl/raw_transform.py](../postgres_etl/raw_transform.py)
+- **Used by Gold:** [`app_standings`](GOLD_TABLE_REFERENCE.md#app_standings), merged/normalized into one page row
 
 **Notes:** One row per last5Form array element, preserving its order. Ordinal starts at zero.
 
@@ -1126,21 +1032,17 @@ established by the warehouse remains marked as such.
 | `load_id` | `UUID` | No |  | Load writer | UUID of the successful table/competition/season replacement; joins load_log with the table name and scope. |
 | `loaded_at` | `TIMESTAMPTZ` | No |  | Load writer | UTC load timestamp shared by rows written by this replacement; not the source fetch time. |
 
-[Silver catalog](SILVER_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## play_by_play
 
-**Purpose:** Raw typed live event timeline with resolved player identities.
+Raw typed live event timeline with resolved player identities.
 
-**Grain:** one event ordinal-period-game.
-
-**Primary key:** `competition_code`, `season_code`, `game_code`, `period`, `event_ordinal`.
-
-**Upstream:** `live/{game}/play_by_play`.
-
-**Producer:** [postgres_etl/raw_transform.py](../postgres_etl/raw_transform.py).
-
-**Gold use:** [`app_play_by_play`](GOLD_TABLE_REFERENCE.md#app_play_by_play).
+- **Grain:** one event ordinal-period-game
+- **Primary key:** `competition_code`, `season_code`, `game_code`, `period`, `event_ordinal`
+- **Upstream:** `live/{game}/play_by_play`
+- **Built by:** [postgres_etl/raw_transform.py](../postgres_etl/raw_transform.py)
+- **Used by Gold:** [`app_play_by_play`](GOLD_TABLE_REFERENCE.md#app_play_by_play)
 
 **Notes:** Source period is TEXT. Sort using regulation period rank, overtime number from minute, and event_ordinal, not alphabetical period or play_number.
 
@@ -1170,21 +1072,17 @@ established by the warehouse remains marked as such.
 | `load_id` | `UUID` | No |  | Load writer | UUID of the successful table/competition/season replacement; joins load_log with the table name and scope. |
 | `loaded_at` | `TIMESTAMPTZ` | No |  | Load writer | UTC load timestamp shared by rows written by this replacement; not the source fetch time. |
 
-[Silver catalog](SILVER_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## shots
 
-**Purpose:** Typed shot attempts, coordinates, zone and context flags.
+Typed shot attempts, coordinates, zone and context flags.
 
-**Grain:** one shot ordinal-game.
-
-**Primary key:** `competition_code`, `season_code`, `game_code`, `shot_ordinal`.
-
-**Upstream:** `live/{game}/shooting_charts`.
-
-**Producer:** [postgres_etl/raw_transform.py](../postgres_etl/raw_transform.py).
-
-**Gold use:** [`app_shots`](GOLD_TABLE_REFERENCE.md#app_shots).
+- **Grain:** one shot ordinal-game
+- **Primary key:** `competition_code`, `season_code`, `game_code`, `shot_ordinal`
+- **Upstream:** `live/{game}/shooting_charts`
+- **Built by:** [postgres_etl/raw_transform.py](../postgres_etl/raw_transform.py)
+- **Used by Gold:** [`app_shots`](GOLD_TABLE_REFERENCE.md#app_shots)
 
 **Notes:** person_code resolves to the game box-score person_key; raw player_code remains separate. Source coordinate units/orientation are not standardized by the warehouse.
 
@@ -1217,21 +1115,17 @@ established by the warehouse remains marked as such.
 | `load_id` | `UUID` | No |  | Load writer | UUID of the successful table/competition/season replacement; joins load_log with the table name and scope. |
 | `loaded_at` | `TIMESTAMPTZ` | No |  | Load writer | UTC load timestamp shared by rows written by this replacement; not the source fetch time. |
 
-[Silver catalog](SILVER_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## game_team_advanced
 
-**Purpose:** Box-score estimated possessions, pace, ratings and four factors.
+Box-score estimated possessions, pace, ratings and four factors.
 
-**Grain:** one side-game.
-
-**Primary key:** `competition_code`, `season_code`, `game_code`, `side`.
-
-**Upstream:** `games, game_period_scores, game_team_stats, game_stat_gaps`.
-
-**Producer:** [postgres_etl/advanced.py](../postgres_etl/advanced.py).
-
-**Gold use:** [`app_game_team_advanced`](GOLD_TABLE_REFERENCE.md#app_game_team_advanced); team/player round calculations, game PER context.
+- **Grain:** one side-game
+- **Primary key:** `competition_code`, `season_code`, `game_code`, `side`
+- **Upstream:** `games, game_period_scores, game_team_stats, game_stat_gaps`
+- **Built by:** [postgres_etl/advanced.py](../postgres_etl/advanced.py)
+- **Used by Gold:** [`app_game_team_advanced`](GOLD_TABLE_REFERENCE.md#app_game_team_advanced); team/player round calculations, game PER context
 
 **Notes:** Played games with both total box-score rows only; forfeits without box scores excluded. Gold drops opponent_club_code, phase_code, round_number and provenance.
 
@@ -1265,21 +1159,17 @@ established by the warehouse remains marked as such.
 | `load_id` | `UUID` | No |  | Load writer | UUID of the successful table/competition/season replacement; joins load_log with the table name and scope. |
 | `loaded_at` | `TIMESTAMPTZ` | No |  | Load writer | UTC load timestamp shared by rows written by this replacement; not the source fetch time. |
 
-[Silver catalog](SILVER_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## game_player_advanced
 
-**Purpose:** Player Game Score, efficiency and on-court/estimated rates.
+Player Game Score, efficiency and on-court/estimated rates.
 
-**Grain:** one player-side-game.
-
-**Primary key:** `competition_code`, `season_code`, `game_code`, `side`, `person_key`.
-
-**Upstream:** `games, game_period_scores, game_team_stats, game_player_stats, game_stat_gaps, play_by_play`.
-
-**Producer:** [postgres_etl/advanced.py](../postgres_etl/advanced.py).
-
-**Gold use:** [`app_game_player_advanced`](GOLD_TABLE_REFERENCE.md#app_game_player_advanced); app_player_round_stats Game Score totals.
+- **Grain:** one player-side-game
+- **Primary key:** `competition_code`, `season_code`, `game_code`, `side`, `person_key`
+- **Upstream:** `games, game_period_scores, game_team_stats, game_player_stats, game_stat_gaps, play_by_play`
+- **Built by:** [postgres_etl/advanced.py](../postgres_etl/advanced.py)
+- **Used by Gold:** [`app_game_player_advanced`](GOLD_TABLE_REFERENCE.md#app_game_player_advanced); app_player_round_stats Game Score totals
 
 **Notes:** Seven time-dependent rates use on-court events when possible; rate_source identifies the method. Estimate rates are NULL below 180 seconds. Gold drops rate_source and adds game PER; Silver has no PER columns.
 
@@ -1307,21 +1197,17 @@ established by the warehouse remains marked as such.
 | `load_id` | `UUID` | No |  | Load writer | UUID of the successful table/competition/season replacement; joins load_log with the table name and scope. |
 | `loaded_at` | `TIMESTAMPTZ` | No |  | Load writer | UTC load timestamp shared by rows written by this replacement; not the source fetch time. |
 
-[Silver catalog](SILVER_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## game_team_possessions
 
-**Purpose:** Counted possessions and their measurable lengths.
+Counted possessions and their measurable lengths.
 
-**Grain:** one side-game.
-
-**Primary key:** `competition_code`, `season_code`, `game_code`, `side`.
-
-**Upstream:** `games, game_team_advanced, play_by_play`.
-
-**Producer:** [postgres_etl/possessions.py](../postgres_etl/possessions.py).
-
-**Gold use:** [`app_game_team_possessions`](GOLD_TABLE_REFERENCE.md#app_game_team_possessions); app_team_pbp_stats.
+- **Grain:** one side-game
+- **Primary key:** `competition_code`, `season_code`, `game_code`, `side`
+- **Upstream:** `games, game_team_advanced, play_by_play`
+- **Built by:** [postgres_etl/possessions.py](../postgres_etl/possessions.py)
+- **Used by Gold:** [`app_game_team_possessions`](GOLD_TABLE_REFERENCE.md#app_game_team_possessions); app_team_pbp_stats
 
 **Notes:** Event state machine counts possessions separately from the shared box-score estimate. Requires usable events and an advanced team row.
 
@@ -1340,21 +1226,17 @@ established by the warehouse remains marked as such.
 | `load_id` | `UUID` | No |  | Load writer | UUID of the successful table/competition/season replacement; joins load_log with the table name and scope. |
 | `loaded_at` | `TIMESTAMPTZ` | No |  | Load writer | UTC load timestamp shared by rows written by this replacement; not the source fetch time. |
 
-[Silver catalog](SILVER_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## game_team_score_flow
 
-**Purpose:** Running-score leads, runs, time ahead/behind and clutch.
+Running-score leads, runs, time ahead/behind and clutch.
 
-**Grain:** one side-game.
-
-**Primary key:** `competition_code`, `season_code`, `game_code`, `side`.
-
-**Upstream:** `games, play_by_play`.
-
-**Producer:** [postgres_etl/score_flow.py](../postgres_etl/score_flow.py).
-
-**Gold use:** [`app_game_team_score_flow`](GOLD_TABLE_REFERENCE.md#app_game_team_score_flow); app_team_pbp_stats.
+- **Grain:** one side-game
+- **Primary key:** `competition_code`, `season_code`, `game_code`, `side`
+- **Upstream:** `games, play_by_play`
+- **Built by:** [postgres_etl/score_flow.py](../postgres_etl/score_flow.py)
+- **Used by Gold:** [`app_game_team_score_flow`](GOLD_TABLE_REFERENCE.md#app_game_team_score_flow); app_team_pbp_stats
 
 **Notes:** Lead changes and ties repeat on both side rows. Clutch starts at elapsed second 2100 with pre-event margin at most five; overtime is included.
 
@@ -1382,21 +1264,17 @@ established by the warehouse remains marked as such.
 | `load_id` | `UUID` | No |  | Load writer | UUID of the successful table/competition/season replacement; joins load_log with the table name and scope. |
 | `loaded_at` | `TIMESTAMPTZ` | No |  | Load writer | UTC load timestamp shared by rows written by this replacement; not the source fetch time. |
 
-[Silver catalog](SILVER_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## game_team_shot_splits
 
-**Purpose:** Flagged scoring and capped assisted-field-goal counts.
+Flagged scoring and capped assisted-field-goal counts.
 
-**Grain:** one side-game.
-
-**Primary key:** `competition_code`, `season_code`, `game_code`, `side`.
-
-**Upstream:** `games, shots, play_by_play`.
-
-**Producer:** [postgres_etl/shot_splits.py](../postgres_etl/shot_splits.py).
-
-**Gold use:** [`app_game_team_shot_splits`](GOLD_TABLE_REFERENCE.md#app_game_team_shot_splits); app_team_pbp_stats.
+- **Grain:** one side-game
+- **Primary key:** `competition_code`, `season_code`, `game_code`, `side`
+- **Upstream:** `games, shots, play_by_play`
+- **Built by:** [postgres_etl/shot_splits.py](../postgres_etl/shot_splits.py)
+- **Used by Gold:** [`app_game_team_shot_splits`](GOLD_TABLE_REFERENCE.md#app_game_team_shot_splits); app_team_pbp_stats
 
 **Notes:** Missing flags make all three flagged point totals NULL. assisted_field_goals = min(AS events, made FG events), not shot-by-shot matching.
 
@@ -1417,22 +1295,18 @@ established by the warehouse remains marked as such.
 | `load_id` | `UUID` | No |  | Load writer | UUID of the successful table/competition/season replacement; joins load_log with the table name and scope. |
 | `loaded_at` | `TIMESTAMPTZ` | No |  | Load writer | UTC load timestamp shared by rows written by this replacement; not the source fetch time. |
 
-[Silver catalog](SILVER_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 
 ## game_player_on_court
 
-**Purpose:** Reconstructed continuous player on-court stretches.
+Reconstructed continuous player on-court stretches.
 
-**Grain:** one interval ordinal-player-side-game.
-
-**Primary key:** `competition_code`, `season_code`, `game_code`, `side`, `person_key`, `interval_ordinal`.
-
-**Upstream:** `games, game_player_stats, play_by_play`.
-
-**Producer:** [postgres_etl/on_court.py](../postgres_etl/on_court.py).
-
-**Gold use:** [`app_game_player_on_court`](GOLD_TABLE_REFERENCE.md#app_game_player_on_court).
+- **Grain:** one interval ordinal-player-side-game
+- **Primary key:** `competition_code`, `season_code`, `game_code`, `side`, `person_key`, `interval_ordinal`
+- **Upstream:** `games, game_player_stats, play_by_play`
+- **Built by:** [postgres_etl/on_court.py](../postgres_etl/on_court.py)
+- **Used by Gold:** [`app_game_player_on_court`](GOLD_TABLE_REFERENCE.md#app_game_player_on_court)
 
 **Notes:** Uses starters and IN/OUT substitutions in event order. Times are elapsed game seconds; zero-length intervals are dropped.
 
@@ -1450,21 +1324,17 @@ established by the warehouse remains marked as such.
 | `load_id` | `UUID` | No |  | Load writer | UUID of the successful table/competition/season replacement; joins load_log with the table name and scope. |
 | `loaded_at` | `TIMESTAMPTZ` | No |  | Load writer | UTC load timestamp shared by rows written by this replacement; not the source fetch time. |
 
-[Silver catalog](SILVER_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## game_team_lineup_stints
 
-**Purpose:** Complete five-versus-five intervals with scoring and possessions.
+Complete five-versus-five intervals with scoring and possessions.
 
-**Grain:** one stint ordinal-side-game.
-
-**Primary key:** `competition_code`, `season_code`, `game_code`, `side`, `stint_ordinal`.
-
-**Upstream:** `games, game_player_stats, play_by_play`.
-
-**Producer:** [postgres_etl/lineups.py](../postgres_etl/lineups.py).
-
-**Gold use:** [`app_game_team_lineup_stints`](GOLD_TABLE_REFERENCE.md#app_game_team_lineup_stints); app_player_on_off, app_lineup_ratings, app_player_rapm.
+- **Grain:** one stint ordinal-side-game
+- **Primary key:** `competition_code`, `season_code`, `game_code`, `side`, `stint_ordinal`
+- **Upstream:** `games, game_player_stats, play_by_play`
+- **Built by:** [postgres_etl/lineups.py](../postgres_etl/lineups.py)
+- **Used by Gold:** [`app_game_team_lineup_stints`](GOLD_TABLE_REFERENCE.md#app_game_team_lineup_stints); app_player_on_off, app_lineup_ratings, app_player_rapm
 
 **Notes:** Uses the same event walk as on_court, with both lineups complete; does not simply join stored player interval rows. Incomplete portions are excluded.
 
@@ -1488,17 +1358,15 @@ established by the warehouse remains marked as such.
 | `load_id` | `UUID` | No |  | Load writer | UUID of the successful table/competition/season replacement; joins load_log with the table name and scope. |
 | `loaded_at` | `TIMESTAMPTZ` | No |  | Load writer | UTC load timestamp shared by rows written by this replacement; not the source fetch time. |
 
-[Silver catalog](SILVER_CATALOG.md) | [Statistics glossary](STAT_GLOSSARY.md)
+[Back to table list](#tables)
 
 ## load_log
 
-**Purpose:** Append-only history of successful data-table scope replacements.
+Append-only history of successful data-table scope replacements.
 
-**Grain:** one successful table/competition/season/load ID.
-
-**Primary key:** `competition_code`, `season_code`, `table_name`, `load_id`.
-
-**Producer:** Source and calculated-table writers; schema is create_load_log_sql in [flat_schema.py](../postgres_etl/flat_schema.py).
+- **Grain:** one successful table/competition/season/load ID
+- **Primary key:** `competition_code`, `season_code`, `table_name`, `load_id`
+- **Built by:** Source and calculated-table writers; schema is create_load_log_sql in [flat_schema.py](../postgres_etl/flat_schema.py)
 
 **Notes:** Log and rows commit together. Old log entries remain after a rerun. Failed replacements roll back both. Derived loads record [] rather than exact upstream Silver load IDs.
 
@@ -1512,6 +1380,12 @@ established by the warehouse remains marked as such.
 | `row_count` | `BIGINT` | No |  | Load writer | Rows inserted by this replacement, including zero. |
 | `bronze_versions` | `JSONB` | No |  | Load writer | Sorted, deduplicated array of exact source version paths relative to data/bronze/; [] for calculated tables. |
 
+[Back to table list](#tables)
+
 ## Keeping this reference current
 
-Compare data columns, keys and indexes with ALL_TABLES and provenance with PROVENANCE_COLUMNS in flat_schema.py; load_log is declared separately by create_load_log_sql. Verify source paths against RawSeason/FlatSeason and formulas against the producing module. Update the shared glossary rather than duplicating formula explanations in each layer. This Markdown is maintained in the repository; it is not refreshed automatically.
+This file is maintained by hand; nothing regenerates it. When the Silver schema changes:
+
+1. Compare data columns, keys and indexes with `ALL_TABLES`, and the provenance columns with `PROVENANCE_COLUMNS`, in [flat_schema.py](../postgres_etl/flat_schema.py). `load_log` is declared separately by `create_load_log_sql`.
+2. Check source paths against `RawSeason` and `FlatSeason`, and formulas against the producing script.
+3. Put formula explanations in the [glossary](STAT_GLOSSARY.md) rather than repeating them here.
